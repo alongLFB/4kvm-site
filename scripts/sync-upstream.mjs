@@ -16,16 +16,24 @@ db.exec("PRAGMA synchronous = NORMAL;");
 
 const hours = process.env.SYNC_HOURS || "24";
 
-// Upstream MacCMS Standard JSON API Sources
+// Top High-Bandwidth Overseas & Global CDN MacCMS Sources
 const UPSTREAM_SOURCES = [
   {
-    name: "👑 非凡资源专线 (1080P极速)",
-    apiUrl: "https://api.ffzyapi.com/api.php/provide/vod/at/json/",
+    name: "⚡ iKun 国际专线 (全球Cloudflare加速/1080P秒播)",
+    apiUrl: "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/",
   },
   {
-    name: "⚡ 量子资源专线 (1080P秒播)",
+    name: "🚀 光速专线 (香港/欧美多节点直连)",
+    apiUrl: "https://api.guangsuapi.com/api.php/provide/vod/from/gsm3u8/at/json/",
+  },
+  {
+    name: "🌐 量子专线 (亚太/美西边缘节点)",
     apiUrl: "https://cj.lziapi.com/api.php/provide/vod/at/json/",
   },
+  {
+    name: "🌪️ 暴风专线 (全球高速CDN)",
+    apiUrl: "https://bfzyapi.com/api.php/provide/vod/at/json/",
+  }
 ];
 
 function mapTypeName(typeName, subTypeName = "") {
@@ -70,7 +78,7 @@ async function fetchUpstreamList(source, h = "24", page = 1) {
 }
 
 async function runSync() {
-  console.log(`Starting upstream sync for the last ${hours} hours...`);
+  console.log(`Starting upstream sync for the last ${hours} hours (Overseas & Global CDN)...`);
 
   const insertStmt = db.prepare(`
     INSERT OR REPLACE INTO vods (
@@ -92,7 +100,7 @@ async function runSync() {
     let page = 1;
     let pageCount = 1;
 
-    while (page <= pageCount && page <= 5) { // Sync top 5 pages of latest updates
+    while (page <= pageCount && page <= 5) {
       const data = await fetchUpstreamList(source, hours, page);
       if (!data || !Array.isArray(data.list)) break;
 
