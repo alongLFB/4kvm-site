@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Search, Film, Star, Loader2, ChevronLeft, ChevronRight, RotateCcw, Filter, Plus, Check } from "lucide-react";
+import { X, Search, Film, Star, Loader2, ChevronLeft, ChevronRight, RotateCcw, Filter, Plus, Check, SlidersHorizontal, ChevronDown, ChevronUp } from "lucide-react";
 import { VodItem } from "@/lib/types";
 
 interface FilmPickerModalProps {
@@ -12,9 +12,15 @@ interface FilmPickerModalProps {
   onSelect: (item: VodItem) => void;
 }
 
-const FILTER_TYPES = ["全部", "电影", "电视剧", "动漫", "综艺", "短剧", "纪录片", "4K专区"];
-const FILTER_AREAS = ["全部", "大陆", "香港", "台湾", "日本", "韩国", "欧美", "其它"];
-const FILTER_YEARS = ["全部", "今年", "去年", "10年代", "00年代", "更早"];
+// 6 Full Dimensions matching the entire movie library
+const FILTER_CONFIG = {
+  types: ["全部", "电影", "电视剧", "综艺", "动漫", "短剧", "纪录片", "4K专区"],
+  areas: ["全部", "大陆", "香港", "台湾", "日本", "韩国", "欧美", "泰国", "其它"],
+  langs: ["全部", "国语", "粤语", "英语", "韩语", "日语", "泰语", "其它"],
+  years: ["全部", "今年", "去年", "10年代", "00年代", "90年代", "80年代", "更早"],
+  qualities: ["全部", "4K超清", "1080P", "720P", "HD", "蓝光"],
+  statuses: ["全部", "连载中", "全集"],
+};
 
 export function FilmPickerModal({
   isOpen,
@@ -25,14 +31,27 @@ export function FilmPickerModal({
 }: FilmPickerModalProps) {
   const [selectedType, setSelectedType] = useState("全部");
   const [selectedArea, setSelectedArea] = useState("全部");
+  const [selectedLang, setSelectedLang] = useState("全部");
   const [selectedYear, setSelectedYear] = useState("全部");
+  const [selectedQuality, setSelectedQuality] = useState("全部");
+  const [selectedStatus, setSelectedStatus] = useState("全部");
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [expandFilters, setExpandFilters] = useState(false);
 
   const [vodList, setVodList] = useState<VodItem[]>([]);
   const [total, setTotal] = useState(0);
   const [pageCount, setPageCount] = useState(1);
   const [loading, setLoading] = useState(true);
+
+  const activeFilterCount = [
+    selectedType !== "全部",
+    selectedArea !== "全部",
+    selectedLang !== "全部",
+    selectedYear !== "全部",
+    selectedQuality !== "全部",
+    selectedStatus !== "全部",
+  ].filter(Boolean).length;
 
   const fetchFilms = async () => {
     setLoading(true);
@@ -40,7 +59,10 @@ export function FilmPickerModal({
       const params = new URLSearchParams();
       if (selectedType !== "全部") params.set("type", selectedType);
       if (selectedArea !== "全部") params.set("area", selectedArea);
+      if (selectedLang !== "全部") params.set("lang", selectedLang);
       if (selectedYear !== "全部") params.set("year", selectedYear);
+      if (selectedQuality !== "全部") params.set("quality", selectedQuality);
+      if (selectedStatus !== "全部") params.set("status", selectedStatus);
       if (searchQuery.trim()) params.set("wd", searchQuery.trim());
       params.set("pg", page.toString());
       params.set("limit", "12");
@@ -63,7 +85,16 @@ export function FilmPickerModal({
     if (isOpen) {
       fetchFilms();
     }
-  }, [isOpen, selectedType, selectedArea, selectedYear, page]);
+  }, [
+    isOpen,
+    selectedType,
+    selectedArea,
+    selectedLang,
+    selectedYear,
+    selectedQuality,
+    selectedStatus,
+    page,
+  ]);
 
   // Debounced search
   useEffect(() => {
@@ -80,26 +111,34 @@ export function FilmPickerModal({
   const handleResetFilters = () => {
     setSelectedType("全部");
     setSelectedArea("全部");
+    setSelectedLang("全部");
     setSelectedYear("全部");
+    setSelectedQuality("全部");
+    setSelectedStatus("全部");
     setSearchQuery("");
     setPage(1);
   };
 
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-      <div className="relative w-full max-w-3xl bg-dark-900 border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+      <div className="relative w-full max-w-4xl bg-dark-900 border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-white/10">
           <div className="flex items-center gap-2 text-base sm:text-lg font-bold text-white">
             <Film className="w-5 h-5 text-cyan-400" />
             {title}
+            {activeFilterCount > 0 && (
+              <span className="text-[10px] bg-cyan-500/20 text-cyan-400 font-bold px-2 py-0.5 rounded-full border border-cyan-500/30">
+                已启用 {activeFilterCount} 个过滤维度
+              </span>
+            )}
           </div>
           <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-white rounded-lg transition">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Search Bar + Reset */}
+        {/* Search Bar + Controls */}
         <div className="flex items-center gap-2.5">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -107,7 +146,7 @@ export function FilmPickerModal({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="搜索片名、演员、导演、关键词..."
+              placeholder="搜索片名、演员、导演、关键词（例如：早春晴朗、繁花、辛芷蕾）..."
               className="w-full bg-dark-800 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition"
             />
             {searchQuery && (
@@ -121,6 +160,20 @@ export function FilmPickerModal({
           </div>
 
           <button
+            type="button"
+            onClick={() => setExpandFilters(!expandFilters)}
+            className={`px-3.5 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 shrink-0 transition ${
+              expandFilters || activeFilterCount > 0
+                ? "bg-cyan-500/15 text-cyan-400 border-cyan-500/30"
+                : "bg-dark-800 hover:bg-dark-700 border-white/10 text-gray-300"
+            }`}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <span>全部 6 维筛选</span>
+            {expandFilters ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+
+          <button
             onClick={handleResetFilters}
             className="px-3 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-700 border border-white/10 text-gray-400 hover:text-white text-xs flex items-center gap-1 shrink-0 transition"
             title="重置全部筛选"
@@ -130,13 +183,13 @@ export function FilmPickerModal({
           </button>
         </div>
 
-        {/* Multi-tier Category Filter Bar */}
-        <div className="p-3 rounded-2xl bg-dark-850 border border-white/5 space-y-2 text-xs">
-          {/* 1. Types */}
+        {/* 6 Multi-Dimensional Filter Panel (Matching Entire Movie Library) */}
+        <div className="p-3.5 rounded-2xl bg-dark-850 border border-white/5 space-y-2.5 text-xs">
+          {/* 1. 全部类型 */}
           <div className="flex items-center gap-2">
-            <span className="w-10 text-gray-400 font-bold shrink-0 text-[11px]">类型:</span>
+            <span className="w-14 text-gray-400 font-bold shrink-0 text-[11px]">全部类型</span>
             <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-              {FILTER_TYPES.map((t) => (
+              {FILTER_CONFIG.types.map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -156,11 +209,11 @@ export function FilmPickerModal({
             </div>
           </div>
 
-          {/* 2. Areas */}
+          {/* 2. 全部地区 */}
           <div className="flex items-center gap-2 pt-1.5 border-t border-white/5">
-            <span className="w-10 text-gray-400 font-bold shrink-0 text-[11px]">地区:</span>
+            <span className="w-14 text-gray-400 font-bold shrink-0 text-[11px]">全部地区</span>
             <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-              {FILTER_AREAS.map((a) => (
+              {FILTER_CONFIG.areas.map((a) => (
                 <button
                   key={a}
                   type="button"
@@ -180,11 +233,11 @@ export function FilmPickerModal({
             </div>
           </div>
 
-          {/* 3. Years */}
+          {/* 3. 全部年份 */}
           <div className="flex items-center gap-2 pt-1.5 border-t border-white/5">
-            <span className="w-10 text-gray-400 font-bold shrink-0 text-[11px]">年份:</span>
+            <span className="w-14 text-gray-400 font-bold shrink-0 text-[11px]">全部年份</span>
             <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-              {FILTER_YEARS.map((y) => (
+              {FILTER_CONFIG.years.map((y) => (
                 <button
                   key={y}
                   type="button"
@@ -203,6 +256,83 @@ export function FilmPickerModal({
               ))}
             </div>
           </div>
+
+          {/* Expanded Dimensions: 4. 全部语言, 5. 全部画质, 6. 全部状态 */}
+          {expandFilters && (
+            <div className="space-y-2.5 pt-1.5 border-t border-white/5 animate-in fade-in">
+              {/* 4. 全部语言 */}
+              <div className="flex items-center gap-2">
+                <span className="w-14 text-gray-400 font-bold shrink-0 text-[11px]">全部语言</span>
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+                  {FILTER_CONFIG.langs.map((l) => (
+                    <button
+                      key={l}
+                      type="button"
+                      onClick={() => {
+                        setSelectedLang(l);
+                        setPage(1);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition text-[11px] ${
+                        selectedLang === l
+                          ? "bg-cyan-500 text-dark-950 font-bold shadow-md shadow-cyan-500/20"
+                          : "text-gray-400 hover:text-white hover:bg-white/5"
+                      }`}
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 5. 全部画质 */}
+              <div className="flex items-center gap-2 pt-1.5 border-t border-white/5">
+                <span className="w-14 text-gray-400 font-bold shrink-0 text-[11px]">全部画质</span>
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+                  {FILTER_CONFIG.qualities.map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => {
+                        setSelectedQuality(q);
+                        setPage(1);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition text-[11px] ${
+                        selectedQuality === q
+                          ? "bg-cyan-500 text-dark-950 font-bold shadow-md shadow-cyan-500/20"
+                          : "text-gray-400 hover:text-white hover:bg-white/5"
+                      }`}
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 6. 全部状态 */}
+              <div className="flex items-center gap-2 pt-1.5 border-t border-white/5">
+                <span className="w-14 text-gray-400 font-bold shrink-0 text-[11px]">全部状态</span>
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+                  {FILTER_CONFIG.statuses.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => {
+                        setSelectedStatus(s);
+                        setPage(1);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition text-[11px] ${
+                        selectedStatus === s
+                          ? "bg-cyan-500 text-dark-950 font-bold shadow-md shadow-cyan-500/20"
+                          : "text-gray-400 hover:text-white hover:bg-white/5"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Film Cards Results Area */}

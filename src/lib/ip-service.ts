@@ -28,13 +28,40 @@ export function getClientIp(request: Request): string {
   const cfConnectingIp = request.headers.get("cf-connecting-ip");
   if (cfConnectingIp) return cfConnectingIp.trim();
 
-  const xRealIp = request.headers.get("x-real-ip");
-  if (xRealIp) return xRealIp.trim();
-
   const xForwardedFor = request.headers.get("x-forwarded-for");
   if (xForwardedFor) {
-    return xForwardedFor.split(",")[0].trim();
+    const ips = xForwardedFor.split(",").map((i) => i.trim()).filter(Boolean);
+    for (const ip of ips) {
+      if (
+        !ip.startsWith("127.") &&
+        !ip.startsWith("192.168.") &&
+        !ip.startsWith("10.") &&
+        !ip.startsWith("172.16.") &&
+        !ip.startsWith("172.17.") &&
+        !ip.startsWith("172.18.") &&
+        !ip.startsWith("172.19.") &&
+        !ip.startsWith("172.20.") &&
+        !ip.startsWith("172.21.") &&
+        !ip.startsWith("172.22.") &&
+        !ip.startsWith("172.23.") &&
+        !ip.startsWith("172.24.") &&
+        !ip.startsWith("172.25.") &&
+        !ip.startsWith("172.26.") &&
+        !ip.startsWith("172.27.") &&
+        !ip.startsWith("172.28.") &&
+        !ip.startsWith("172.29.") &&
+        !ip.startsWith("172.30.") &&
+        !ip.startsWith("172.31.") &&
+        ip !== "::1"
+      ) {
+        return ip;
+      }
+    }
+    return ips[0];
   }
+
+  const xRealIp = request.headers.get("x-real-ip");
+  if (xRealIp) return xRealIp.trim();
 
   return "127.0.0.1";
 }
@@ -58,10 +85,16 @@ export function maskIp(ip: string): string {
   return ip;
 }
 
-function formatTwoTier(country: string, region: string, city: string): string {
-  country = (country || "中国").replace("阿拉伯联合酋长国", "阿联酋").replace("中华人民共和国", "中国").trim();
-  
+export function formatTwoTierLocation(country: string, region: string, city: string): string {
+  country = (country || "中国")
+    .replace("阿拉伯联合酋长国", "阿联酋")
+    .replace("中华人民共和国", "中国")
+    .replace("United Arab Emirates", "阿联酋")
+    .replace("China", "中国")
+    .trim();
+
   let secondTier = "";
+
   if (city && region) {
     const cleanCity = city.replace(/市|自治州|地区|特别行政区/g, "").trim();
     const cleanRegion = region.replace(/省|自治区|特别行政区|酋長國|酋长国/g, "").trim();
@@ -77,14 +110,16 @@ function formatTwoTier(country: string, region: string, city: string): string {
   }
 
   if (!secondTier || secondTier === country) {
-    return country;
+    if (country === "中国") return "中国 · 核心枢纽";
+    return `${country} · 本地`;
   }
+
   return `${country} · ${secondTier}`;
 }
 
 export async function resolveIpLocation(ip: string, headers?: Headers): Promise<string> {
   if (!ip || ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172.16.")) {
-    return "本地局域网";
+    return "局域网 · 本地节点";
   }
 
   if (ipCache.has(ip)) {
@@ -94,14 +129,10 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
   // 1. Check Cloudflare Geo Headers
   if (headers) {
     const countryCode = (headers.get("cf-ipcountry") || "").toUpperCase();
-    const city = headers.get("cf-ipcity");
+    const city = headers.get("cf-ipcity") || "";
     const countryName = COUNTRY_NAME_MAP[countryCode] || countryCode;
     if (countryName && city) {
-      const loc = formatTwoTier(countryName, "", city);
-      ipCache.set(ip, loc);
-      return loc;
-    } else if (countryName && countryName !== "XX" && countryName !== "T1") {
-      const loc = countryName;
+      const loc = formatTwoTierLocation(countryName, "", city);
       ipCache.set(ip, loc);
       return loc;
     }
@@ -110,7 +141,7 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
   // 2. Query ip-api.com with Chinese localization (supports IPv4 & IPv6 worldwide)
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 1500);
+    const timeout = setTimeout(() => controller.abort(), 1800);
 
     const res = await fetch(`http://ip-api.com/json/${ip}?lang=zh-CN`, {
       signal: controller.signal,
@@ -124,7 +155,7 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
         const region = data.regionName || "";
         const city = data.city || "";
 
-        const loc = formatTwoTier(country, region, city);
+        const loc = formatTwoTierLocation(country, region, city);
         ipCache.set(ip, loc);
         return loc;
       }
@@ -134,7 +165,7 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
   // 3. Fallback to ipwho.is (global GeoIP with zh-CN support)
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 1500);
+    const timeout = setTimeout(() => controller.abort(), 1800);
 
     const res = await fetch(`https://ipwho.is/${ip}?lang=zh-CN`, {
       signal: controller.signal,
@@ -148,12 +179,32 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
         const city = data.city || "";
         const region = data.region || "";
 
-        const loc = formatTwoTier(country, region, city);
+        const loc = formatTwoTierLocation(country, region, city);
         ipCache.set(ip, loc);
         return loc;
       }
     }
   } catch (e) {}
 
-  return "中国";
+  // 4. China domestic fallback
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1500);
+
+    const res = await fetch(`https://whois.pconline.com.cn/ipJson.jsp?ip=${ip}&json=true`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.pro || data.city) {
+        const loc = formatTwoTierLocation("中国", data.pro || "", data.city || "");
+        ipCache.set(ip, loc);
+        return loc;
+      }
+    }
+  } catch (e) {}
+
+  return "中国 · 综合网络";
 }
