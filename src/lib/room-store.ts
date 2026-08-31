@@ -29,6 +29,7 @@ export interface WatchRoom {
   vodId: string;
   vodName: string;
   vodPic: string;
+  vodItem?: VodItem;
   sourceIndex: number;
   episodeIndex: number;
   episodeName: string;
@@ -222,6 +223,7 @@ export const RoomStore = {
       vodId: vodItem.id,
       vodName: vodItem.name,
       vodPic: vodItem.pic,
+      vodItem: vodItem,
       sourceIndex,
       episodeIndex,
       episodeName: episode.name,

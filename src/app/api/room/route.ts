@@ -11,9 +11,9 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { title, vodId, sourceIndex = 0, episodeIndex = 0, isPublic = true, password = "", controlMode = "free", host } = body;
+    const { title, vodId, vodItem: passedVodItem, sourceIndex = 0, episodeIndex = 0, isPublic = true, password = "", controlMode = "free", host } = body;
 
-    const vodItem = await fetchLiveVodDetail(vodId);
+    const vodItem = passedVodItem || (await fetchLiveVodDetail(vodId));
     if (!vodItem) {
       return NextResponse.json({ code: 404, message: "影视不存在" }, { status: 404 });
     }

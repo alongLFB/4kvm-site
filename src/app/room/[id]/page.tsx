@@ -40,6 +40,48 @@ import { VodItem } from "@/lib/types";
 import { getGuestUser, updateGuestUser, GuestUser } from "@/lib/guest";
 import { RoomSettingsModal } from "@/components/RoomSettingsModal";
 
+// Helper to switch video stream reliably with Hls
+function loadHlsStream(art: Artplayer, streamUrl: string, startTime: number = 0) {
+  if (!art || !streamUrl) return;
+
+  if (art.hls) {
+    try {
+      art.hls.destroy();
+      art.hls = null;
+    } catch (e) {}
+  }
+
+  if (Hls.isSupported()) {
+    const hls = new Hls({
+      maxBufferLength: 60,
+      maxMaxBufferLength: 120,
+      startFragPrefetch: true,
+    });
+    hls.loadSource(streamUrl);
+    hls.attachMedia(art.video);
+    art.hls = hls;
+
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      if (startTime > 0) {
+        art.currentTime = startTime;
+      }
+      art.play().catch(() => {});
+    });
+  } else if (art.video.canPlayType("application/vnd.apple.mpegurl")) {
+    art.video.src = streamUrl;
+    if (startTime > 0) {
+      art.currentTime = startTime;
+    }
+    art.play().catch(() => {});
+  } else {
+    art.video.src = streamUrl;
+    if (startTime > 0) {
+      art.currentTime = startTime;
+    }
+    art.play().catch(() => {});
+  }
+}
+
 export default function RoomPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: roomId } = use(params);
   const router = useRouter();
@@ -185,7 +227,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           isSyncingFromRemote.current = true;
 
           if (payload.action === "play") {
-            if (!art.playing) art.play();
+            if (!art.playing) art.play().catch(() => {});
             if (Math.abs(art.currentTime - payload.currentTime) > 1.5) {
               art.currentTime = payload.currentTime;
             }
@@ -197,12 +239,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           } else if (payload.action === "source" || payload.action === "episode") {
             if (payload.streamUrl) {
               const prevTime = payload.currentTime || 0;
-              art.switchUrl(payload.streamUrl);
-              if (prevTime > 0) {
-                art.on("ready", () => {
-                  art.currentTime = prevTime;
-                });
-              }
+              loadHlsStream(art, payload.streamUrl, prevTime);
               setRoom((prev) =>
                 prev
                   ? {
@@ -348,14 +385,13 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
         art.destroy(false);
       }
     };
-  }, [room?.streamUrl, passwordRequired]);
+  }, [room?.id, passwordRequired]);
 
   // Back button click handler with Host Protection Modal
   const handleBackClick = () => {
     if (isHost) {
       setExitModalOpen(true);
     } else {
-      // Normal member exit
       fetch(`/api/room/${roomId}/leave`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -365,7 +401,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     }
   };
 
-  // Host transfers and exits
   const handleHostTransferAndExit = () => {
     fetch(`/api/room/${roomId}/leave`, {
       method: "POST",
@@ -375,7 +410,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     router.push("/hall");
   };
 
-  // Host disbands and closes room
   const handleHostDisbandAndExit = () => {
     fetch(`/api/room/${roomId}/leave`, {
       method: "POST",
@@ -385,7 +419,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     router.push("/hall");
   };
 
-  // Host manually transfers to specific member
   const handleManualTransfer = (targetUserId: string) => {
     fetch(`/api/room/${roomId}/transfer`, {
       method: "POST",
@@ -394,7 +427,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     });
   };
 
-  // Host kicks member
   const handleKickMember = (targetUserId: string) => {
     fetch(`/api/room/${roomId}/kick`, {
       method: "POST",
@@ -429,7 +461,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     });
   };
 
-  // Switch Line / Source with real-time sync
+  // Switch Line / Source with real-time sync and instant optimistic UI
   const handleSwitchSource = (sourceIdx: number) => {
     if (!vodItem || !room) return;
     const targetSource = vodItem.sources[sourceIdx];
@@ -440,6 +472,24 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     const art = artInstanceRef.current;
     const currentTime = art ? art.currentTime : room.currentTime;
 
+    // 1. Instantly update local player & UI selection
+    setRoom((prev) =>
+      prev
+        ? {
+            ...prev,
+            sourceIndex: sourceIdx,
+            episodeIndex: targetEpIndex,
+            episodeName: targetEp.name,
+            streamUrl: targetEp.url,
+          }
+        : null
+    );
+
+    if (art) {
+      loadHlsStream(art, targetEp.url, currentTime);
+    }
+
+    // 2. Broadcast to all members
     const user = getGuestUser();
     fetch(`/api/room/${roomId}/sync`, {
       method: "POST",
@@ -457,8 +507,28 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     });
   };
 
-  // Switch Episode with real-time sync
+  // Switch Episode with real-time sync and instant optimistic UI
   const handleSwitchEpisode = (idx: number, ep: { name: string; url: string }) => {
+    if (!room) return;
+    const art = artInstanceRef.current;
+
+    // 1. Instantly update local player & UI selection
+    setRoom((prev) =>
+      prev
+        ? {
+            ...prev,
+            episodeIndex: idx,
+            episodeName: ep.name,
+            streamUrl: ep.url,
+          }
+        : null
+    );
+
+    if (art) {
+      loadHlsStream(art, ep.url, 0);
+    }
+
+    // 2. Broadcast to all members
     const user = getGuestUser();
     fetch(`/api/room/${roomId}/sync`, {
       method: "POST",
@@ -748,18 +818,19 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                       return (
                         <button
                           key={idx}
+                          type="button"
                           onClick={() => handleSwitchSource(idx)}
-                          className={`w-full py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                          className={`w-full py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
                             isCurrent
-                              ? "bg-cyan-500/15 border border-cyan-500/50 text-cyan-400 shadow-sm"
+                              ? "bg-cyan-500/20 border-2 border-cyan-400 text-cyan-300 shadow-md shadow-cyan-500/10 font-bold"
                               : "bg-dark-800 hover:bg-dark-700 text-gray-300 border border-white/5"
                           }`}
                         >
-                          <span className="flex items-center gap-1.5">
-                            <span className={`w-1.5 h-1.5 rounded-full ${isCurrent ? "bg-cyan-400" : "bg-gray-600"}`} />
-                            {src.sourceName}
+                          <span className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${isCurrent ? "bg-cyan-400 animate-pulse" : "bg-gray-600"}`} />
+                            <span>{src.sourceName}</span>
                           </span>
-                          <span className="text-[11px] opacity-70">共 {src.episodes.length} 集</span>
+                          <span className="text-[11px] opacity-75">{src.episodes.length} 集</span>
                         </button>
                       );
                     })}
@@ -777,19 +848,23 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[260px] overflow-y-auto pr-1">
-                    {episodes.map((ep, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleSwitchEpisode(idx, ep)}
-                        className={`p-2.5 rounded-xl text-xs font-semibold transition ${
-                          room.episodeIndex === idx
-                            ? "bg-cyan-500 text-dark-950 font-bold shadow-md shadow-cyan-500/20"
-                            : "bg-dark-800 text-gray-300 hover:bg-dark-700 hover:text-white"
-                        }`}
-                      >
-                        {ep.name}
-                      </button>
-                    ))}
+                    {episodes.map((ep, idx) => {
+                      const isEpActive = room.episodeIndex === idx;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSwitchEpisode(idx, ep)}
+                          className={`p-2.5 rounded-xl text-xs font-semibold transition ${
+                            isEpActive
+                              ? "bg-cyan-500 text-dark-950 font-black shadow-md shadow-cyan-500/20 scale-[1.02]"
+                              : "bg-dark-800 text-gray-300 hover:bg-dark-700 hover:text-white border border-white/5"
+                          }`}
+                        >
+                          {ep.name}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -899,12 +974,14 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                       {isHost && m.id !== currentUser.id && (
                         <div className="flex items-center justify-end gap-2 pt-1">
                           <button
+                            type="button"
                             onClick={() => handleManualTransfer(m.id)}
                             className="px-2 py-0.8 bg-gold-400/10 hover:bg-gold-400 text-gold-400 hover:text-dark-950 text-[10px] font-bold rounded-lg border border-gold-400/20 transition flex items-center gap-1"
                           >
                             <Crown className="w-2.5 h-2.5" /> 移交房主
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleKickMember(m.id)}
                             className="px-2 py-0.8 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white text-[10px] font-bold rounded-lg border border-rose-500/20 transition flex items-center gap-1"
                           >

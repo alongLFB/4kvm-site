@@ -76,6 +76,7 @@ export function CreateRoomModal({
         body: JSON.stringify({
           title,
           vodId: vodItem.id,
+          vodItem,
           sourceIndex,
           episodeIndex,
           isPublic,

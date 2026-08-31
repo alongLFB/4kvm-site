@@ -9,7 +9,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ code: 404, message: "房间不存在或已解散" }, { status: 404 });
   }
 
-  const vodItem = await fetchLiveVodDetail(room.vodId);
+  const vodItem = room.vodItem || (await fetchLiveVodDetail(room.vodId));
 
   return NextResponse.json({ code: 200, data: { room, vodItem } });
 }
