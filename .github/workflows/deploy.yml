@@ -34,8 +34,8 @@ jobs:
           ENV_B64: ${{ steps.env_prep.outputs.ENV_B64 }}
           HAS_ENV: ${{ steps.env_prep.outputs.HAS_ENV }}
         with:
-          host: ${{ secrets.SERVER_HOST }}     # 服务器IP (如 84.13.128.183)
-          username: ${{ secrets.SERVER_USER }} # 服务器用户名 (如 ubuntu)
+          host: ${{ secrets.SERVER_HOST }}     # 服务器IP
+          username: ${{ secrets.SERVER_USER }} # 服务器用户名
           key: ${{ secrets.SERVER_SSH_KEY }}   # 服务器私钥
           port: ${{ secrets.SERVER_PORT || 22 }}
           envs: ENV_B64,HAS_ENV
@@ -48,6 +48,10 @@ jobs:
               git clone https://github.com/alongLFB/4kvm-site.git
             fi
             cd 4kvm-site
+
+            # 自动修复/配置远程 origin 地址，防止出现 'origin' does not appear to be a git repository 报错
+            git remote add origin https://github.com/alongLFB/4kvm-site.git 2>/dev/null || git remote set-url origin https://github.com/alongLFB/4kvm-site.git
+            
             git fetch origin master
             git reset --hard origin/master
 
