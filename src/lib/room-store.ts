@@ -778,6 +778,17 @@ export const RoomStore = {
     return true;
   },
 
+    updateSpeakingState(roomId: string, userId: string, isSpeaking: boolean): boolean {
+    const room = rooms.get(roomId);
+    if (!room) return false;
+    broadcastRoomEvent(roomId, {
+      type: "speaking_state",
+      userId,
+      isSpeaking,
+    });
+    return true;
+  },
+
   updateVoiceState(roomId: string, userId: string, isMuted: boolean): boolean {
     const room = rooms.get(roomId);
     if (!room) return false;

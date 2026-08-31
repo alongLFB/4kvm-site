@@ -231,6 +231,8 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           if (payload.toUserId === user.id && voiceManagerRef.current) {
             voiceManagerRef.current.handleSignal(payload.fromUserId, payload.signal);
           }
+        } else if (payload.type === "speaking_state") {
+          setSpeakingUsers((prev) => ({ ...prev, [payload.userId]: payload.isSpeaking }));
         } else if (payload.type === "voice_state") {
           setMemberMuteStates((prev) => ({ ...prev, [payload.userId]: payload.isMuted }));
         } else if (payload.type === "mute_all") {

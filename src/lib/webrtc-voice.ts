@@ -19,6 +19,8 @@ export class WebRTCVoiceManager {
   private localAnalyser: AnalyserNode | null = null;
   private remoteAnalysers: Map<string, AnalyserNode> = new Map();
   private analyserInterval: NodeJS.Timeout | null = null;
+  private lastLocalSpeaking: boolean = false;
+  private speakingDebounceTimeout: NodeJS.Timeout | null = null;
 
   public isMuted: boolean = true;
   public isDeafened: boolean = false;
@@ -38,12 +40,30 @@ export class WebRTCVoiceManager {
       };
       window.addEventListener("click", unlockAudio, { passive: true });
       window.addEventListener("touchstart", unlockAudio, { passive: true });
+
+      // Start audio analyzer loop immediately so remote streams are analyzed
+      this.ensureAudioContext();
+      this.startAnalyserLoop();
     }
   }
 
+  private ensureAudioContext(): AudioContext | null {
+    if (typeof window === "undefined") return null;
+    try {
+      if (!this.audioContext) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          this.audioContext = new AudioCtx();
+        }
+      }
+    } catch (e) {}
+    return this.audioContext;
+  }
+
   public resumeAudio() {
-    if (this.audioContext && this.audioContext.state === "suspended") {
-      this.audioContext.resume().catch(() => {});
+    const ctx = this.ensureAudioContext();
+    if (ctx && ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
     }
     this.remoteAudios.forEach((audio) => {
       if (audio.paused && !this.isDeafened) {
@@ -56,9 +76,8 @@ export class WebRTCVoiceManager {
   public playChime(type: "unmute" | "mute" | "alert") {
     if (typeof window === "undefined") return;
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = this.audioContext || new AudioCtx();
+      const ctx = this.ensureAudioContext();
+      if (!ctx) return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
@@ -144,7 +163,7 @@ export class WebRTCVoiceManager {
         track.enabled = !this.isMuted;
       });
 
-      this.setupAudioAnalyser();
+      this.setupLocalAudioAnalyser();
 
       // Dynamic Renegotiation: Attach new audio tracks to ALL existing PeerConnections
       this.peerConnections.forEach((pc, targetUserId) => {
@@ -173,62 +192,80 @@ export class WebRTCVoiceManager {
     return false;
   }
 
-  // 2. Setup AudioContext to detect speaking volume decibels & local input meter
-  private setupAudioAnalyser() {
-    if (typeof window === "undefined") return;
+  // 2. Setup Local Audio Analyser
+  private setupLocalAudioAnalyser() {
+    const ctx = this.ensureAudioContext();
+    if (!ctx || !this.localStream) return;
 
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-
-      if (!this.audioContext) {
-        this.audioContext = new AudioCtx();
-      }
-
-      if (this.localStream) {
-        const source = this.audioContext.createMediaStreamSource(this.localStream);
-        this.localAnalyser = this.audioContext.createAnalyser();
-        this.localAnalyser.fftSize = 256;
-        source.connect(this.localAnalyser);
-      }
-
-      if (this.analyserInterval) clearInterval(this.analyserInterval);
-
-      // Decibel analysis loop every 100ms
-      this.analyserInterval = setInterval(() => {
-        // Check local speaking & calculate real-time meter (0~100)
-        if (this.localAnalyser && !this.isMuted) {
-          const data = new Uint8Array(this.localAnalyser.frequencyBinCount);
-          this.localAnalyser.getByteFrequencyData(data);
-          const avg = data.reduce((acc, val) => acc + val, 0) / data.length;
-          const isSpeaking = avg > 10;
-          const level = Math.min(100, Math.round(avg * 2.2));
-          this.onSpeakingChange?.(this.currentUserId, isSpeaking, avg);
-          this.onLocalLevel?.(level);
-        } else {
-          this.onSpeakingChange?.(this.currentUserId, false, 0);
-          this.onLocalLevel?.(0);
-        }
-
-        // Check remote speaking
-        this.remoteAnalysers.forEach((analyser, userId) => {
-          if (!this.isDeafened) {
-            const data = new Uint8Array(analyser.frequencyBinCount);
-            analyser.getByteFrequencyData(data);
-            const avg = data.reduce((acc, val) => acc + val, 0) / data.length;
-            const isSpeaking = avg > 10;
-            this.onSpeakingChange?.(userId, isSpeaking, avg);
-          } else {
-            this.onSpeakingChange?.(userId, false, 0);
-          }
-        });
-      }, 100);
-    } catch (e) {
-      console.warn("AudioContext init warning:", e);
-    }
+      const source = ctx.createMediaStreamSource(this.localStream);
+      this.localAnalyser = ctx.createAnalyser();
+      this.localAnalyser.fftSize = 256;
+      source.connect(this.localAnalyser);
+    } catch (e) {}
   }
 
-  // 3. Toggle Local Mic (Unmute / Mute)
+  // 3. Start universal Audio Analyser Loop and broadcast speaking transitions
+  private startAnalyserLoop() {
+    if (this.analyserInterval) clearInterval(this.analyserInterval);
+
+    this.analyserInterval = setInterval(() => {
+      // Check local speaking & calculate real-time meter (0~100)
+      if (this.localAnalyser && !this.isMuted) {
+        const data = new Uint8Array(this.localAnalyser.frequencyBinCount);
+        this.localAnalyser.getByteFrequencyData(data);
+        const avg = data.reduce((acc, val) => acc + val, 0) / data.length;
+        const isSpeaking = avg > 10;
+        const level = Math.min(100, Math.round(avg * 2.2));
+
+        this.onSpeakingChange?.(this.currentUserId, isSpeaking, avg);
+        this.onLocalLevel?.(level);
+
+        // Broadcast speaking state change across room via HTTP/SSE
+        if (isSpeaking !== this.lastLocalSpeaking) {
+          this.lastLocalSpeaking = isSpeaking;
+          this.broadcastSpeakingState(isSpeaking);
+        }
+      } else {
+        this.onSpeakingChange?.(this.currentUserId, false, 0);
+        this.onLocalLevel?.(0);
+        if (this.lastLocalSpeaking) {
+          this.lastLocalSpeaking = false;
+          this.broadcastSpeakingState(false);
+        }
+      }
+
+      // Check remote speaking via AnalyserNodes
+      this.remoteAnalysers.forEach((analyser, userId) => {
+        if (!this.isDeafened) {
+          const data = new Uint8Array(analyser.frequencyBinCount);
+          analyser.getByteFrequencyData(data);
+          const avg = data.reduce((acc, val) => acc + val, 0) / data.length;
+          const isSpeaking = avg > 10;
+          this.onSpeakingChange?.(userId, isSpeaking, avg);
+        } else {
+          this.onSpeakingChange?.(userId, false, 0);
+        }
+      });
+    }, 100);
+  }
+
+  // Broadcast speaking transition to whole room
+  private broadcastSpeakingState(isSpeaking: boolean) {
+    if (this.speakingDebounceTimeout) clearTimeout(this.speakingDebounceTimeout);
+    this.speakingDebounceTimeout = setTimeout(() => {
+      fetch(`/api/room/${this.roomId}/webrtc/speaking`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: this.currentUserId,
+          isSpeaking,
+        }),
+      }).catch(() => {});
+    }, 80);
+  }
+
+  // 4. Toggle Local Mic (Unmute / Mute)
   public async toggleMute(forceMute?: boolean): Promise<boolean> {
     this.resumeAudio();
 
@@ -266,7 +303,7 @@ export class WebRTCVoiceManager {
     return !this.isMuted;
   }
 
-  // 4. Toggle Speaker / Deafen
+  // 5. Toggle Speaker / Deafen
   public toggleDeafen(forceDeafen?: boolean): boolean {
     this.resumeAudio();
 
@@ -276,7 +313,7 @@ export class WebRTCVoiceManager {
       this.isDeafened = !this.isDeafened;
     }
 
-    this.remoteAudios.forEach((audio, userId) => {
+    this.remoteAudios.forEach((audio) => {
       audio.muted = this.isDeafened;
     });
 
@@ -284,7 +321,7 @@ export class WebRTCVoiceManager {
     return this.isDeafened;
   }
 
-  // 5. Create PeerConnection for a specific remote peer with GainNode Boost
+  // 6. Create PeerConnection for a specific remote peer with GainNode Boost
   private getOrCreatePeer(targetUserId: string, isInitiator: boolean): RTCPeerConnection {
     if (this.peerConnections.has(targetUserId)) {
       return this.peerConnections.get(targetUserId)!;
@@ -324,14 +361,15 @@ export class WebRTCVoiceManager {
       audio.play().catch(() => {});
 
       // Setup Web Audio GainNode & Analyser
-      if (this.audioContext) {
+      const ctx = this.ensureAudioContext();
+      if (ctx) {
         try {
-          const source = this.audioContext.createMediaStreamSource(remoteStream);
-          const gainNode = this.audioContext.createGain();
-          gainNode.gain.setValueAtTime(userVol / 100, this.audioContext.currentTime);
+          const source = ctx.createMediaStreamSource(remoteStream);
+          const gainNode = ctx.createGain();
+          gainNode.gain.setValueAtTime(userVol / 100, ctx.currentTime);
           this.remoteGains.set(targetUserId, gainNode);
 
-          const analyser = this.audioContext.createAnalyser();
+          const analyser = ctx.createAnalyser();
           analyser.fftSize = 256;
           source.connect(gainNode);
           gainNode.connect(analyser);
@@ -361,7 +399,7 @@ export class WebRTCVoiceManager {
     return pc;
   }
 
-  // 6. Connect with all other members in the room
+  // 7. Connect with all other members in the room
   public connectWithMembers(memberIds: string[]) {
     memberIds.forEach((targetId) => {
       if (targetId !== this.currentUserId && !this.peerConnections.has(targetId)) {
@@ -371,7 +409,7 @@ export class WebRTCVoiceManager {
     });
   }
 
-  // 7. Handle incoming WebRTC signaling from SSE with ICE queueing
+  // 8. Handle incoming WebRTC signaling from SSE with ICE queueing
   public async handleSignal(fromUserId: string, signal: any) {
     if (fromUserId === this.currentUserId) return;
 
@@ -411,7 +449,7 @@ export class WebRTCVoiceManager {
     }
   }
 
-  // 8. Send signal over HTTP
+  // 9. Send signal over HTTP
   private sendSignal(toUserId: string, signal: any) {
     fetch(`/api/room/${this.roomId}/webrtc/signal`, {
       method: "POST",
@@ -424,9 +462,10 @@ export class WebRTCVoiceManager {
     }).catch(() => {});
   }
 
-  // 9. Cleanup
+  // 10. Cleanup
   public destroy() {
     if (this.analyserInterval) clearInterval(this.analyserInterval);
+    if (this.speakingDebounceTimeout) clearTimeout(this.speakingDebounceTimeout);
 
     this.peerConnections.forEach((pc) => pc.close());
     this.peerConnections.clear();
