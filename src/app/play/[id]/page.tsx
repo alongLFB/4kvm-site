@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { MovieCard } from "@/components/MovieCard";
-import { Film, Share2, Radio, Loader2 } from "lucide-react";
+import { CreateRoomModal } from "@/components/CreateRoomModal";
+import { Film, Share2, Radio, Users, Loader2 } from "lucide-react";
 import { VodItem, WatchHistoryItem } from "@/lib/types";
 
 const VideoPlayer = dynamic(() => import("@/components/Player/ArtPlayer"), {
@@ -12,7 +13,7 @@ const VideoPlayer = dynamic(() => import("@/components/Player/ArtPlayer"), {
   loading: () => (
     <div className="w-full aspect-video rounded-2xl bg-dark-900 flex items-center justify-center border border-white/10 text-gray-400">
       <div className="animate-pulse flex flex-col items-center gap-2">
-        <div className="w-8 h-8 rounded-full border-2 border-gold-500 border-t-transparent animate-spin" />
+        <div className="w-8 h-8 rounded-full border-2 border-cyan-500 border-t-transparent animate-spin" />
         <span className="text-xs">加载播放器中...</span>
       </div>
     </div>
@@ -29,6 +30,7 @@ export default function PlayPage() {
   const [currentSourceIndex, setCurrentSourceIndex] = useState(0);
   const [currentEpIndex, setCurrentEpIndex] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [createRoomOpen, setCreateRoomOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -60,7 +62,7 @@ export default function PlayPage() {
   if (loading || !item) {
     return (
       <div className="py-40 flex flex-col items-center justify-center gap-3 text-gray-400">
-        <Loader2 className="w-10 h-10 text-gold-500 animate-spin" />
+        <Loader2 className="w-10 h-10 text-cyan-400 animate-spin" />
         <span className="text-sm">正在加载视频播放流与剧集列表...</span>
       </div>
     );
@@ -121,7 +123,7 @@ export default function PlayPage() {
               <div>
                 <h1 className="text-2xl font-black text-white flex items-center gap-3">
                   {item.name}
-                  <span className="text-sm font-normal text-gold-400 px-2.5 py-0.5 rounded-full bg-gold-400/10 border border-gold-400/20">
+                  <span className="text-sm font-normal text-cyan-400 px-2.5 py-0.5 rounded-full bg-cyan-400/10 border border-cyan-400/20">
                     {currentEpisode.name}
                   </span>
                 </h1>
@@ -130,12 +132,21 @@ export default function PlayPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
+                {/* Watch Party Button */}
+                <button
+                  onClick={() => setCreateRoomOpen(true)}
+                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500/15 to-blue-500/15 hover:from-cyan-500 hover:to-blue-600 text-xs font-bold text-cyan-400 hover:text-dark-950 flex items-center gap-1.5 transition border border-cyan-500/40 shadow-lg shadow-cyan-500/10"
+                >
+                  <Users className="w-4 h-4" />
+                  👥 邀请好友一起看
+                </button>
+
                 <button
                   onClick={handleShare}
                   className="px-3.5 py-2 rounded-xl bg-dark-800 hover:bg-dark-700 text-xs font-semibold text-gray-200 flex items-center gap-1.5 transition border border-white/5"
                 >
-                  <Share2 className="w-4 h-4 text-gold-400" />
+                  <Share2 className="w-4 h-4 text-cyan-400" />
                   {copied ? "已复制链接" : "分享"}
                 </button>
               </div>
@@ -165,7 +176,7 @@ export default function PlayPage() {
           <div className="p-6 rounded-2xl bg-dark-900 border border-white/10 space-y-4">
             <div>
               <div className="flex items-center gap-2 text-xs font-bold text-gray-400 mb-2.5">
-                <Radio className="w-3.5 h-3.5 text-gold-400" />
+                <Radio className="w-3.5 h-3.5 text-cyan-400" />
                 切换播放源线路
               </div>
               <div className="flex flex-col gap-1.5">
@@ -182,7 +193,7 @@ export default function PlayPage() {
                       }}
                       className={`w-full py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
                         isCurrent
-                          ? "bg-gold-500/15 border border-gold-500/40 text-gold-400 shadow-sm"
+                          ? "bg-cyan-500/15 border border-cyan-500/40 text-cyan-400 shadow-sm"
                           : "bg-dark-800 hover:bg-dark-700 text-gray-300 border border-white/5"
                       }`}
                     >
@@ -196,7 +207,7 @@ export default function PlayPage() {
 
             <div className="flex items-center justify-between pt-3 border-t border-white/10">
               <h2 className="text-sm font-bold text-white flex items-center gap-1.5">
-                <Film className="w-4 h-4 text-gold-400" />
+                <Film className="w-4 h-4 text-cyan-400" />
                 选集列表
               </h2>
               <span className="text-xs text-gray-400">
@@ -213,7 +224,7 @@ export default function PlayPage() {
                     onClick={() => setCurrentEpIndex(idx)}
                     className={`py-2.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center text-center ${
                       isActive
-                        ? "bg-gradient-to-r from-gold-500 to-gold-400 text-dark-950 shadow-lg shadow-gold-500/20 scale-[1.02]"
+                        ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-dark-950 shadow-lg shadow-cyan-500/20 scale-[1.02]"
                         : "bg-dark-800 hover:bg-dark-700 text-gray-300 hover:text-white border border-white/5"
                     }`}
                   >
@@ -236,6 +247,15 @@ export default function PlayPage() {
           </div>
         </section>
       )}
+
+      {/* Modal */}
+      <CreateRoomModal
+        vodItem={item}
+        initialSourceIndex={currentSourceIndex}
+        initialEpisodeIndex={currentEpIndex}
+        isOpen={createRoomOpen}
+        onClose={() => setCreateRoomOpen(false)}
+      />
     </div>
   );
 }

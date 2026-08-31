@@ -7,7 +7,7 @@ import {
   Search,
   Film,
   Tv,
-  PlayCircle,
+  Users,
   Flame,
   History,
   Menu,
@@ -33,6 +33,7 @@ export function Navbar() {
 
   const isHome = pathname === "/";
   const isCategory = pathname === "/category";
+  const isHall = pathname === "/hall";
   const isHistory = pathname === "/history";
 
   return (
@@ -102,7 +103,18 @@ export function Navbar() {
                   }`}
                 >
                   <SlidersHorizontal className="w-4 h-4 text-cyan-400" />
-                  全部片库 (高级筛选)
+                  全部片库
+                </Link>
+                <Link
+                  href="/hall"
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${
+                    isHall
+                      ? "text-cyan-400 bg-cyan-500/15 font-bold border border-cyan-500/30 shadow-sm"
+                      : "text-gray-300 hover:text-cyan-400 hover:bg-white/5"
+                  }`}
+                >
+                  <Users className="w-4 h-4 text-cyan-400" />
+                  🎪 放映广场 (一起看)
                 </Link>
               </div>
             </div>
@@ -134,11 +146,11 @@ export function Navbar() {
             {/* Mobile Header Actions */}
             <div className="flex md:hidden items-center gap-2">
               <Link
-                href="/category"
+                href="/hall"
                 className="px-2.5 py-1 text-xs font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 rounded-lg flex items-center gap-1"
               >
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-                全部片库
+                <Users className="w-3.5 h-3.5" />
+                一起看
               </Link>
               <Link href="/history" className="p-2 text-gray-300">
                 <History className="w-5 h-5" />
@@ -177,9 +189,17 @@ export function Navbar() {
                 首页
               </Link>
               <Link
+                href="/hall"
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-3 bg-cyan-500/15 border border-cyan-500/40 rounded-xl text-sm font-bold text-cyan-400 flex items-center gap-2"
+              >
+                <Users className="w-4 h-4 text-cyan-400" />
+                🎪 放映广场 (一起看)
+              </Link>
+              <Link
                 href="/category"
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-xl text-sm font-bold text-cyan-400 flex items-center gap-2"
+                className="p-3 bg-dark-800 rounded-xl text-sm font-medium text-white flex items-center gap-2"
               >
                 <SlidersHorizontal className="w-4 h-4 text-cyan-400" />
                 全部片库 (多维筛选)
@@ -208,14 +228,6 @@ export function Navbar() {
                 <Sparkles className="w-4 h-4 text-purple-400" />
                 动漫
               </Link>
-              <Link
-                href="/category?type=综艺"
-                onClick={() => setMobileMenuOpen(false)}
-                className="p-3 bg-dark-800 rounded-xl text-sm font-medium text-white flex items-center gap-2"
-              >
-                <Flame className="w-4 h-4 text-amber-400" />
-                综艺
-              </Link>
             </div>
           </div>
         )}
@@ -241,21 +253,25 @@ export function Navbar() {
         </Link>
         <Link
           href="/category"
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
+          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition ${
             isCategory
               ? "text-cyan-400 font-bold bg-cyan-500/10 border border-cyan-500/30"
               : "text-gray-300 hover:text-cyan-400"
           }`}
         >
           <SlidersHorizontal className="w-5 h-5 text-cyan-400" />
-          <span className="text-[10px] text-cyan-400 font-bold">全部片库</span>
+          <span className="text-[10px] text-cyan-400 font-bold">片库</span>
         </Link>
         <Link
-          href="/category?type=电视剧"
-          className="flex flex-col items-center gap-1 py-1 px-2 text-gray-400 hover:text-white rounded-lg transition"
+          href="/hall"
+          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition ${
+            isHall
+              ? "text-cyan-400 font-bold bg-cyan-500/15 border border-cyan-500/40"
+              : "text-gray-400 hover:text-white"
+          }`}
         >
-          <Tv className="w-5 h-5" />
-          <span className="text-[10px]">电视剧</span>
+          <Users className="w-5 h-5" />
+          <span className="text-[10px]">放映广场</span>
         </Link>
         <Link
           href="/history"
