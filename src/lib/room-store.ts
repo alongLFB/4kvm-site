@@ -291,7 +291,6 @@ export const RoomStore = {
 
     room.updatedAt = Date.now();
 
-    // Broadcast update
     broadcastRoomEvent(roomId, {
       type: "settings_updated",
       title: room.title,
@@ -321,7 +320,6 @@ export const RoomStore = {
     const room = rooms.get(roomId);
     if (!room) return { success: false, message: "房间不存在" };
 
-    // Check password if private and user is not host
     if (!room.isPublic && room.password && user.id !== room.hostId) {
       if (!password || password.trim() !== room.password.trim()) {
         return { success: false, message: "房间口令/密码错误" };
@@ -399,9 +397,11 @@ export const RoomStore = {
   syncPlayback(
     roomId: string,
     action: {
-      type: "play" | "pause" | "seek" | "episode" | "heartbeat";
+      type: "play" | "pause" | "seek" | "source" | "episode" | "heartbeat";
       currentTime: number;
       duration?: number;
+      sourceIndex?: number;
+      sourceName?: string;
       episodeIndex?: number;
       episodeName?: string;
       streamUrl?: string;
@@ -427,7 +427,7 @@ export const RoomStore = {
       broadcastRoomEvent(roomId, { type: "sync", action: "pause", currentTime: room.currentTime, sender: action.sender });
     } else if (action.type === "seek") {
       broadcastRoomEvent(roomId, { type: "sync", action: "seek", currentTime: room.currentTime, sender: action.sender });
-        } else if (action.type === "source") {
+    } else if (action.type === "source") {
       if (typeof action.sourceIndex === "number") room.sourceIndex = action.sourceIndex;
       if (typeof action.episodeIndex === "number") room.episodeIndex = action.episodeIndex;
       if (action.episodeName) room.episodeName = action.episodeName;
@@ -455,8 +455,8 @@ export const RoomStore = {
         currentTime: room.currentTime,
         sender: action.sender,
       });
-    }
     } else if (action.type === "episode") {
+      if (typeof action.sourceIndex === "number") room.sourceIndex = action.sourceIndex;
       if (typeof action.episodeIndex === "number") room.episodeIndex = action.episodeIndex;
       if (action.episodeName) room.episodeName = action.episodeName;
       if (action.streamUrl) room.streamUrl = action.streamUrl;
@@ -477,6 +477,7 @@ export const RoomStore = {
       broadcastRoomEvent(roomId, {
         type: "sync",
         action: "episode",
+        sourceIndex: room.sourceIndex,
         episodeIndex: room.episodeIndex,
         episodeName: room.episodeName,
         streamUrl: room.streamUrl,
