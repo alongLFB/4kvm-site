@@ -3,8 +3,8 @@ RUN apk add --no-cache libc6-compat wget
 WORKDIR /app
 
 FROM base AS deps
-COPY package.json ./
-RUN npm install --legacy-peer-deps
+COPY package.json package-lock.json ./
+RUN npm install
 
 FROM base AS builder
 WORKDIR /app
