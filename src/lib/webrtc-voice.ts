@@ -13,6 +13,7 @@ export class WebRTCVoiceManager {
   private localStream: MediaStream | null = null;
   private peerConnections: Map<string, RTCPeerConnection> = new Map();
   private remoteAudios: Map<string, HTMLAudioElement> = new Map();
+  private remoteGains: Map<string, GainNode> = new Map();
   private pendingCandidates: Map<string, RTCIceCandidateInit[]> = new Map();
   private audioContext: AudioContext | null = null;
   private localAnalyser: AnalyserNode | null = null;
@@ -21,7 +22,9 @@ export class WebRTCVoiceManager {
 
   public isMuted: boolean = true;
   public isDeafened: boolean = false;
-  public onSpeakingChange?: (userId: string, isSpeaking: boolean) => void;
+  public userVolumes: Map<string, number> = new Map(); // userId -> 0 to 200%
+  public onSpeakingChange?: (userId: string, isSpeaking: boolean, decibel: number) => void;
+  public onLocalLevel?: (level: number) => void; // 0 to 100
   public onMuteChange?: (isMuted: boolean) => void;
   public onError?: (err: string) => void;
 
@@ -47,6 +50,56 @@ export class WebRTCVoiceManager {
         audio.play().catch(() => {});
       }
     });
+  }
+
+  // Play gentle synthesized chime (Mic toggle / Mute All)
+  public playChime(type: "unmute" | "mute" | "alert") {
+    if (typeof window === "undefined") return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = this.audioContext || new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      const now = ctx.currentTime;
+      if (type === "unmute") {
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      } else if (type === "mute") {
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.exponentialRampToValueAtTime(440, now + 0.12);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      } else {
+        osc.frequency.setValueAtTime(600, now);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      }
+
+      osc.start(now);
+      osc.stop(now + 0.2);
+    } catch (e) {}
+  }
+
+  // Set individual member volume (0% ~ 200%)
+  public setUserVolume(userId: string, volume: number) {
+    this.userVolumes.set(userId, volume);
+
+    const gain = this.remoteGains.get(userId);
+    if (gain && this.audioContext) {
+      gain.gain.setValueAtTime(volume / 100, this.audioContext.currentTime);
+    }
+
+    const audio = this.remoteAudios.get(userId);
+    if (audio) {
+      audio.volume = Math.min(1.0, volume / 100);
+    }
   }
 
   // 1. Initialize local microphone with multi-tier fallback and dynamic renegotiation
@@ -120,7 +173,7 @@ export class WebRTCVoiceManager {
     return false;
   }
 
-  // 2. Setup AudioContext to detect speaking volume decibels
+  // 2. Setup AudioContext to detect speaking volume decibels & local input meter
   private setupAudioAnalyser() {
     if (typeof window === "undefined") return;
 
@@ -141,17 +194,20 @@ export class WebRTCVoiceManager {
 
       if (this.analyserInterval) clearInterval(this.analyserInterval);
 
-      // Decibel analysis loop every 120ms
+      // Decibel analysis loop every 100ms
       this.analyserInterval = setInterval(() => {
-        // Check local speaking
+        // Check local speaking & calculate real-time meter (0~100)
         if (this.localAnalyser && !this.isMuted) {
           const data = new Uint8Array(this.localAnalyser.frequencyBinCount);
           this.localAnalyser.getByteFrequencyData(data);
           const avg = data.reduce((acc, val) => acc + val, 0) / data.length;
-          const isSpeaking = avg > 12;
-          this.onSpeakingChange?.(this.currentUserId, isSpeaking);
+          const isSpeaking = avg > 10;
+          const level = Math.min(100, Math.round(avg * 2.2));
+          this.onSpeakingChange?.(this.currentUserId, isSpeaking, avg);
+          this.onLocalLevel?.(level);
         } else {
-          this.onSpeakingChange?.(this.currentUserId, false);
+          this.onSpeakingChange?.(this.currentUserId, false, 0);
+          this.onLocalLevel?.(0);
         }
 
         // Check remote speaking
@@ -160,13 +216,13 @@ export class WebRTCVoiceManager {
             const data = new Uint8Array(analyser.frequencyBinCount);
             analyser.getByteFrequencyData(data);
             const avg = data.reduce((acc, val) => acc + val, 0) / data.length;
-            const isSpeaking = avg > 12;
-            this.onSpeakingChange?.(userId, isSpeaking);
+            const isSpeaking = avg > 10;
+            this.onSpeakingChange?.(userId, isSpeaking, avg);
           } else {
-            this.onSpeakingChange?.(userId, false);
+            this.onSpeakingChange?.(userId, false, 0);
           }
         });
-      }, 120);
+      }, 100);
     } catch (e) {
       console.warn("AudioContext init warning:", e);
     }
@@ -197,6 +253,7 @@ export class WebRTCVoiceManager {
       });
     }
 
+    this.playChime(!this.isMuted ? "unmute" : "mute");
     this.onMuteChange?.(this.isMuted);
 
     // Broadcast voice state
@@ -219,14 +276,15 @@ export class WebRTCVoiceManager {
       this.isDeafened = !this.isDeafened;
     }
 
-    this.remoteAudios.forEach((audio) => {
+    this.remoteAudios.forEach((audio, userId) => {
       audio.muted = this.isDeafened;
     });
 
+    this.playChime(!this.isDeafened ? "unmute" : "mute");
     return this.isDeafened;
   }
 
-  // 5. Create PeerConnection for a specific remote peer
+  // 5. Create PeerConnection for a specific remote peer with GainNode Boost
   private getOrCreatePeer(targetUserId: string, isInitiator: boolean): RTCPeerConnection {
     if (this.peerConnections.has(targetUserId)) {
       return this.peerConnections.get(targetUserId)!;
@@ -259,15 +317,25 @@ export class WebRTCVoiceManager {
       }
       audio.srcObject = remoteStream;
       audio.muted = this.isDeafened;
+
+      const userVol = this.userVolumes.get(targetUserId) ?? 100;
+      audio.volume = Math.min(1.0, userVol / 100);
+
       audio.play().catch(() => {});
 
-      // Setup remote analyser
+      // Setup Web Audio GainNode & Analyser
       if (this.audioContext) {
         try {
           const source = this.audioContext.createMediaStreamSource(remoteStream);
+          const gainNode = this.audioContext.createGain();
+          gainNode.gain.setValueAtTime(userVol / 100, this.audioContext.currentTime);
+          this.remoteGains.set(targetUserId, gainNode);
+
           const analyser = this.audioContext.createAnalyser();
           analyser.fftSize = 256;
-          source.connect(analyser);
+          source.connect(gainNode);
+          gainNode.connect(analyser);
+
           this.remoteAnalysers.set(targetUserId, analyser);
         } catch (e) {}
       }
@@ -368,6 +436,7 @@ export class WebRTCVoiceManager {
       audio.remove();
     });
     this.remoteAudios.clear();
+    this.remoteGains.clear();
     this.pendingCandidates.clear();
 
     if (this.localStream) {

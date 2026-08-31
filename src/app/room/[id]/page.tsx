@@ -78,8 +78,10 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   // Voice States
   const [isMicMuted, setIsMicMuted] = useState(true);
   const [isDeafened, setIsDeafened] = useState(false);
+  const [localAudioLevel, setLocalAudioLevel] = useState(0);
   const [speakingUsers, setSpeakingUsers] = useState<Record<string, boolean>>({});
   const [memberMuteStates, setMemberMuteStates] = useState<Record<string, boolean>>({});
+  const [userVolumes, setUserVolumes] = useState<Record<string, number>>({});
   const voiceManagerRef = useRef<WebRTCVoiceManager | null>(null);
 
   // In-Room Film Switcher Modal state
@@ -107,6 +109,13 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const canControl = isHost || (room?.controlMode !== "host");
   const canSwitch = isHost || (room?.switchMode !== "host");
   const otherMembers = members.filter((m) => m.id !== currentUser.id);
+
+  // Active Speakers list
+  const activeSpeakersList = members
+    .filter((m) => speakingUsers[m.id])
+    .map((m) => ({ id: m.id, name: m.name, avatar: m.avatar }));
+  const otherSpeaking = activeSpeakersList.filter((s) => s.id !== currentUser.id);
+
 
   const showPermToast = (msg: string) => {
     setPermissionTip(msg);
@@ -162,6 +171,9 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             const vm = new WebRTCVoiceManager(roomId, user.id);
             vm.onSpeakingChange = (uid, isSpeaking) => {
               setSpeakingUsers((prev) => ({ ...prev, [uid]: isSpeaking }));
+            };
+            vm.onLocalLevel = (level) => {
+              setLocalAudioLevel(level);
             };
             vm.onMuteChange = (muted) => {
               setIsMicMuted(muted);
@@ -575,6 +587,14 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   };
 
 
+
+  const handleSetMemberVolume = (targetUserId: string, volume: number) => {
+    setUserVolumes((prev) => ({ ...prev, [targetUserId]: volume }));
+    if (voiceManagerRef.current) {
+      voiceManagerRef.current.setUserVolume(targetUserId, volume);
+    }
+  };
+
   const handleToggleMic = async () => {
     if (room?.isMutedAll && !isHost && isMicMuted) {
       showPermToast("👑 房主已开启【全员静音】，暂不可开麦");
@@ -851,7 +871,15 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
       {/* Main Grid: Player + Interaction Sidebar */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: Dedicated Room Video Player */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-4 relative group">
+          {/* Floating Speaker Overlay Badge */}
+          {otherSpeaking.length > 0 && (
+            <div className="absolute top-4 left-4 z-40 px-3 py-1.5 rounded-full bg-black/80 border border-emerald-500/40 text-emerald-300 text-xs font-bold backdrop-blur-md flex items-center gap-2 shadow-2xl animate-in fade-in slide-in-from-top-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>{otherSpeaking[0].avatar}</span>
+              <span>{otherSpeaking.map((s) => s.name).join("、")} 正在说话...</span>
+            </div>
+          )}
           <RoomVideoPlayer
             url={room.streamUrl}
             poster={room.vodPic || ""}
@@ -872,6 +900,8 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             isMuted={isMicMuted}
             isDeafened={isDeafened}
             isSpeaking={!!speakingUsers[currentUser.id]}
+            localLevel={localAudioLevel}
+            activeSpeakers={activeSpeakersList}
             isMutedAll={room?.isMutedAll}
             isHost={isHost}
             onToggleMic={handleToggleMic}
@@ -1174,6 +1204,37 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                           {!isHost && <Lock className="w-2.5 h-2.5 text-gray-600" title="仅房主可看完整IP" />}
                         </div>
                       </div>
+
+                      {/* Individual Member Volume Control Slider (Only for others) */}
+                      {m.id !== currentUser.id && (
+                        <div className="flex items-center justify-between gap-3 px-2 py-1.5 rounded-lg bg-dark-900/60 border border-white/5 text-[10px]">
+                          <span className="text-gray-400 flex items-center gap-1">
+                            <span>🔊 独立音量:</span>
+                            <span className="font-mono text-cyan-400 font-bold">
+                              {userVolumes[m.id] !== undefined ? userVolumes[m.id] : 100}%
+                            </span>
+                          </span>
+
+                          <div className="flex items-center gap-2 flex-1 max-w-[140px]">
+                            <input
+                              type="range"
+                              min="0"
+                              max="200"
+                              step="5"
+                              value={userVolumes[m.id] !== undefined ? userVolumes[m.id] : 100}
+                              onChange={(e) => handleSetMemberVolume(m.id, Number(e.target.value))}
+                              className="w-full h-1 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSetMemberVolume(m.id, (userVolumes[m.id] === 0 ? 100 : 0))}
+                              className="text-[9px] text-gray-400 hover:text-cyan-400"
+                            >
+                              {userVolumes[m.id] === 0 ? "取消静音" : "静音"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       {isHost && m.id !== currentUser.id && (
                         <div className="flex items-center justify-end gap-2 pt-1">

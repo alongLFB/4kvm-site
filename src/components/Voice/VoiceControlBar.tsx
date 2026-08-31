@@ -1,12 +1,20 @@
 "use client";
 
 import React from "react";
-import { Mic, MicOff, Volume2, VolumeX, ShieldAlert, Sparkles } from "lucide-react";
+import { Mic, MicOff, Volume2, VolumeX, ShieldAlert, Sparkles, Activity } from "lucide-react";
+
+export interface ActiveSpeaker {
+  id: string;
+  name: string;
+  avatar: string;
+}
 
 interface VoiceControlBarProps {
   isMuted: boolean;
   isDeafened: boolean;
   isSpeaking: boolean;
+  localLevel?: number; // 0~100
+  activeSpeakers: ActiveSpeaker[];
   isMutedAll?: boolean;
   isHost?: boolean;
   onToggleMic: () => void;
@@ -18,6 +26,8 @@ export function VoiceControlBar({
   isMuted,
   isDeafened,
   isSpeaking,
+  localLevel = 0,
+  activeSpeakers = [],
   isMutedAll = false,
   isHost = false,
   onToggleMic,
@@ -26,7 +36,7 @@ export function VoiceControlBar({
 }: VoiceControlBarProps) {
   return (
     <div className="p-3 sm:p-3.5 rounded-2xl bg-dark-900/90 border border-white/10 flex flex-wrap items-center justify-between gap-3 shadow-xl backdrop-blur-md">
-      {/* Left: Status & Audio Waves */}
+      {/* Left: Status, Active Speakers & Audio Level */}
       <div className="flex items-center gap-3">
         <div className="relative">
           <div
@@ -48,24 +58,56 @@ export function VoiceControlBar({
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-white">语音连麦室</span>
-            {!isMuted ? (
+
+            {/* Dynamic Active Speakers display */}
+            {activeSpeakers.length > 0 ? (
+              <div className="px-2 py-0.5 text-[10px] font-bold text-emerald-300 bg-emerald-500/15 border border-emerald-500/40 rounded-full flex items-center gap-1.5 animate-pulse shadow-sm shadow-emerald-500/10">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="truncate max-w-[180px]">
+                  {activeSpeakers.map((s) => s.name).join("、")} 正在讲话
+                </span>
+                {/* 4-bar equalizer */}
+                <div className="flex items-end gap-0.5 h-2.5">
+                  <span className="w-0.5 bg-emerald-400 animate-[bounce_0.6s_infinite_100ms] h-full" />
+                  <span className="w-0.5 bg-emerald-400 animate-[bounce_0.6s_infinite_250ms] h-2/3" />
+                  <span className="w-0.5 bg-emerald-400 animate-[bounce_0.6s_infinite_400ms] h-full" />
+                </div>
+              </div>
+            ) : !isMuted ? (
               <span className="px-1.5 py-0.2 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded">
-                {isSpeaking ? "🟢 正在说话..." : "🎙️ 开麦就绪"}
+                🎙️ 开麦就绪 · 全屋静默
               </span>
             ) : (
               <span className="px-1.5 py-0.2 text-[10px] font-bold text-gray-400 bg-white/5 rounded">
                 🔇 麦克风已闭麦
               </span>
             )}
+
             {isMutedAll && (
               <span className="px-1.5 py-0.2 text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded flex items-center gap-0.5">
                 <ShieldAlert className="w-2.5 h-2.5" /> 全员禁言中
               </span>
             )}
           </div>
-          <p className="text-[10px] text-gray-400 mt-0.5">
-            硬件级降噪 & 回声消除，外放电影不受干扰
-          </p>
+
+          {/* Realtime Local Input Meter or Subtitle */}
+          <div className="flex items-center gap-2 mt-1">
+            {!isMuted ? (
+              <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                <span>麦克风音量:</span>
+                <div className="w-16 h-1.5 bg-dark-800 rounded-full overflow-hidden border border-white/10">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all duration-75"
+                    style={{ width: `${Math.min(100, Math.max(localLevel, isSpeaking ? 30 : 0))}%` }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="text-[10px] text-gray-400">
+                硬件级降噪 & 回声消除，观众列表中可独立调节各成员音量
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
