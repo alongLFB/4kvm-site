@@ -12,81 +12,52 @@ concurrency:
 
 jobs:
   deploy:
+    name: Deploy 4kvm-site
     runs-on: ubuntu-latest
     steps:
-      - name: Prepare Environment Secret
-        id: env_prep
-        env:
-          RAW_ENV: ${{ secrets.ENV_FILE }}
-        run: |
-          if [ -n "$RAW_ENV" ]; then
-            B64=$(printf "%s" "$RAW_ENV" | base64 -w 0)
-            echo "ENV_B64=$B64" >> "$GITHUB_OUTPUT"
-            echo "HAS_ENV=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "ENV_B64=" >> "$GITHUB_OUTPUT"
-            echo "HAS_ENV=0" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: SSH and Deploy
         uses: appleboy/ssh-action@v1.0.3
         env:
-          ENV_B64: ${{ steps.env_prep.outputs.ENV_B64 }}
-          HAS_ENV: ${{ steps.env_prep.outputs.HAS_ENV }}
+          ENV_FILE: ${{ secrets.ENV_FILE }}
         with:
-          host: ${{ secrets.SERVER_HOST }}     # 服务器IP
-          username: ${{ secrets.SERVER_USER }} # 服务器用户名
-          key: ${{ secrets.SERVER_SSH_KEY }}   # 服务器私钥
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || 22 }}
-          envs: ENV_B64,HAS_ENV
+          command_timeout: 30m
+          envs: ENV_FILE
           script: |
             set -euo pipefail
-            
-            # 1. 强制 Git 使用 IPv4 并优化网络缓冲区，彻底根治 IPv6 导致的 132s 连 GitHub 超时问题
-            git config --global http.ipResolve 4
-            git config --global http.postBuffer 524288000
-            git config --global http.lowSpeedLimit 1000
-            git config --global http.lowSpeedTime 30
+            # 1. 锁定 GitHub 官方欧美骨干 IP（防止甲骨文 DNS 解析到不可达的亚太节点）
+            if ! grep -q "140.82.112.3 github.com" /etc/hosts 2>/dev/null; then
+              sudo sed -i '/github.com/d' /etc/hosts 2>/dev/null || true
+              echo "140.82.112.3 github.com" | sudo tee -a /etc/hosts >/dev/null
+            fi
 
             mkdir -p ~/github
             cd ~/github
-            
+
+            # 2. 获取或更新最新代码（带 30 秒超时与自动重试）
             if [ ! -d "4kvm-site" ]; then
-              git clone https://github.com/alongLFB/4kvm-site.git
+              for i in {1..3}; do
+                timeout 30s git clone https://github.com/alongLFB/4kvm-site.git && break || { echo "Clone retry ($i/3)..."; sleep 2; }
+              done
             fi
             cd 4kvm-site
-
-            # 自动修复/配置远程 origin 地址
-            git remote add origin https://github.com/alongLFB/4kvm-site.git 2>/dev/null || git remote set-url origin https://github.com/alongLFB/4kvm-site.git
-            
-            # 带重试机制拉取最新代码
-            echo "==> Fetching latest master branch (IPv4 direct)..."
-            for i in 1 2 3; do
-              git fetch origin master && break || {
-                echo "Fetch failed, retrying in 3 seconds ($i/3)..."
-                sleep 3
-              }
+            for i in {1..3}; do
+              timeout 30s git fetch origin master && break || { echo "Fetch retry ($i/3)..."; sleep 2; }
             done
-
             git reset --hard origin/master
 
-            # 确保数据目录存在且具备持久化权限
+            # 3. 确保数据目录存在
             mkdir -p data
 
-            # 如果在 GitHub Secrets 中配置了 ENV_FILE，则同步写入服务器 .env；否则保留服务器原有配置
-            if [ "${HAS_ENV:-0}" = "1" ] && [ -n "${ENV_B64:-}" ]; then
-              echo "==> Updating .env from GitHub Secrets..."
-              echo "$ENV_B64" | base64 -d > .env
-            else
-              echo "==> No GitHub Secrets .env configured, keeping existing server .env..."
+            # 4. 同步环境变量（若 GitHub Secrets 已配置 ENV_FILE）
+            if [ -n "${ENV_FILE:-}" ]; then
+              printf "%s\n" "$ENV_FILE" > .env
             fi
 
-            # 停止可能存在的历史 PM2 进程（若有）
-            if command -v pm2 &> /dev/null; then
-              pm2 stop 4kvm-site 2>/dev/null || true
-              pm2 delete 4kvm-site 2>/dev/null || true
-            fi
-
+            # 5. 自动化容器构建与热重载
             echo "==> Deploying with Docker Compose..."
             docker compose down 2>/dev/null || true
             docker compose up -d --build
@@ -95,4 +66,4 @@ jobs:
             echo "==> Verifying Deployment Health..."
             sleep 5
             curl -s http://127.0.0.1:3028/api/health || true
-            echo "==> 4KVM Site Deployed Successfully!"
+            echo "==> 4kvm-site deployment completed successfully!"
