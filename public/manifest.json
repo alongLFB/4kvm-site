@@ -1,0 +1,37 @@
+{
+  "name": "4KVM 影视 - 4K超清在线点播",
+  "short_name": "4KVM影视",
+  "description": "全网海量1080P/4K超清影视、热播电视剧、新番动漫无广告在线播放",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#050811",
+  "theme_color": "#050811",
+  "orientation": "portrait-primary",
+  "categories": ["entertainment", "movies", "video"],
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "64x64",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
