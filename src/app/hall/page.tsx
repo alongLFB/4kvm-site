@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Users, Tv, Play, Plus, Sparkles, RefreshCw, Loader2, Globe, Clock } from "lucide-react";
-import { WatchRoom } from "@/lib/room-store";
+import { useRouter } from "next/navigation";
+import { Users, Tv, Play, Plus, Sparkles, RefreshCw, Loader2, Globe, Lock, Clock, KeyRound, X } from "lucide-react";
 
 function formatTime(seconds: number) {
   if (!seconds || isNaN(seconds)) return "00:00";
@@ -13,9 +13,17 @@ function formatTime(seconds: number) {
 }
 
 export default function HallPage() {
-  const [rooms, setRooms] = useState<WatchRoom[]>([]);
+  const router = useRouter();
+  const [rooms, setRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Password Prompt Modal state
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [targetRoom, setTargetRoom] = useState<any | null>(null);
+  const [inputPassword, setInputPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [joining, setJoining] = useState(false);
 
   const fetchRooms = async () => {
     try {
@@ -34,9 +42,31 @@ export default function HallPage() {
 
   useEffect(() => {
     fetchRooms();
-    const interval = setInterval(fetchRooms, 8000);
+    const interval = setInterval(fetchRooms, 6000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleJoinClick = (room: any) => {
+    if (room.hasPassword) {
+      setTargetRoom(room);
+      setInputPassword("");
+      setPasswordError("");
+      setPasswordModalOpen(true);
+    } else {
+      router.push(`/room/${room.id}`);
+    }
+  };
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputPassword.trim()) {
+      setPasswordError("请输入房间口令");
+      return;
+    }
+    if (!targetRoom) return;
+
+    router.push(`/room/${targetRoom.id}?pwd=${encodeURIComponent(inputPassword.trim())}`);
+  };
 
   return (
     <div className="space-y-8">
@@ -55,7 +85,7 @@ export default function HallPage() {
           </h1>
 
           <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
-            在这里你可以看到其他影迷正在观看的影视剧集与实时进度。如果你也感兴趣，点击即可秒级加入房间，进度毫秒级对齐，一边看剧一边实时吐槽聊天！
+            在这里你可以看到其他影迷正在观看的影视剧集与实时进度。公开放映厅免密一键直达，私密放映厅支持口令加入，进度毫秒级对齐，一边看剧一边实时吐槽聊天！
           </p>
 
           <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -85,7 +115,7 @@ export default function HallPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Globe className="w-5 h-5 text-cyan-400" />
-          <h2 className="text-lg font-bold text-white">当前活跃的公开放映厅</h2>
+          <h2 className="text-lg font-bold text-white">当前活跃放映厅</h2>
           <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-bold border border-cyan-500/20">
             {rooms.length} 房活跃
           </span>
@@ -107,18 +137,37 @@ export default function HallPage() {
             >
               <div className="p-5 space-y-4">
                 {/* Header info */}
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xl">{room.hostAvatar || "🐱"}</span>
                     <div>
-                      <p className="text-xs font-bold text-white">{room.hostName}</p>
+                      <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span>{room.hostName}</span>
+                        {room.hostDevice && (
+                          <span className="text-[9px] text-gray-400 bg-dark-800 px-1.5 py-0.2 rounded font-normal">
+                            {room.hostDevice}
+                          </span>
+                        )}
+                      </p>
                       <p className="text-[10px] text-gray-500">房号: {room.id}</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-xs font-bold border border-cyan-500/30">
-                    <Users className="w-3.5 h-3.5" />
-                    {room.members.length} 人在看
+                  <div className="flex items-center gap-1.5">
+                    {room.hasPassword ? (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-[10px] font-bold border border-amber-500/30 flex items-center gap-1">
+                        <Lock className="w-2.5 h-2.5" /> 私密房
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-bold border border-cyan-500/30 flex items-center gap-1">
+                        <Globe className="w-2.5 h-2.5" /> 公开
+                      </span>
+                    )}
+
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 text-gray-300 text-[10px] font-bold border border-white/10">
+                      <Users className="w-2.5 h-2.5 text-cyan-400" />
+                      {room.memberCount || 1}
+                    </span>
                   </div>
                 </div>
 
@@ -147,13 +196,17 @@ export default function HallPage() {
 
               {/* Action Button */}
               <div className="p-4 pt-0">
-                <Link
-                  href={`/room/${room.id}`}
-                  className="w-full py-2.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500 text-cyan-400 hover:text-dark-950 font-bold text-xs transition flex items-center justify-center gap-1.5 border border-cyan-500/30 hover:border-cyan-500"
+                <button
+                  onClick={() => handleJoinClick(room)}
+                  className={`w-full py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 border shadow-md ${
+                    room.hasPassword
+                      ? "bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-dark-950 border-amber-500/30 hover:border-amber-500"
+                      : "bg-cyan-500/10 hover:bg-cyan-500 text-cyan-400 hover:text-dark-950 border-cyan-500/30 hover:border-cyan-500"
+                  }`}
                 >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  一键加入放映厅
-                </Link>
+                  {room.hasPassword ? <KeyRound className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                  {room.hasPassword ? "输入口令进入私密房" : "一键加入放映厅"}
+                </button>
               </div>
             </div>
           ))}
@@ -161,13 +214,57 @@ export default function HallPage() {
       ) : (
         <div className="py-24 text-center space-y-3 bg-dark-900/50 rounded-3xl border border-white/5">
           <Tv className="w-10 h-10 text-gray-600 mx-auto" />
-          <p className="text-gray-400 text-sm">暂无活跃的公开放映厅</p>
+          <p className="text-gray-400 text-sm">暂无活跃放映厅</p>
           <Link
             href="/category"
             className="text-xs text-cyan-400 hover:underline inline-flex items-center gap-1"
           >
             <Plus className="w-3.5 h-3.5" /> 成为第一位放映发起人
           </Link>
+        </div>
+      )}
+
+      {/* Password Prompt Modal */}
+      {passwordModalOpen && targetRoom && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-sm bg-dark-900 border border-white/10 rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2 text-sm font-bold text-amber-400">
+                <Lock className="w-4 h-4" />
+                该放映厅已开启私密保护
+              </div>
+              <button onClick={() => setPasswordModalOpen(false)} className="p-1 text-gray-400 hover:text-white rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-300">
+              您正在加入由 <strong className="text-white">{targetRoom.hostName}</strong> 发起的《{targetRoom.vodName}》私密共赏房，请输入房主设置的口令：
+            </p>
+
+            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+              <input
+                type="text"
+                autoFocus
+                value={inputPassword}
+                onChange={(e) => {
+                  setInputPassword(e.target.value);
+                  setPasswordError("");
+                }}
+                placeholder="请输入入房口令 / 密码..."
+                className="w-full bg-dark-800 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+              />
+
+              {passwordError && <p className="text-xs text-rose-400">{passwordError}</p>}
+
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-dark-950 font-bold text-xs transition shadow-lg shadow-amber-500/20"
+              >
+                验证口令并进入房间
+              </button>
+            </form>
+          </div>
         </div>
       )}
     </div>

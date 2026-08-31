@@ -37,6 +37,7 @@ export interface WatchRoom {
   duration: number;
   isPlaying: boolean;
   isPublic: boolean;
+  password?: string;
   controlMode: "host" | "free";
   hostId: string;
   hostName: string;
@@ -65,7 +66,7 @@ if (!global.__4kvm_subscribers__) {
 const rooms = global.__4kvm_rooms__;
 const subscribers = global.__4kvm_subscribers__;
 
-// Demo seed rooms
+// Seed demo rooms
 if (rooms.size === 0) {
   const demoRoom1: WatchRoom = {
     id: "8888",
@@ -99,7 +100,38 @@ if (rooms.size === 0) {
     updatedAt: Date.now(),
   };
 
+  const demoPrivateRoom: WatchRoom = {
+    id: "5200",
+    title: "🔒 好友私密观影专厅",
+    vodId: "ch4izw8wt",
+    vodName: "早春晴朗",
+    vodPic: "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=jpeg&src=4kvm.staticimgjs.org/uploads/2026/08/douban_1788053004-300x450.jpg",
+    sourceIndex: 0,
+    episodeIndex: 0,
+    episodeName: "第01集",
+    streamUrl: "https://oss.douyinbit.com/m3u8/d36b88127cc45aaf6e838fa266cd196c.m3u8",
+    currentTime: 450,
+    duration: 2700,
+    isPlaying: true,
+    isPublic: false,
+    password: "666",
+    controlMode: "host",
+    hostId: "system_host_private",
+    hostName: "独角兽_88",
+    hostAvatar: "🦄",
+    hostDevice: "💻 Mac 电脑",
+    members: [
+      { id: "system_host_private", name: "独角兽_88", avatar: "🦄", device: "💻 Mac 电脑", location: "📍 上海", maskedIp: "222.66.*.*", fullIp: "222.66.12.8", joinedAt: Date.now() - 400000, lastActive: Date.now() },
+    ],
+    chatMessages: [
+      { id: "msg_p1", senderId: "sys", senderName: "系统提示", senderAvatar: "📢", text: "欢迎来到私密放映厅！", time: "刚刚", isSystem: true },
+    ],
+    createdAt: Date.now() - 400000,
+    updatedAt: Date.now(),
+  };
+
   rooms.set(demoRoom1.id, demoRoom1);
+  rooms.set(demoPrivateRoom.id, demoPrivateRoom);
 }
 
 export function broadcastRoomEvent(roomId: string, eventData: any) {
@@ -133,12 +165,28 @@ export const RoomStore = {
     return rooms.get(id) || null;
   },
 
-  getAllPublicRooms(): WatchRoom[] {
-    const list: WatchRoom[] = [];
+  getAllRoomsForHall(): any[] {
+    const list: any[] = [];
     rooms.forEach((r) => {
-      if (r.isPublic) {
-        list.push(r);
-      }
+      list.push({
+        id: r.id,
+        title: r.title,
+        vodId: r.vodId,
+        vodName: r.vodName,
+        vodPic: r.vodPic,
+        episodeName: r.episodeName,
+        currentTime: r.currentTime,
+        isPlaying: r.isPlaying,
+        isPublic: r.isPublic,
+        hasPassword: !r.isPublic && !!r.password,
+        controlMode: r.controlMode,
+        hostId: r.hostId,
+        hostName: r.hostName,
+        hostAvatar: r.hostAvatar,
+        hostDevice: r.hostDevice,
+        memberCount: r.members.length,
+        updatedAt: r.updatedAt,
+      });
     });
     return list.sort((a, b) => b.updatedAt - a.updatedAt);
   },
@@ -149,10 +197,11 @@ export const RoomStore = {
     sourceIndex?: number;
     episodeIndex?: number;
     isPublic?: boolean;
+    password?: string;
     controlMode?: "host" | "free";
     host: { id: string; name: string; avatar: string; device?: string; location?: string; maskedIp?: string; fullIp?: string };
   }): WatchRoom {
-    const { title, vodItem, sourceIndex = 0, episodeIndex = 0, isPublic = true, controlMode = "free", host } = params;
+    const { title, vodItem, sourceIndex = 0, episodeIndex = 0, isPublic = true, password = "", controlMode = "free", host } = params;
 
     const source = vodItem.sources[sourceIndex] || vodItem.sources[0];
     const episode = source?.episodes[episodeIndex] || source?.episodes[0] || { name: "正片", url: "" };
@@ -186,6 +235,7 @@ export const RoomStore = {
       duration: 0,
       isPlaying: true,
       isPublic,
+      password: isPublic ? undefined : password.trim(),
       controlMode,
       hostId: host.id,
       hostName: host.name,
@@ -211,9 +261,72 @@ export const RoomStore = {
     return room;
   },
 
-  joinRoom(roomId: string, user: { id: string; name: string; avatar: string; device?: string; location?: string; maskedIp?: string; fullIp?: string }): WatchRoom | null {
+  updateSettings(roomId: string, hostId: string, updates: {
+    title?: string;
+    isPublic?: boolean;
+    password?: string;
+    controlMode?: "host" | "free";
+    hostName?: string;
+    hostAvatar?: string;
+  }): { success: boolean; message?: string; room?: WatchRoom } {
     const room = rooms.get(roomId);
-    if (!room) return null;
+    if (!room) return { success: false, message: "房间不存在" };
+    if (room.hostId !== hostId) return { success: false, message: "只有房主有权限修改房间设置" };
+
+    if (updates.title) room.title = updates.title.trim();
+    if (typeof updates.isPublic === "boolean") {
+      room.isPublic = updates.isPublic;
+      if (room.isPublic) {
+        room.password = undefined;
+      } else if (updates.password !== undefined) {
+        room.password = updates.password.trim();
+      }
+    } else if (updates.password !== undefined && !room.isPublic) {
+      room.password = updates.password.trim();
+    }
+
+    if (updates.controlMode) room.controlMode = updates.controlMode;
+    if (updates.hostName) room.hostName = updates.hostName.trim();
+    if (updates.hostAvatar) room.hostAvatar = updates.hostAvatar;
+
+    room.updatedAt = Date.now();
+
+    // Broadcast update
+    broadcastRoomEvent(roomId, {
+      type: "settings_updated",
+      title: room.title,
+      isPublic: room.isPublic,
+      hasPassword: !room.isPublic && !!room.password,
+      controlMode: room.controlMode,
+      hostName: room.hostName,
+      hostAvatar: room.hostAvatar,
+    });
+
+    const sysMsg: ChatMessage = {
+      id: `msg_${Date.now()}_sys`,
+      senderId: "system",
+      senderName: "系统",
+      senderAvatar: "⚙️",
+      text: `房主更新了房间设置（${room.isPublic ? "🌐 公开放映" : "🔒 私密放映"} · ${room.controlMode === "host" ? "👑 仅房主可控" : "⚡ 全员自由控制"}）`,
+      time: "刚刚",
+      isSystem: true,
+    };
+    room.chatMessages.push(sysMsg);
+    broadcastRoomEvent(roomId, { type: "chat", message: sysMsg });
+
+    return { success: true, room };
+  },
+
+  joinRoom(roomId: string, user: { id: string; name: string; avatar: string; device?: string; location?: string; maskedIp?: string; fullIp?: string }, password?: string): { success: boolean; message?: string; room?: WatchRoom } {
+    const room = rooms.get(roomId);
+    if (!room) return { success: false, message: "房间不存在" };
+
+    // Check password if private and user is not host
+    if (!room.isPublic && room.password && user.id !== room.hostId) {
+      if (!password || password.trim() !== room.password.trim()) {
+        return { success: false, message: "房间口令/密码错误" };
+      }
+    }
 
     const existingIdx = room.members.findIndex((m) => m.id === user.id);
     const now = Date.now();
@@ -256,7 +369,7 @@ export const RoomStore = {
 
     room.updatedAt = now;
     broadcastRoomEvent(roomId, { type: "members", members: room.members });
-    return room;
+    return { success: true, room };
   },
 
   leaveRoom(roomId: string, userId: string) {

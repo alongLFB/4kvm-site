@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { MovieCard } from "@/components/MovieCard";
@@ -31,6 +31,10 @@ export default function PlayPage() {
   const [currentEpIndex, setCurrentEpIndex] = useState(0);
   const [copied, setCopied] = useState(false);
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
+
+  // Playback state restoration when opening/closing modal
+  const wasPlayingRef = useRef(false);
+  const playerRef = useRef<any>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -102,6 +106,30 @@ export default function PlayPage() {
     }
   };
 
+  // 1. Pause video when opening modal, and record playing state
+  const handleOpenCreateRoom = () => {
+    const player = playerRef.current || (typeof window !== "undefined" ? (window as any).__4kvm_player__ : null);
+    if (player) {
+      if (player.playing) {
+        wasPlayingRef.current = true;
+        player.pause();
+      } else {
+        wasPlayingRef.current = false;
+      }
+    }
+    setCreateRoomOpen(true);
+  };
+
+  // 2. Resume video if it was playing before when modal is closed
+  const handleCloseCreateRoom = () => {
+    setCreateRoomOpen(false);
+    const player = playerRef.current || (typeof window !== "undefined" ? (window as any).__4kvm_player__ : null);
+    if (player && wasPlayingRef.current) {
+      player.play();
+      wasPlayingRef.current = false;
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -110,6 +138,9 @@ export default function PlayPage() {
             url={currentEpisode.url}
             title={`${item.name} - ${currentEpisode.name}`}
             poster={item.banner || item.pic}
+            getInstance={(art) => {
+              playerRef.current = art;
+            }}
             onEnded={() => {
               if (currentEpIndex < currentSource.episodes.length - 1) {
                 setCurrentEpIndex(currentEpIndex + 1);
@@ -133,9 +164,9 @@ export default function PlayPage() {
               </div>
 
               <div className="flex items-center gap-2.5">
-                {/* Watch Party Button */}
+                {/* Watch Party Button with auto pause/resume lifecycle */}
                 <button
-                  onClick={() => setCreateRoomOpen(true)}
+                  onClick={handleOpenCreateRoom}
                   className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500/15 to-blue-500/15 hover:from-cyan-500 hover:to-blue-600 text-xs font-bold text-cyan-400 hover:text-dark-950 flex items-center gap-1.5 transition border border-cyan-500/40 shadow-lg shadow-cyan-500/10"
                 >
                   <Users className="w-4 h-4" />
@@ -248,13 +279,13 @@ export default function PlayPage() {
         </section>
       )}
 
-      {/* Modal */}
+      {/* Modal with auto pause/resume */}
       <CreateRoomModal
         vodItem={item}
         initialSourceIndex={currentSourceIndex}
         initialEpisodeIndex={currentEpIndex}
         isOpen={createRoomOpen}
-        onClose={() => setCreateRoomOpen(false)}
+        onClose={handleCloseCreateRoom}
       />
     </div>
   );

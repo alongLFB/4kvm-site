@@ -4,14 +4,14 @@ import { fetchLiveVodDetail } from "@/lib/vod-service";
 import { getClientIp, resolveIpLocation, maskIp } from "@/lib/ip-service";
 
 export async function GET() {
-  const list = RoomStore.getAllPublicRooms();
+  const list = RoomStore.getAllRoomsForHall();
   return NextResponse.json({ code: 200, list });
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { title, vodId, sourceIndex = 0, episodeIndex = 0, isPublic = true, controlMode = "free", host } = body;
+    const { title, vodId, sourceIndex = 0, episodeIndex = 0, isPublic = true, password = "", controlMode = "free", host } = body;
 
     const vodItem = await fetchLiveVodDetail(vodId);
     if (!vodItem) {
@@ -28,6 +28,7 @@ export async function POST(request: Request) {
       sourceIndex,
       episodeIndex,
       isPublic,
+      password,
       controlMode,
       host: {
         ...host,

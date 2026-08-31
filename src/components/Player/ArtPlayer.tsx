@@ -11,6 +11,7 @@ interface ArtPlayerProps {
   onEnded?: () => void;
   onTimeUpdate?: (currentTime: number, duration: number) => void;
   initialTime?: number;
+  getInstance?: (art: Artplayer) => void;
 }
 
 export default function VideoPlayer({
@@ -20,6 +21,7 @@ export default function VideoPlayer({
   onEnded,
   onTimeUpdate,
   initialTime = 0,
+  getInstance,
 }: ArtPlayerProps) {
   const artRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<Artplayer | null>(null);
@@ -27,7 +29,6 @@ export default function VideoPlayer({
   useEffect(() => {
     if (!artRef.current) return;
 
-    // 根据 ArtPlayer 官方源码规范初始化的最简且标准配置
     const art = new Artplayer({
       container: artRef.current,
       url: url,
@@ -43,19 +44,17 @@ export default function VideoPlayer({
       flip: true,
       playbackRate: true,
       aspectRatio: true,
-      hotkey: true,          // 键盘快捷键支持
-      fullscreen: true,      // 允许原生全屏
-      fullscreenWeb: true,   // 允许网页全屏（移动端 autoOrientation 的基石）
-      autoOrientation: true, // 核心：开启原生移动端全屏自动横屏旋转
-      playsInline: true,     // 标准配置：第一级原生顶层参数，Artplayer 内部会自动挂载 playsinline/webkit-playsinline
-      lock: true,            // 移动端锁屏防误触
-      fastForward: true,     // 移动端长按 2x 倍速快进
-      airplay: true,         // 支持苹果无线投屏
-      mutex: true,           // 多播放器互斥
+      hotkey: true,
+      fullscreen: true,
+      fullscreenWeb: true,
+      autoOrientation: true,
+      playsInline: true,
+      lock: true,
+      fastForward: true,
+      airplay: true,
+      mutex: true,
       theme: "#06b6d4",
       lang: "zh-cn",
-
-      // moreVideoAttr 仅用于配置底层 <video> DOM 元素的非标准扩展属性（如跨域、预加载和腾讯X5/微信内核属性）
       moreVideoAttr: {
         crossOrigin: "anonymous",
         preload: "auto",
@@ -63,7 +62,6 @@ export default function VideoPlayer({
         "x5-video-player-fullscreen": "true",
         "x5-playsinline": "true",
       },
-
       customType: {
         m3u8: function (video: HTMLMediaElement, url: string, art: Artplayer) {
           if (Hls.isSupported()) {
@@ -99,6 +97,13 @@ export default function VideoPlayer({
     });
 
     instanceRef.current = art;
+
+    if (getInstance) {
+      getInstance(art);
+    }
+    if (typeof window !== "undefined") {
+      (window as any).__4kvm_player__ = art;
+    }
 
     art.on("ready", () => {
       if (initialTime > 0) {

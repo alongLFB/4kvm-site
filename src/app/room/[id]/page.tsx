@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, use } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import Artplayer from "artplayer";
 import Hls from "hls.js";
 import {
@@ -22,16 +23,19 @@ import {
   Shield,
   Eye,
   EyeOff,
-  Smartphone,
-  Laptop,
+  Settings,
+  KeyRound,
   MapPin,
 } from "lucide-react";
 import { WatchRoom, ChatMessage, RoomMember } from "@/lib/room-store";
 import { VodItem } from "@/lib/types";
-import { getGuestUser, updateGuestUser, GuestUser, detectDevice } from "@/lib/guest";
+import { getGuestUser, updateGuestUser, GuestUser } from "@/lib/guest";
+import { RoomSettingsModal } from "@/components/RoomSettingsModal";
 
 export default function RoomPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: roomId } = use(params);
+  const searchParams = useSearchParams();
+  const urlPassword = searchParams.get("pwd") || "";
 
   const [currentUser, setCurrentUser] = useState<GuestUser>({ id: "", name: "游客", avatar: "🐱", device: "💻 网页端" });
   const [editingName, setEditingName] = useState(false);
@@ -40,8 +44,14 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const [room, setRoom] = useState<WatchRoom | null>(null);
   const [vodItem, setVodItem] = useState<VodItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
   const [copied, setCopied] = useState(false);
   const [showFullIp, setShowFullIp] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Private room password prompt if unauthorized
+  const [passwordRequired, setPasswordRequired] = useState(false);
+  const [roomPasswordInput, setRoomPasswordInput] = useState(urlPassword);
 
   // Tabs: chat | members | episodes
   const [activeTab, setActiveTab] = useState<"chat" | "members" | "episodes">("chat");
@@ -56,6 +66,35 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const isSyncingFromRemote = useRef(false);
 
   const isHost = room ? room.hostId === currentUser.id : false;
+
+  const joinWithPassword = (pwd: string) => {
+    const user = getGuestUser();
+    setLoading(true);
+    setErrorMsg("");
+
+    fetch(`/api/room/${roomId}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user, password: pwd }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.code === 200 && data.data) {
+          setRoom(data.data);
+          setMessages(data.data.chatMessages || []);
+          setMembers(data.data.members || []);
+          setPasswordRequired(false);
+        } else {
+          setPasswordRequired(true);
+          setErrorMsg(data.message || "口令错误，请重新输入");
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        setErrorMsg("连接房间失败");
+        setLoading(false);
+      });
+  };
 
   useEffect(() => {
     const user = getGuestUser();
@@ -72,14 +111,23 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           setMessages(data.data.room.chatMessages || []);
           setMembers(data.data.room.members || []);
 
-          // Join room
-          fetch(`/api/room/${roomId}/join`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user }),
-          });
+          // Check if password required
+          if (!data.data.room.isPublic && data.data.room.password && data.data.room.hostId !== user.id) {
+            if (urlPassword) {
+              joinWithPassword(urlPassword);
+            } else {
+              setPasswordRequired(true);
+              setLoading(false);
+              return;
+            }
+          } else {
+            // Join directly
+            joinWithPassword("");
+          }
+        } else {
+          setErrorMsg(data.message || "房间不存在");
+          setLoading(false);
         }
-        setLoading(false);
       })
       .catch((err) => {
         console.error(err);
@@ -96,6 +144,8 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           setMessages((prev) => [...prev, payload.message]);
         } else if (payload.type === "members") {
           setMembers(payload.members);
+        } else if (payload.type === "settings_updated") {
+          setRoom((prev) => (prev ? { ...prev, ...payload } : null));
         } else if (payload.type === "sync") {
           const art = artInstanceRef.current;
           if (!art) return;
@@ -138,7 +188,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
 
   // Initialize ArtPlayer
   useEffect(() => {
-    if (!room || !artContainerRef.current) return;
+    if (!room || !artContainerRef.current || passwordRequired) return;
 
     if (artInstanceRef.current) {
       artInstanceRef.current.destroy(false);
@@ -228,7 +278,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
         art.destroy(false);
       }
     };
-  }, [room?.streamUrl]);
+  }, [room?.streamUrl, passwordRequired]);
 
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault();
@@ -302,10 +352,58 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     );
   }
 
+  // Password Prompt Screen
+  if (passwordRequired && room) {
+    return (
+      <div className="py-24 max-w-md mx-auto space-y-6">
+        <div className="p-8 rounded-3xl bg-dark-900 border border-white/10 shadow-2xl space-y-5 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto shadow-lg">
+            <Lock className="w-7 h-7" />
+          </div>
+
+          <div className="space-y-1">
+            <h2 className="text-lg font-bold text-white">🔒 这是一个私密观影房</h2>
+            <p className="text-xs text-gray-400">房主已设置入房口令，请输入口令方可同步加入</p>
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              joinWithPassword(roomPasswordInput);
+            }}
+            className="space-y-4"
+          >
+            <input
+              type="text"
+              autoFocus
+              value={roomPasswordInput}
+              onChange={(e) => setRoomPasswordInput(e.target.value)}
+              placeholder="请输入入房口令 / 密码..."
+              className="w-full bg-dark-800 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400 font-mono text-center"
+            />
+
+            {errorMsg && <p className="text-xs text-rose-400 font-medium">{errorMsg}</p>}
+
+            <button
+              type="submit"
+              className="w-full py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-dark-950 font-bold text-xs transition shadow-lg shadow-amber-500/20"
+            >
+              验证口令并同步进入
+            </button>
+          </form>
+
+          <Link href="/hall" className="text-xs text-gray-500 hover:text-cyan-400 block">
+            返回放映广场
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (!room || !vodItem) {
     return (
       <div className="py-24 text-center space-y-4">
-        <h2 className="text-xl font-bold text-white">房间不存在或已解散</h2>
+        <h2 className="text-xl font-bold text-white">{errorMsg || "房间不存在或已解散"}</h2>
         <Link href="/hall" className="text-xs text-cyan-400 hover:underline">
           返回放映广场
         </Link>
@@ -335,6 +433,11 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
               <span className="px-2 py-0.5 text-[10px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 rounded-md">
                 房号: {room.id}
               </span>
+              {!room.isPublic && (
+                <span className="px-1.5 py-0.5 text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded flex items-center gap-0.5">
+                  <Lock className="w-2.5 h-2.5" /> 私密
+                </span>
+              )}
             </div>
             <p className="text-xs text-gray-400 flex flex-wrap items-center gap-2 mt-0.5">
               <span>片名: {room.vodName}</span>
@@ -346,8 +449,19 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           </div>
         </div>
 
-        {/* User Identity & Copy Button */}
-        <div className="flex items-center gap-3">
+        {/* User Identity, Settings & Copy Button */}
+        <div className="flex items-center gap-2.5">
+          {/* Host Settings button */}
+          {isHost && (
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-gold-400/15 hover:bg-gold-400 text-gold-400 hover:text-dark-950 font-bold text-xs transition flex items-center gap-1.5 border border-gold-400/30 shadow-md"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              房间设置
+            </button>
+          )}
+
           {/* Guest badge */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-800 border border-white/10 text-xs">
             <span>{currentUser.avatar}</span>
@@ -366,7 +480,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             ) : (
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-white">{currentUser.name}</span>
-                <span className="text-[10px] text-cyan-400/80 bg-cyan-500/10 px-1.5 py-0.5 rounded">{currentUser.device}</span>
+                <span className="text-[10px] text-cyan-400/80 bg-cyan-500/10 px-1.5 py-0.2 rounded">{currentUser.device}</span>
                 <button onClick={() => setEditingName(true)} className="text-gray-500 hover:text-cyan-400">
                   <Edit2 className="w-3 h-3" />
                 </button>
@@ -484,7 +598,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                 {isHost && (
                   <div className="p-2.5 rounded-xl bg-gold-500/10 border border-gold-500/30 flex items-center justify-between text-[11px]">
                     <span className="text-gold-400 font-bold flex items-center gap-1">
-                      <Shield className="w-3.5 h-3.5" /> 房主管理视角 (全量敏感信息)
+                      <Shield className="w-3.5 h-3.5" /> 房主管理视角 (敏感明文信息)
                     </span>
                     <button
                       onClick={() => setShowFullIp(!showFullIp)}
@@ -607,6 +721,16 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           )}
         </div>
       </div>
+
+      {/* Host Settings Modal */}
+      {isHost && (
+        <RoomSettingsModal
+          room={room}
+          isOpen={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={(updated) => setRoom((prev) => (prev ? { ...prev, ...updated } : null))}
+        />
+      )}
     </div>
   );
 }
