@@ -29,13 +29,14 @@ export class WebRTCVoiceManager {
     this.currentUserId = currentUserId;
   }
 
-  // 1. Initialize local microphone with hardware Echo Cancellation & Noise Suppression
+  // 1. Initialize local microphone with multi-tier constraints fallback
   public async initLocalAudio(): Promise<boolean> {
     if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      this.onError?.("您的浏览器不支持 WebRTC 实时语音");
+      this.onError?.("您的浏览器环境不支持 WebRTC 音频采集");
       return false;
     }
 
+    // Try Tier 1: Enhanced constraints (Echo Cancellation + Noise Suppression + AGC)
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -45,23 +46,38 @@ export class WebRTCVoiceManager {
         },
         video: false,
       });
+    } catch (errTier1: any) {
+      console.warn("Tier 1 audio constraints failed, trying basic audio: true...", errTier1);
+      // Try Tier 2: Basic audio: true
+      try {
+        this.localStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false,
+        });
+      } catch (e: any) {
+        console.error("Audio permission / hardware error:", e);
+        if (e.name === "NotAllowedError" || e.name === "PermissionDeniedError") {
+          this.onError?.("麦克风权限被拒绝，请检查浏览器地址栏🔒图标中的麦克风权限或 Windows 隐私设置");
+        } else if (e.name === "NotFoundError" || e.name === "DevicesNotFoundError") {
+          this.onError?.("未检测到可用的麦克风音频输入设备");
+        } else if (e.name === "NotReadableError" || e.name === "TrackStartError") {
+          this.onError?.("麦克风正被其他应用独占占用，请关闭其他占用应用");
+        } else {
+          this.onError?.(`无法访问麦克风: ${e.message || e.name}`);
+        }
+        return false;
+      }
+    }
 
-      // Default to muted
+    if (this.localStream) {
       this.localStream.getAudioTracks().forEach((track) => {
         track.enabled = !this.isMuted;
       });
-
       this.setupAudioAnalyser();
       return true;
-    } catch (e: any) {
-      console.warn("Audio permission error:", e);
-      if (e.name === "NotAllowedError" || e.name === "PermissionDeniedError") {
-        this.onError?.("麦克风权限被拒绝，请在浏览器地址栏允许麦克风权限");
-      } else {
-        this.onError?.("无法访问麦克风设备");
-      }
-      return false;
     }
+
+    return false;
   }
 
   // 2. Setup AudioContext to detect speaking volume decibels
