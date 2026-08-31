@@ -42,6 +42,8 @@ export interface WatchRoom {
   controlMode: "host" | "free";
   switchMode: "host" | "free";
   isWebFullscreen?: boolean;
+  isMutedAll?: boolean;
+  voiceStates?: Record<string, { isMuted: boolean }>;
   hostId: string;
   hostName: string;
   hostAvatar: string;
@@ -596,6 +598,8 @@ export const RoomStore = {
       episodeName?: string;
       streamUrl?: string;
       isWebFullscreen?: boolean;
+  isMutedAll?: boolean;
+  voiceStates?: Record<string, { isMuted: boolean }>;
       sender: { id: string; name: string };
     }
   ): boolean {
@@ -759,5 +763,88 @@ export const RoomStore = {
 
     broadcastRoomEvent(roomId, { type: "chat", message: msg });
     return msg;
+  },
+
+
+  sendWebRTCSignal(roomId: string, fromUserId: string, toUserId: string, signal: any): boolean {
+    const room = rooms.get(roomId);
+    if (!room) return false;
+    broadcastRoomEvent(roomId, {
+      type: "webrtc_signal",
+      fromUserId,
+      toUserId,
+      signal,
+    });
+    return true;
+  },
+
+  updateVoiceState(roomId: string, userId: string, isMuted: boolean): boolean {
+    const room = rooms.get(roomId);
+    if (!room) return false;
+    if (!room.voiceStates) room.voiceStates = {};
+    room.voiceStates[userId] = { isMuted };
+
+    broadcastRoomEvent(roomId, {
+      type: "voice_state",
+      userId,
+      isMuted,
+    });
+    return true;
+  },
+
+  toggleMuteAll(roomId: string, hostId: string, isMutedAll: boolean): { success: boolean; message?: string } {
+    const room = rooms.get(roomId);
+    if (!room) return { success: false, message: "房间不存在" };
+    if (room.hostId !== hostId) return { success: false, message: "只有房主有权限设置全员静音" };
+
+    room.isMutedAll = isMutedAll;
+    room.updatedAt = Date.now();
+
+    const muteMsg: ChatMessage = {
+      id: `msg_${Date.now()}_mute_all`,
+      senderId: "system",
+      senderName: "系统",
+      senderAvatar: "🎙️",
+      text: isMutedAll ? "👑 房主已开启【全员静音】，除房主外麦克风已全部关闭" : "👑 房主已解除【全员静音】，大家可以自由开麦畅聊啦！",
+      time: "刚刚",
+      isSystem: true,
+    };
+    room.chatMessages.push(muteMsg);
+    broadcastRoomEvent(roomId, { type: "chat", message: muteMsg });
+    broadcastRoomEvent(roomId, {
+      type: "mute_all",
+      isMutedAll,
+      byHost: hostId,
+    });
+
+    return { success: true };
+  },
+
+  muteUser(roomId: string, hostId: string, targetUserId: string): { success: boolean; message?: string } {
+    const room = rooms.get(roomId);
+    if (!room) return { success: false, message: "房间不存在" };
+    if (room.hostId !== hostId) return { success: false, message: "只有房主有权限静音成员" };
+
+    const target = room.members.find((m) => m.id === targetUserId);
+    if (!target) return { success: false, message: "目标用户不在房间中" };
+
+    const muteUserMsg: ChatMessage = {
+      id: `msg_${Date.now()}_mute_user`,
+      senderId: "system",
+      senderName: "系统",
+      senderAvatar: "🔇",
+      text: `【${target.name}】已被房主静音`,
+      time: "刚刚",
+      isSystem: true,
+    };
+    room.chatMessages.push(muteUserMsg);
+    broadcastRoomEvent(roomId, { type: "chat", message: muteUserMsg });
+    broadcastRoomEvent(roomId, {
+      type: "mute_user",
+      targetUserId,
+      byHost: hostId,
+    });
+
+    return { success: true };
   },
 };

@@ -37,6 +37,9 @@ import { WatchRoom, ChatMessage, RoomMember } from "@/lib/room-store";
 import { VodItem } from "@/lib/types";
 import { getGuestUser, updateGuestUser, GuestUser } from "@/lib/guest";
 import { RoomSettingsModal } from "@/components/RoomSettingsModal";
+import { WebRTCVoiceManager } from "@/lib/webrtc-voice";
+import { VoiceControlBar } from "@/components/Voice/VoiceControlBar";
+import { Mic, MicOff, VolumeX } from "lucide-react";
 import { FilmPickerModal } from "@/components/FilmPickerModal";
 import { RoomPlayerHandle } from "@/components/Player/RoomVideoPlayer";
 
@@ -70,7 +73,14 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const [showFullIp, setShowFullIp] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [permissionTip, setPermissionTip] = useState<string | null>(null);
-  const [isWebFullscreen, setIsWebFullscreen] = useState(false);
+    const [isWebFullscreen, setIsWebFullscreen] = useState(false);
+
+  // Voice States
+  const [isMicMuted, setIsMicMuted] = useState(true);
+  const [isDeafened, setIsDeafened] = useState(false);
+  const [speakingUsers, setSpeakingUsers] = useState<Record<string, boolean>>({});
+  const [memberMuteStates, setMemberMuteStates] = useState<Record<string, boolean>>({});
+  const voiceManagerRef = useRef<WebRTCVoiceManager | null>(null);
 
   // In-Room Film Switcher Modal state
   const [changeVodModalOpen, setChangeVodModalOpen] = useState(false);
@@ -147,6 +157,27 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           setMessages(data.data.room.chatMessages || []);
           setMembers(data.data.room.members || []);
 
+          // Initialize WebRTC Voice Manager
+          if (!voiceManagerRef.current) {
+            const vm = new WebRTCVoiceManager(roomId, user.id);
+            vm.onSpeakingChange = (uid, isSpeaking) => {
+              setSpeakingUsers((prev) => ({ ...prev, [uid]: isSpeaking }));
+            };
+            vm.onMuteChange = (muted) => {
+              setIsMicMuted(muted);
+            };
+            vm.onError = (err) => {
+              showPermToast(err);
+            };
+            voiceManagerRef.current = vm;
+
+            // Connect with initial members
+            const otherIds = (data.data.room.members || [])
+              .map((m: any) => m.id)
+              .filter((id: string) => id !== user.id);
+            vm.connectWithMembers(otherIds);
+          }
+
           if (!data.data.room.isPublic && data.data.room.password && data.data.room.hostId !== user.id) {
             if (urlPassword) {
               joinWithPassword(urlPassword);
@@ -178,6 +209,29 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           setMessages((prev) => [...prev, payload.message]);
         } else if (payload.type === "members") {
           setMembers(payload.members);
+          if (voiceManagerRef.current) {
+            const otherIds = payload.members
+              .map((m: any) => m.id)
+              .filter((id: string) => id !== user.id);
+            voiceManagerRef.current.connectWithMembers(otherIds);
+          }
+        } else if (payload.type === "webrtc_signal") {
+          if (payload.toUserId === user.id && voiceManagerRef.current) {
+            voiceManagerRef.current.handleSignal(payload.fromUserId, payload.signal);
+          }
+        } else if (payload.type === "voice_state") {
+          setMemberMuteStates((prev) => ({ ...prev, [payload.userId]: payload.isMuted }));
+        } else if (payload.type === "mute_all") {
+          setRoom((prev) => (prev ? { ...prev, isMutedAll: payload.isMutedAll } : null));
+          if (payload.isMutedAll && user.id !== payload.byHost) {
+            voiceManagerRef.current?.toggleMute(true);
+            showPermToast("👑 房主已开启【全员静音】");
+          }
+        } else if (payload.type === "mute_user") {
+          if (payload.targetUserId === user.id) {
+            voiceManagerRef.current?.toggleMute(true);
+            showPermToast("👑 您已被房主静音");
+          }
         } else if (payload.type === "settings_updated") {
           setRoom((prev) => (prev ? { ...prev, ...payload } : null));
         } else if (payload.type === "vod_changed") {
@@ -260,6 +314,8 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
       eventSource.close();
       clearInterval(heartbeatInterval);
       window.removeEventListener("pagehide", handleUnload);
+      voiceManagerRef.current?.destroy();
+      voiceManagerRef.current = null;
     };
   }, [roomId, router]);
 
@@ -518,6 +574,49 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     }, 250);
   };
 
+
+  const handleToggleMic = async () => {
+    if (room?.isMutedAll && !isHost && isMicMuted) {
+      showPermToast("👑 房主已开启【全员静音】，暂不可开麦");
+      return;
+    }
+    if (voiceManagerRef.current) {
+      await voiceManagerRef.current.toggleMute();
+    }
+  };
+
+  const handleToggleDeafen = () => {
+    if (voiceManagerRef.current) {
+      const nextDeaf = voiceManagerRef.current.toggleDeafen();
+      setIsDeafened(nextDeaf);
+    }
+  };
+
+  const handleToggleMuteAll = () => {
+    if (!isHost) return;
+    const nextState = !room?.isMutedAll;
+    fetch(`/api/room/${roomId}/webrtc/mute-all`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        hostId: currentUser.id,
+        isMutedAll: nextState,
+      }),
+    });
+  };
+
+  const handleMuteSingleUser = (targetUserId: string) => {
+    if (!isHost) return;
+    fetch(`/api/room/${roomId}/webrtc/mute-all`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        hostId: currentUser.id,
+        targetUserId,
+      }),
+    });
+  };
+
   const copyRoomLink = () => {
     if (typeof window !== "undefined") {
       navigator.clipboard.writeText(window.location.href);
@@ -768,6 +867,18 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             onPermissionDenied={(msg) => showPermToast(msg)}
           />
 
+                    {/* Voice Chat Control Toolbar */}
+          <VoiceControlBar
+            isMuted={isMicMuted}
+            isDeafened={isDeafened}
+            isSpeaking={!!speakingUsers[currentUser.id]}
+            isMutedAll={room?.isMutedAll}
+            isHost={isHost}
+            onToggleMic={handleToggleMic}
+            onToggleDeafen={handleToggleDeafen}
+            onToggleMuteAll={handleToggleMuteAll}
+          />
+
           {/* Quick Info bar */}
           <div className="p-4 rounded-2xl bg-dark-900 border border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
             <div className="flex items-center gap-2">
@@ -1009,7 +1120,14 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="text-lg">{m.avatar}</span>
+                          <div className="relative">
+                            <span className={`text-lg transition-transform inline-block ${speakingUsers[m.id] ? "scale-110" : ""}`}>
+                              {m.avatar}
+                            </span>
+                            {speakingUsers[m.id] && (
+                              <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full ring-2 ring-emerald-400 animate-pulse" />
+                            )}
+                          </div>
                           <span className="font-bold text-white text-xs">{m.name}</span>
                           {memberIsHost && (
                             <span className="px-1.5 py-0.5 text-[9px] font-bold text-gold-400 bg-gold-400/10 rounded-md border border-gold-400/20 flex items-center gap-0.5">
@@ -1019,6 +1137,20 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                           {m.id === currentUser.id && (
                             <span className="px-1.5 py-0.5 text-[9px] font-bold text-cyan-400 bg-cyan-500/10 rounded">
                               我
+                            </span>
+                          )}
+                          {/* Voice badge */}
+                          {speakingUsers[m.id] ? (
+                            <span className="px-1.5 py-0.2 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center gap-0.5">
+                              🟢 说话中
+                            </span>
+                          ) : memberMuteStates[m.id] ? (
+                            <span className="text-[10px] text-gray-500" title="已闭麦">
+                              <MicOff className="w-3 h-3 text-gray-500" />
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-emerald-400" title="开麦中">
+                              <Mic className="w-3 h-3 text-emerald-400" />
                             </span>
                           )}
                         </div>
@@ -1045,6 +1177,14 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
 
                       {isHost && m.id !== currentUser.id && (
                         <div className="flex items-center justify-end gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleMuteSingleUser(m.id)}
+                            className="px-2 py-0.8 bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-dark-950 text-[10px] font-bold rounded-lg border border-amber-500/20 transition flex items-center gap-1"
+                            title="强制静音该成员"
+                          >
+                            <MicOff className="w-2.5 h-2.5" /> 禁言
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleManualTransfer(m.id)}
