@@ -47,12 +47,14 @@ export interface WatchRoom {
   chatMessages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
+  emptySince?: number;
 }
 
 // Global Singleton in Node.js
 declare global {
   var __4kvm_rooms__: Map<string, WatchRoom> | undefined;
   var __4kvm_subscribers__: Map<string, Set<(event: any) => void>> | undefined;
+  var __4kvm_cleaner_interval__: NodeJS.Timeout | undefined;
 }
 
 if (!global.__4kvm_rooms__) {
@@ -65,74 +67,6 @@ if (!global.__4kvm_subscribers__) {
 
 const rooms = global.__4kvm_rooms__;
 const subscribers = global.__4kvm_subscribers__;
-
-// Seed demo rooms
-if (rooms.size === 0) {
-  const demoRoom1: WatchRoom = {
-    id: "8888",
-    title: "🌸 《早春晴朗》超清追剧放映厅",
-    vodId: "ch4izw8wt",
-    vodName: "早春晴朗",
-    vodPic: "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=jpeg&src=4kvm.staticimgjs.org/uploads/2026/08/douban_1788053004-300x450.jpg",
-    sourceIndex: 0,
-    episodeIndex: 0,
-    episodeName: "第01集",
-    streamUrl: "https://oss.douyinbit.com/m3u8/d36b88127cc45aaf6e838fa266cd196c.m3u8",
-    currentTime: 120,
-    duration: 2700,
-    isPlaying: true,
-    isPublic: true,
-    controlMode: "free",
-    hostId: "system_host_1",
-    hostName: "灵狐看客_9921",
-    hostAvatar: "🦊",
-    hostDevice: "📱 iPhone 手机",
-    members: [
-      { id: "system_host_1", name: "灵狐看客_9921", avatar: "🦊", device: "📱 iPhone 手机", location: "📍 北京", maskedIp: "123.114.*.*", fullIp: "123.114.88.21", joinedAt: Date.now() - 600000, lastActive: Date.now() },
-      { id: "member_2", name: "萌熊影迷_3312", avatar: "🐼", device: "💻 Windows PC", location: "📍 广东 广州", maskedIp: "113.108.*.*", fullIp: "113.108.22.45", joinedAt: Date.now() - 300000, lastActive: Date.now() },
-      { id: "member_3", name: "橘猫追剧_7718", avatar: "🐱", device: "📱 iPad 平板", location: "📍 浙江 杭州", maskedIp: "122.224.*.*", fullIp: "122.224.19.82", joinedAt: Date.now() - 120000, lastActive: Date.now() },
-    ],
-    chatMessages: [
-      { id: "msg_1", senderId: "sys", senderName: "系统提示", senderAvatar: "📢", text: "欢迎来到《早春晴朗》公开放映厅，大家可以一边看剧一边交流！", time: "刚刚", isSystem: true },
-      { id: "msg_2", senderId: "system_host_1", senderName: "灵狐看客_9921", senderAvatar: "🦊", senderDevice: "📱 iPhone 手机", text: "这一集男女主对峙戏份太好看了！", time: "刚刚" },
-    ],
-    createdAt: Date.now() - 600000,
-    updatedAt: Date.now(),
-  };
-
-  const demoPrivateRoom: WatchRoom = {
-    id: "5200",
-    title: "🔒 好友私密观影专厅",
-    vodId: "ch4izw8wt",
-    vodName: "早春晴朗",
-    vodPic: "https://gimg0.baidu.com/gimg/app=2001&n=0&g=0n&fmt=jpeg&src=4kvm.staticimgjs.org/uploads/2026/08/douban_1788053004-300x450.jpg",
-    sourceIndex: 0,
-    episodeIndex: 0,
-    episodeName: "第01集",
-    streamUrl: "https://oss.douyinbit.com/m3u8/d36b88127cc45aaf6e838fa266cd196c.m3u8",
-    currentTime: 450,
-    duration: 2700,
-    isPlaying: true,
-    isPublic: false,
-    password: "666",
-    controlMode: "host",
-    hostId: "system_host_private",
-    hostName: "独角兽_88",
-    hostAvatar: "🦄",
-    hostDevice: "💻 Mac 电脑",
-    members: [
-      { id: "system_host_private", name: "独角兽_88", avatar: "🦄", device: "💻 Mac 电脑", location: "📍 上海", maskedIp: "222.66.*.*", fullIp: "222.66.12.8", joinedAt: Date.now() - 400000, lastActive: Date.now() },
-    ],
-    chatMessages: [
-      { id: "msg_p1", senderId: "sys", senderName: "系统提示", senderAvatar: "📢", text: "欢迎来到私密放映厅！", time: "刚刚", isSystem: true },
-    ],
-    createdAt: Date.now() - 400000,
-    updatedAt: Date.now(),
-  };
-
-  rooms.set(demoRoom1.id, demoRoom1);
-  rooms.set(demoPrivateRoom.id, demoPrivateRoom);
-}
 
 export function broadcastRoomEvent(roomId: string, eventData: any) {
   const set = subscribers.get(roomId);
@@ -158,6 +92,67 @@ export function subscribeRoom(roomId: string, callback: (eventData: any) => void
       subscribers.delete(roomId);
     }
   };
+}
+
+// Background cleanup worker (runs every 15s)
+if (!global.__4kvm_cleaner_interval__) {
+  global.__4kvm_cleaner_interval__ = setInterval(() => {
+    const now = Date.now();
+    rooms.forEach((room, roomId) => {
+      // 1. Remove members who haven't pinged in > 45 seconds
+      const activeMembers = room.members.filter((m) => now - m.lastActive <= 45000);
+      const offlineCount = room.members.length - activeMembers.length;
+
+      if (offlineCount > 0) {
+        const wasHostOffline = !activeMembers.some((m) => m.id === room.hostId);
+        room.members = activeMembers;
+
+        if (wasHostOffline && room.members.length > 0) {
+          // Auto transfer host to the next earliest joined member
+          room.members.sort((a, b) => a.joinedAt - b.joinedAt);
+          const newHost = room.members[0];
+          const oldHostName = room.hostName;
+
+          room.hostId = newHost.id;
+          room.hostName = newHost.name;
+          room.hostAvatar = newHost.avatar;
+          room.hostDevice = newHost.device;
+          room.updatedAt = now;
+
+          const successionMsg: ChatMessage = {
+            id: `msg_${now}_succession`,
+            senderId: "system",
+            senderName: "系统",
+            senderAvatar: "👑",
+            text: `原房主【${oldHostName}】已掉线，房主特权已自动顺延移交给【${newHost.name}】！`,
+            time: "刚刚",
+            isSystem: true,
+          };
+          room.chatMessages.push(successionMsg);
+          broadcastRoomEvent(roomId, { type: "chat", message: successionMsg });
+          broadcastRoomEvent(roomId, {
+            type: "host_changed",
+            hostId: newHost.id,
+            hostName: newHost.name,
+            hostAvatar: newHost.avatar,
+            hostDevice: newHost.device,
+          });
+        }
+
+        broadcastRoomEvent(roomId, { type: "members", members: room.members });
+      }
+
+      // 2. Track empty rooms and auto prune after 15 minutes of inactivity
+      if (room.members.length === 0) {
+        if (!room.emptySince) room.emptySince = now;
+        if (now - room.emptySince > 900000) {
+          rooms.delete(roomId);
+        }
+      } else {
+        room.emptySince = undefined;
+      }
+    });
+  }, 15000);
 }
 
 export const RoomStore = {
@@ -316,6 +311,99 @@ export const RoomStore = {
     return { success: true, room };
   },
 
+  transferHost(roomId: string, currentHostId: string, targetUserId: string): { success: boolean; message?: string } {
+    const room = rooms.get(roomId);
+    if (!room) return { success: false, message: "房间不存在" };
+    if (room.hostId !== currentHostId) return { success: false, message: "只有房主有权限移交房主" };
+
+    const targetMember = room.members.find((m) => m.id === targetUserId);
+    if (!targetMember) return { success: false, message: "目标用户不在房间中" };
+
+    const oldHostName = room.hostName;
+    room.hostId = targetMember.id;
+    room.hostName = targetMember.name;
+    room.hostAvatar = targetMember.avatar;
+    room.hostDevice = targetMember.device;
+    room.updatedAt = Date.now();
+
+    const transferMsg: ChatMessage = {
+      id: `msg_${Date.now()}_transfer`,
+      senderId: "system",
+      senderName: "系统",
+      senderAvatar: "👑",
+      text: `房主【${oldHostName}】已将房主管理特权主动移交给【${targetMember.name}】！`,
+      time: "刚刚",
+      isSystem: true,
+    };
+    room.chatMessages.push(transferMsg);
+    broadcastRoomEvent(roomId, { type: "chat", message: transferMsg });
+    broadcastRoomEvent(roomId, {
+      type: "host_changed",
+      hostId: targetMember.id,
+      hostName: targetMember.name,
+      hostAvatar: targetMember.avatar,
+      hostDevice: targetMember.device,
+    });
+    broadcastRoomEvent(roomId, { type: "members", members: room.members });
+
+    return { success: true };
+  },
+
+  kickMember(roomId: string, hostId: string, targetUserId: string): { success: boolean; message?: string } {
+    const room = rooms.get(roomId);
+    if (!room) return { success: false, message: "房间不存在" };
+    if (room.hostId !== hostId) return { success: false, message: "只有房主有权限移出成员" };
+    if (targetUserId === hostId) return { success: false, message: "房主不能踢出自己" };
+
+    const target = room.members.find((m) => m.id === targetUserId);
+    if (!target) return { success: false, message: "目标用户不存在" };
+
+    room.members = room.members.filter((m) => m.id !== targetUserId);
+    room.updatedAt = Date.now();
+
+    const kickMsg: ChatMessage = {
+      id: `msg_${Date.now()}_kick`,
+      senderId: "system",
+      senderName: "系统",
+      senderAvatar: "🚫",
+      text: `【${target.name}】已被房主移出房间`,
+      time: "刚刚",
+      isSystem: true,
+    };
+    room.chatMessages.push(kickMsg);
+    broadcastRoomEvent(roomId, { type: "chat", message: kickMsg });
+    broadcastRoomEvent(roomId, { type: "kicked", targetUserId });
+    broadcastRoomEvent(roomId, { type: "members", members: room.members });
+
+    return { success: true };
+  },
+
+  disbandRoom(roomId: string, hostId: string): { success: boolean; message?: string } {
+    const room = rooms.get(roomId);
+    if (!room) return { success: false, message: "房间不存在" };
+    if (room.hostId !== hostId) return { success: false, message: "只有房主有权限解散房间" };
+
+    broadcastRoomEvent(roomId, {
+      type: "disbanded",
+      message: `房主【${room.hostName}】已解散本放映厅，感谢大家的陪伴！`,
+    });
+
+    rooms.delete(roomId);
+    return { success: true };
+  },
+
+  heartbeat(roomId: string, userId: string): boolean {
+    const room = rooms.get(roomId);
+    if (!room) return false;
+
+    const member = room.members.find((m) => m.id === userId);
+    if (member) {
+      member.lastActive = Date.now();
+      return true;
+    }
+    return false;
+  },
+
   joinRoom(roomId: string, user: { id: string; name: string; avatar: string; device?: string; location?: string; maskedIp?: string; fullIp?: string }, password?: string): { success: boolean; message?: string; room?: WatchRoom } {
     const room = rooms.get(roomId);
     if (!room) return { success: false, message: "房间不存在" };
@@ -366,20 +454,28 @@ export const RoomStore = {
     }
 
     room.updatedAt = now;
+    room.emptySince = undefined;
     broadcastRoomEvent(roomId, { type: "members", members: room.members });
     return { success: true, room };
   },
 
-  leaveRoom(roomId: string, userId: string) {
+  leaveRoom(roomId: string, userId: string, action?: "disband" | "transfer"): { success: boolean; message?: string } {
     const room = rooms.get(roomId);
-    if (!room) return;
+    if (!room) return { success: false, message: "房间不存在" };
+
+    const isHost = room.hostId === userId;
+    const now = Date.now();
+
+    if (isHost && action === "disband") {
+      return this.disbandRoom(roomId, userId);
+    }
 
     const member = room.members.find((m) => m.id === userId);
     room.members = room.members.filter((m) => m.id !== userId);
 
     if (member) {
       const leaveMsg: ChatMessage = {
-        id: `msg_${Date.now()}_leave`,
+        id: `msg_${now}_leave`,
         senderId: "system",
         senderName: "系统",
         senderAvatar: "🚪",
@@ -391,7 +487,44 @@ export const RoomStore = {
       broadcastRoomEvent(roomId, { type: "chat", message: leaveMsg });
     }
 
+    // If host left, automatically transfer to next member
+    if (isHost) {
+      if (room.members.length > 0) {
+        room.members.sort((a, b) => a.joinedAt - b.joinedAt);
+        const newHost = room.members[0];
+        const oldHostName = room.hostName;
+
+        room.hostId = newHost.id;
+        room.hostName = newHost.name;
+        room.hostAvatar = newHost.avatar;
+        room.hostDevice = newHost.device;
+        room.updatedAt = now;
+
+        const successionMsg: ChatMessage = {
+          id: `msg_${now}_auto_succession`,
+          senderId: "system",
+          senderName: "系统",
+          senderAvatar: "👑",
+          text: `原房主【${oldHostName}】已退出，房主特权已自动顺延移交给【${newHost.name}】！`,
+          time: "刚刚",
+          isSystem: true,
+        };
+        room.chatMessages.push(successionMsg);
+        broadcastRoomEvent(roomId, { type: "chat", message: successionMsg });
+        broadcastRoomEvent(roomId, {
+          type: "host_changed",
+          hostId: newHost.id,
+          hostName: newHost.name,
+          hostAvatar: newHost.avatar,
+          hostDevice: newHost.device,
+        });
+      } else {
+        room.emptySince = now;
+      }
+    }
+
     broadcastRoomEvent(roomId, { type: "members", members: room.members });
+    return { success: true };
   },
 
   syncPlayback(
