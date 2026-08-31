@@ -125,7 +125,7 @@ function parseEpisodes(playUrlStr) {
       }
     } else if (parts.length === 1 && parts[0].includes("http")) {
       episodes.push({
-        name: `第${episodes.length + 1:02d}集`,
+        name: `第${String(episodes.length + 1).padStart(2, '0')}集`,
         url: parts[0].trim(),
       });
     }
