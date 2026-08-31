@@ -427,6 +427,35 @@ export const RoomStore = {
       broadcastRoomEvent(roomId, { type: "sync", action: "pause", currentTime: room.currentTime, sender: action.sender });
     } else if (action.type === "seek") {
       broadcastRoomEvent(roomId, { type: "sync", action: "seek", currentTime: room.currentTime, sender: action.sender });
+        } else if (action.type === "source") {
+      if (typeof action.sourceIndex === "number") room.sourceIndex = action.sourceIndex;
+      if (typeof action.episodeIndex === "number") room.episodeIndex = action.episodeIndex;
+      if (action.episodeName) room.episodeName = action.episodeName;
+      if (action.streamUrl) room.streamUrl = action.streamUrl;
+      if (typeof action.currentTime === "number") room.currentTime = action.currentTime;
+
+      const sourceMsg: ChatMessage = {
+        id: `msg_${Date.now()}_src`,
+        senderId: "system",
+        senderName: "系统",
+        senderAvatar: "📡",
+        text: `【${action.sender.name}】切换播放线路至「${action.sourceName || "新线路"}」`,
+        time: "刚刚",
+        isSystem: true,
+      };
+      room.chatMessages.push(sourceMsg);
+      broadcastRoomEvent(roomId, { type: "chat", message: sourceMsg });
+      broadcastRoomEvent(roomId, {
+        type: "sync",
+        action: "source",
+        sourceIndex: room.sourceIndex,
+        episodeIndex: room.episodeIndex,
+        episodeName: room.episodeName,
+        streamUrl: room.streamUrl,
+        currentTime: room.currentTime,
+        sender: action.sender,
+      });
+    }
     } else if (action.type === "episode") {
       if (typeof action.episodeIndex === "number") room.episodeIndex = action.episodeIndex;
       if (action.episodeName) room.episodeName = action.episodeName;

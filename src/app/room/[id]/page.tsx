@@ -25,6 +25,8 @@ import {
   EyeOff,
   Settings,
   KeyRound,
+  Radio,
+  Film,
   MapPin,
 } from "lucide-react";
 import { WatchRoom, ChatMessage, RoomMember } from "@/lib/room-store";
@@ -54,7 +56,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const [roomPasswordInput, setRoomPasswordInput] = useState(urlPassword);
 
   // Tabs: chat | members | episodes
-  const [activeTab, setActiveTab] = useState<"chat" | "members" | "episodes">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "members" | "episodes">("episodes");
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [members, setMembers] = useState<RoomMember[]>([]);
@@ -162,10 +164,26 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             art.currentTime = payload.currentTime;
           } else if (payload.action === "seek") {
             art.currentTime = payload.currentTime;
-          } else if (payload.action === "episode") {
+          } else if (payload.action === "source" || payload.action === "episode") {
             if (payload.streamUrl) {
+              const prevTime = payload.currentTime || 0;
               art.switchUrl(payload.streamUrl);
-              setRoom((prev) => prev ? { ...prev, episodeIndex: payload.episodeIndex, episodeName: payload.episodeName } : null);
+              if (prevTime > 0) {
+                art.on("ready", () => {
+                  art.currentTime = prevTime;
+                });
+              }
+              setRoom((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      sourceIndex: typeof payload.sourceIndex === "number" ? payload.sourceIndex : prev.sourceIndex,
+                      episodeIndex: typeof payload.episodeIndex === "number" ? payload.episodeIndex : prev.episodeIndex,
+                      episodeName: payload.episodeName || prev.episodeName,
+                      streamUrl: payload.streamUrl,
+                    }
+                  : null
+              );
             }
           }
 
@@ -306,6 +324,35 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     });
   };
 
+  // Switch Line / Source with real-time sync
+  const handleSwitchSource = (sourceIdx: number) => {
+    if (!vodItem || !room) return;
+    const targetSource = vodItem.sources[sourceIdx];
+    if (!targetSource) return;
+
+    const targetEpIndex = Math.min(room.episodeIndex, targetSource.episodes.length - 1);
+    const targetEp = targetSource.episodes[targetEpIndex] || targetSource.episodes[0];
+    const art = artInstanceRef.current;
+    const currentTime = art ? art.currentTime : room.currentTime;
+
+    const user = getGuestUser();
+    fetch(`/api/room/${roomId}/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "source",
+        sourceIndex: sourceIdx,
+        sourceName: targetSource.sourceName,
+        episodeIndex: targetEpIndex,
+        episodeName: targetEp.name,
+        streamUrl: targetEp.url,
+        currentTime: currentTime,
+        sender: { id: user.id, name: user.name },
+      }),
+    });
+  };
+
+  // Switch Episode with real-time sync
   const handleSwitchEpisode = (idx: number, ep: { name: string; url: string }) => {
     const user = getGuestUser();
     fetch(`/api/room/${roomId}/sync`, {
@@ -313,6 +360,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         type: "episode",
+        sourceIndex: room?.sourceIndex || 0,
         episodeIndex: idx,
         episodeName: ep.name,
         streamUrl: ep.url,
@@ -444,6 +492,8 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
               <span>·</span>
               <span className="text-cyan-400 font-semibold">{room.episodeName}</span>
               <span>·</span>
+              <span className="text-emerald-400 font-medium">{currentSource.sourceName}</span>
+              <span>·</span>
               <span>{room.controlMode === "host" ? "👑 仅房主可控" : "⚡ 全员自由控制"}</span>
             </p>
           </div>
@@ -510,7 +560,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           <div className="p-4 rounded-2xl bg-dark-900 border border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              <span>实时同步通道已就绪 · 延迟 &lt; 30ms</span>
+              <span>当前线路：<strong className="text-cyan-400">{currentSource.sourceName}</strong> · 延迟 &lt; 30ms</span>
             </div>
             <div className="flex items-center gap-2 text-cyan-400 font-bold">
               <Users className="w-4 h-4" />
@@ -519,10 +569,21 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           </div>
         </div>
 
-        {/* Right 1 Col: Chat, Members & Episodes */}
-        <div className="bg-dark-900 border border-white/10 rounded-2xl flex flex-col h-[500px] lg:h-[560px] shadow-2xl overflow-hidden">
+        {/* Right 1 Col: Chat, Members & Episodes/Sources */}
+        <div className="bg-dark-900 border border-white/10 rounded-2xl flex flex-col h-[520px] lg:h-[580px] shadow-2xl overflow-hidden">
           {/* Tabs */}
           <div className="flex border-b border-white/10 bg-dark-950/50">
+            <button
+              onClick={() => setActiveTab("episodes")}
+              className={`flex-1 py-3 text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                activeTab === "episodes"
+                  ? "text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              <Film className="w-3.5 h-3.5" />
+              选集与线路
+            </button>
             <button
               onClick={() => setActiveTab("chat")}
               className={`flex-1 py-3 text-xs font-bold transition flex items-center justify-center gap-1.5 ${
@@ -545,21 +606,75 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
               <Users className="w-3.5 h-3.5" />
               观众 ({members.length})
             </button>
-            <button
-              onClick={() => setActiveTab("episodes")}
-              className={`flex-1 py-3 text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-                activeTab === "episodes"
-                  ? "text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              <List className="w-3.5 h-3.5" />
-              选集 ({episodes.length})
-            </button>
           </div>
 
           {/* Tab Content */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
+            {activeTab === "episodes" && (
+              <div className="space-y-4">
+                {/* 1. Line / Source Switcher */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-gray-400">
+                    <span className="flex items-center gap-1.5">
+                      <Radio className="w-3.5 h-3.5 text-cyan-400" />
+                      切换播放源线路
+                    </span>
+                    <span className="text-[10px] text-gray-500">共 {vodItem.sources.length} 条可用专线</span>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    {vodItem.sources.map((src, idx) => {
+                      const isCurrent = idx === room.sourceIndex;
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => handleSwitchSource(idx)}
+                          className={`w-full py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                            isCurrent
+                              ? "bg-cyan-500/15 border border-cyan-500/50 text-cyan-400 shadow-sm"
+                              : "bg-dark-800 hover:bg-dark-700 text-gray-300 border border-white/5"
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${isCurrent ? "bg-cyan-400" : "bg-gray-600"}`} />
+                            {src.sourceName}
+                          </span>
+                          <span className="text-[11px] opacity-70">共 {src.episodes.length} 集</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. Episode Grid */}
+                <div className="space-y-2 pt-3 border-t border-white/10">
+                  <div className="flex items-center justify-between text-xs font-bold text-white">
+                    <span className="flex items-center gap-1.5">
+                      <List className="w-3.5 h-3.5 text-cyan-400" />
+                      剧集列表
+                    </span>
+                    <span className="text-gray-400 text-[11px]">当前: {room.episodeName}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[260px] overflow-y-auto pr-1">
+                    {episodes.map((ep, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleSwitchEpisode(idx, ep)}
+                        className={`p-2.5 rounded-xl text-xs font-semibold transition ${
+                          room.episodeIndex === idx
+                            ? "bg-cyan-500 text-dark-950 font-bold shadow-md shadow-cyan-500/20"
+                            : "bg-dark-800 text-gray-300 hover:bg-dark-700 hover:text-white"
+                        }`}
+                      >
+                        {ep.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {activeTab === "chat" && (
               <>
                 {messages.map((msg) => (
@@ -662,24 +777,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                     </div>
                   );
                 })}
-              </div>
-            )}
-
-            {activeTab === "episodes" && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {episodes.map((ep, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleSwitchEpisode(idx, ep)}
-                    className={`p-2.5 rounded-xl text-xs font-semibold transition ${
-                      room.episodeIndex === idx
-                        ? "bg-cyan-500 text-dark-950 font-bold shadow-md shadow-cyan-500/20"
-                        : "bg-dark-800 text-gray-300 hover:bg-dark-700 hover:text-white"
-                    }`}
-                  >
-                    {ep.name}
-                  </button>
-                ))}
               </div>
             )}
           </div>
