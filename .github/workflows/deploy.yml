@@ -41,6 +41,13 @@ jobs:
           envs: ENV_B64,HAS_ENV
           script: |
             set -euo pipefail
+            
+            # 1. 强制 Git 使用 IPv4 并优化网络缓冲区，彻底根治 IPv6 导致的 132s 连 GitHub 超时问题
+            git config --global http.ipResolve 4
+            git config --global http.postBuffer 524288000
+            git config --global http.lowSpeedLimit 1000
+            git config --global http.lowSpeedTime 30
+
             mkdir -p ~/github
             cd ~/github
             
@@ -49,10 +56,18 @@ jobs:
             fi
             cd 4kvm-site
 
-            # 自动修复/配置远程 origin 地址，防止出现 'origin' does not appear to be a git repository 报错
+            # 自动修复/配置远程 origin 地址
             git remote add origin https://github.com/alongLFB/4kvm-site.git 2>/dev/null || git remote set-url origin https://github.com/alongLFB/4kvm-site.git
             
-            git fetch origin master
+            # 带重试机制拉取最新代码
+            echo "==> Fetching latest master branch (IPv4 direct)..."
+            for i in 1 2 3; do
+              git fetch origin master && break || {
+                echo "Fetch failed, retrying in 3 seconds ($i/3)..."
+                sleep 3
+              }
+            done
+
             git reset --hard origin/master
 
             # 确保数据目录存在且具备持久化权限
