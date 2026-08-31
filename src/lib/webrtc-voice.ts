@@ -13,6 +13,7 @@ export class WebRTCVoiceManager {
   private localStream: MediaStream | null = null;
   private peerConnections: Map<string, RTCPeerConnection> = new Map();
   private remoteAudios: Map<string, HTMLAudioElement> = new Map();
+  private pendingCandidates: Map<string, RTCIceCandidateInit[]> = new Map();
   private audioContext: AudioContext | null = null;
   private localAnalyser: AnalyserNode | null = null;
   private remoteAnalysers: Map<string, AnalyserNode> = new Map();
@@ -27,16 +28,34 @@ export class WebRTCVoiceManager {
   constructor(roomId: string, currentUserId: string) {
     this.roomId = roomId;
     this.currentUserId = currentUserId;
+
+    if (typeof window !== "undefined") {
+      const unlockAudio = () => {
+        this.resumeAudio();
+      };
+      window.addEventListener("click", unlockAudio, { passive: true });
+      window.addEventListener("touchstart", unlockAudio, { passive: true });
+    }
   }
 
-  // 1. Initialize local microphone with multi-tier constraints fallback
+  public resumeAudio() {
+    if (this.audioContext && this.audioContext.state === "suspended") {
+      this.audioContext.resume().catch(() => {});
+    }
+    this.remoteAudios.forEach((audio) => {
+      if (audio.paused && !this.isDeafened) {
+        audio.play().catch(() => {});
+      }
+    });
+  }
+
+  // 1. Initialize local microphone with multi-tier fallback and dynamic renegotiation
   public async initLocalAudio(): Promise<boolean> {
     if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       this.onError?.("您的浏览器环境不支持 WebRTC 音频采集");
       return false;
     }
 
-    // Try Tier 1: Enhanced constraints (Echo Cancellation + Noise Suppression + AGC)
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -47,21 +66,19 @@ export class WebRTCVoiceManager {
         video: false,
       });
     } catch (errTier1: any) {
-      console.warn("Tier 1 audio constraints failed, trying basic audio: true...", errTier1);
-      // Try Tier 2: Basic audio: true
       try {
         this.localStream = await navigator.mediaDevices.getUserMedia({
           audio: true,
           video: false,
         });
       } catch (e: any) {
-        console.error("Audio permission / hardware error:", e);
+        console.error("Audio permission error:", e);
         if (e.name === "NotAllowedError" || e.name === "PermissionDeniedError") {
-          this.onError?.("麦克风权限被拒绝，请检查浏览器地址栏🔒图标中的麦克风权限或 Windows 隐私设置");
+          this.onError?.("麦克风权限被拒绝，请检查浏览器地址栏🔒图标或系统隐私设置");
         } else if (e.name === "NotFoundError" || e.name === "DevicesNotFoundError") {
           this.onError?.("未检测到可用的麦克风音频输入设备");
         } else if (e.name === "NotReadableError" || e.name === "TrackStartError") {
-          this.onError?.("麦克风正被其他应用独占占用，请关闭其他占用应用");
+          this.onError?.("麦克风正被其他应用独占占用，请先关闭其他占用程序");
         } else {
           this.onError?.(`无法访问麦克风: ${e.message || e.name}`);
         }
@@ -73,7 +90,30 @@ export class WebRTCVoiceManager {
       this.localStream.getAudioTracks().forEach((track) => {
         track.enabled = !this.isMuted;
       });
+
       this.setupAudioAnalyser();
+
+      // Dynamic Renegotiation: Attach new audio tracks to ALL existing PeerConnections
+      this.peerConnections.forEach((pc, targetUserId) => {
+        const senders = pc.getSenders();
+        this.localStream!.getTracks().forEach((track) => {
+          const existing = senders.find((s) => s.track?.kind === track.kind);
+          if (existing) {
+            existing.replaceTrack(track);
+          } else {
+            pc.addTrack(track, this.localStream!);
+          }
+        });
+
+        // Trigger renegotiation offer
+        pc.createOffer({ offerToReceiveAudio: true })
+          .then((offer) => pc.setLocalDescription(offer))
+          .then(() => {
+            this.sendSignal(targetUserId, { sdp: pc.localDescription });
+          })
+          .catch((e) => console.warn("Renegotiation offer error:", e));
+      });
+
       return true;
     }
 
@@ -88,7 +128,9 @@ export class WebRTCVoiceManager {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
 
-      this.audioContext = new AudioCtx();
+      if (!this.audioContext) {
+        this.audioContext = new AudioCtx();
+      }
 
       if (this.localStream) {
         const source = this.audioContext.createMediaStreamSource(this.localStream);
@@ -132,6 +174,8 @@ export class WebRTCVoiceManager {
 
   // 3. Toggle Local Mic (Unmute / Mute)
   public async toggleMute(forceMute?: boolean): Promise<boolean> {
+    this.resumeAudio();
+
     if (forceMute !== undefined) {
       this.isMuted = forceMute;
     } else {
@@ -153,10 +197,6 @@ export class WebRTCVoiceManager {
       });
     }
 
-    if (this.audioContext && this.audioContext.state === "suspended") {
-      this.audioContext.resume().catch(() => {});
-    }
-
     this.onMuteChange?.(this.isMuted);
 
     // Broadcast voice state
@@ -171,6 +211,8 @@ export class WebRTCVoiceManager {
 
   // 4. Toggle Speaker / Deafen
   public toggleDeafen(forceDeafen?: boolean): boolean {
+    this.resumeAudio();
+
     if (forceDeafen !== undefined) {
       this.isDeafened = forceDeafen;
     } else {
@@ -193,7 +235,7 @@ export class WebRTCVoiceManager {
     const pc = new RTCPeerConnection(ICE_CONFIG);
     this.peerConnections.set(targetUserId, pc);
 
-    // Add local audio track
+    // Add local audio track if exists
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => {
         pc.addTrack(track, this.localStream!);
@@ -207,12 +249,16 @@ export class WebRTCVoiceManager {
 
       let audio = this.remoteAudios.get(targetUserId);
       if (!audio) {
-        audio = new Audio();
+        audio = document.createElement("audio");
+        audio.id = `remote_audio_${targetUserId}`;
         audio.autoplay = true;
-        audio.muted = this.isDeafened;
+        audio.setAttribute("playsinline", "true");
+        audio.style.display = "none";
+        document.body.appendChild(audio);
         this.remoteAudios.set(targetUserId, audio);
       }
       audio.srcObject = remoteStream;
+      audio.muted = this.isDeafened;
       audio.play().catch(() => {});
 
       // Setup remote analyser
@@ -251,14 +297,13 @@ export class WebRTCVoiceManager {
   public connectWithMembers(memberIds: string[]) {
     memberIds.forEach((targetId) => {
       if (targetId !== this.currentUserId && !this.peerConnections.has(targetId)) {
-        // Deterministic initiator: the one with larger ID creates the offer
         const isInitiator = this.currentUserId > targetId;
         this.getOrCreatePeer(targetId, isInitiator);
       }
     });
   }
 
-  // 7. Handle incoming WebRTC signaling from SSE
+  // 7. Handle incoming WebRTC signaling from SSE with ICE queueing
   public async handleSignal(fromUserId: string, signal: any) {
     if (fromUserId === this.currentUserId) return;
 
@@ -267,6 +312,14 @@ export class WebRTCVoiceManager {
     if (signal.sdp) {
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+
+        // Flush pending ICE candidates
+        const queued = this.pendingCandidates.get(fromUserId) || [];
+        for (const cand of queued) {
+          await pc.addIceCandidate(new RTCIceCandidate(cand));
+        }
+        this.pendingCandidates.delete(fromUserId);
+
         if (signal.sdp.type === "offer") {
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
@@ -277,7 +330,13 @@ export class WebRTCVoiceManager {
       }
     } else if (signal.candidate) {
       try {
-        await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+        if (pc.remoteDescription && pc.remoteDescription.type) {
+          await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+        } else {
+          const queued = this.pendingCandidates.get(fromUserId) || [];
+          queued.push(signal.candidate);
+          this.pendingCandidates.set(fromUserId, queued);
+        }
       } catch (e) {
         console.error("Add ICE candidate error:", e);
       }
@@ -309,6 +368,7 @@ export class WebRTCVoiceManager {
       audio.remove();
     });
     this.remoteAudios.clear();
+    this.pendingCandidates.clear();
 
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());
