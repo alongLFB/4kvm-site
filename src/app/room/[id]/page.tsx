@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, use } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Artplayer from "artplayer";
 import Hls from "hls.js";
 import {
@@ -28,6 +28,12 @@ import {
   Radio,
   Film,
   MapPin,
+  LogOut,
+  Trash2,
+  UserCheck,
+  UserX,
+  X,
+  AlertTriangle,
 } from "lucide-react";
 import { WatchRoom, ChatMessage, RoomMember } from "@/lib/room-store";
 import { VodItem } from "@/lib/types";
@@ -36,6 +42,7 @@ import { RoomSettingsModal } from "@/components/RoomSettingsModal";
 
 export default function RoomPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: roomId } = use(params);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const urlPassword = searchParams.get("pwd") || "";
 
@@ -51,12 +58,16 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const [showFullIp, setShowFullIp] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Host Exit Modal state
+  const [exitModalOpen, setExitModalOpen] = useState(false);
+  const [disbandNotice, setDisbandNotice] = useState<string | null>(null);
+
   // Private room password prompt if unauthorized
   const [passwordRequired, setPasswordRequired] = useState(false);
   const [roomPasswordInput, setRoomPasswordInput] = useState(urlPassword);
 
   // Tabs: chat | members | episodes
-  const [activeTab, setActiveTab] = useState<"chat" | "members" | "episodes">("episodes");
+  const [activeTab, setActiveTab] = useState<"episodes" | "chat" | "members">("episodes");
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [members, setMembers] = useState<RoomMember[]>([]);
@@ -68,6 +79,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const isSyncingFromRemote = useRef(false);
 
   const isHost = room ? room.hostId === currentUser.id : false;
+  const otherMembers = members.filter((m) => m.id !== currentUser.id);
 
   const joinWithPassword = (pwd: string) => {
     const user = getGuestUser();
@@ -113,7 +125,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           setMessages(data.data.room.chatMessages || []);
           setMembers(data.data.room.members || []);
 
-          // Check if password required
           if (!data.data.room.isPublic && data.data.room.password && data.data.room.hostId !== user.id) {
             if (urlPassword) {
               joinWithPassword(urlPassword);
@@ -123,7 +134,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
               return;
             }
           } else {
-            // Join directly
             joinWithPassword("");
           }
         } else {
@@ -148,6 +158,26 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           setMembers(payload.members);
         } else if (payload.type === "settings_updated") {
           setRoom((prev) => (prev ? { ...prev, ...payload } : null));
+        } else if (payload.type === "host_changed") {
+          setRoom((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  hostId: payload.hostId,
+                  hostName: payload.hostName,
+                  hostAvatar: payload.hostAvatar,
+                  hostDevice: payload.hostDevice,
+                }
+              : null
+          );
+        } else if (payload.type === "disbanded") {
+          setDisbandNotice(payload.message || "房主已解散本放映厅");
+          setTimeout(() => router.push("/hall"), 2500);
+        } else if (payload.type === "kicked") {
+          if (payload.targetUserId === user.id) {
+            setDisbandNotice("您已被房主移出本放映厅");
+            setTimeout(() => router.push("/hall"), 2500);
+          }
         } else if (payload.type === "sync") {
           const art = artInstanceRef.current;
           if (!art) return;
@@ -194,10 +224,32 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
       } catch (err) {}
     };
 
+    // 3. Heartbeat ping every 10s
+    const heartbeatInterval = setInterval(() => {
+      fetch(`/api/room/${roomId}/heartbeat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id }),
+      }).catch(() => {});
+    }, 10000);
+
+    // 4. Reliable Tab Close / Pagehide leave beacon
+    const handleUnload = () => {
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(
+          `/api/room/${roomId}/leave`,
+          JSON.stringify({ userId: user.id, action: "transfer" })
+        );
+      }
+    };
+    window.addEventListener("pagehide", handleUnload);
+
     return () => {
       eventSource.close();
+      clearInterval(heartbeatInterval);
+      window.removeEventListener("pagehide", handleUnload);
     };
-  }, [roomId]);
+  }, [roomId, router]);
 
   // Auto scroll chat
   useEffect(() => {
@@ -297,6 +349,59 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
       }
     };
   }, [room?.streamUrl, passwordRequired]);
+
+  // Back button click handler with Host Protection Modal
+  const handleBackClick = () => {
+    if (isHost) {
+      setExitModalOpen(true);
+    } else {
+      // Normal member exit
+      fetch(`/api/room/${roomId}/leave`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser.id }),
+      });
+      router.push("/hall");
+    }
+  };
+
+  // Host transfers and exits
+  const handleHostTransferAndExit = () => {
+    fetch(`/api/room/${roomId}/leave`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: currentUser.id, action: "transfer" }),
+    });
+    router.push("/hall");
+  };
+
+  // Host disbands and closes room
+  const handleHostDisbandAndExit = () => {
+    fetch(`/api/room/${roomId}/leave`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: currentUser.id, action: "disband" }),
+    });
+    router.push("/hall");
+  };
+
+  // Host manually transfers to specific member
+  const handleManualTransfer = (targetUserId: string) => {
+    fetch(`/api/room/${roomId}/transfer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hostId: currentUser.id, targetUserId }),
+    });
+  };
+
+  // Host kicks member
+  const handleKickMember = (targetUserId: string) => {
+    fetch(`/api/room/${roomId}/kick`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hostId: currentUser.id, targetUserId }),
+    });
+  };
 
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault();
@@ -400,6 +505,20 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     );
   }
 
+  // Overlay Notice for Room Disbanded or Kicked
+  if (disbandNotice) {
+    return (
+      <div className="py-32 flex flex-col items-center justify-center gap-4 text-center max-w-md mx-auto p-6 rounded-3xl bg-dark-900 border border-white/10 shadow-2xl">
+        <AlertTriangle className="w-10 h-10 text-amber-400 animate-bounce" />
+        <h2 className="text-lg font-bold text-white">{disbandNotice}</h2>
+        <p className="text-xs text-gray-400">即将自动为您返回放映广场...</p>
+        <Link href="/hall" className="px-4 py-2 bg-cyan-500 text-dark-950 font-bold text-xs rounded-xl">
+          立即返回广场
+        </Link>
+      </div>
+    );
+  }
+
   // Password Prompt Screen
   if (passwordRequired && room) {
     return (
@@ -461,19 +580,20 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
 
   const currentSource = vodItem.sources[room.sourceIndex] || vodItem.sources[0];
   const episodes = currentSource?.episodes || [];
+  const nextSuccessor = otherMembers[0];
 
   return (
     <div className="space-y-6">
       {/* Top Header Bar */}
       <div className="p-4 sm:p-5 rounded-2xl bg-dark-900 border border-white/10 flex flex-wrap items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-3">
-          <Link
-            href="/hall"
+          <button
+            onClick={handleBackClick}
             className="p-2 rounded-xl bg-dark-800 hover:bg-dark-700 text-gray-300 hover:text-white transition"
-            title="返回广场"
+            title="退出放映厅"
           >
             <ArrowLeft className="w-4 h-4" />
-          </Link>
+          </button>
 
           <div>
             <div className="flex items-center gap-2">
@@ -732,9 +852,9 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                   return (
                     <div
                       key={m.id}
-                      className="p-3 rounded-xl bg-dark-800/80 border border-white/5 space-y-1.5"
+                      className="p-3 rounded-xl bg-dark-800/80 border border-white/5 space-y-2"
                     >
-                      {/* Top: Avatar & Name */}
+                      {/* Top: Avatar & Name & Actions */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">{m.avatar}</span>
@@ -758,8 +878,8 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                         </div>
                       </div>
 
-                      {/* Bottom metadata: Device & IP */}
-                      <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t border-white/5">
+                      {/* Bottom metadata: Device, IP & Host Admin actions */}
+                      <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1.5 border-t border-white/5">
                         {/* Device */}
                         <div className="flex items-center gap-1">
                           <span className="text-gray-300 font-medium">{m.device || "💻 网页端"}</span>
@@ -774,6 +894,24 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                           {!isHost && <Lock className="w-2.5 h-2.5 text-gray-600" title="仅房主可看完整IP" />}
                         </div>
                       </div>
+
+                      {/* Host Actions on other members */}
+                      {isHost && m.id !== currentUser.id && (
+                        <div className="flex items-center justify-end gap-2 pt-1">
+                          <button
+                            onClick={() => handleManualTransfer(m.id)}
+                            className="px-2 py-0.8 bg-gold-400/10 hover:bg-gold-400 text-gold-400 hover:text-dark-950 text-[10px] font-bold rounded-lg border border-gold-400/20 transition flex items-center gap-1"
+                          >
+                            <Crown className="w-2.5 h-2.5" /> 移交房主
+                          </button>
+                          <button
+                            onClick={() => handleKickMember(m.id)}
+                            className="px-2 py-0.8 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white text-[10px] font-bold rounded-lg border border-rose-500/20 transition flex items-center gap-1"
+                          >
+                            <UserX className="w-2.5 h-2.5" /> 移出
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -818,6 +956,80 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           )}
         </div>
       </div>
+
+      {/* Host Exit Confirmation Dialog */}
+      {exitModalOpen && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-md bg-dark-900 border border-white/10 rounded-3xl p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2 text-base font-bold text-gold-400">
+                <Crown className="w-5 h-5" />
+                👑 房主退出管理选项
+              </div>
+              <button onClick={() => setExitModalOpen(false)} className="p-1 text-gray-400 hover:text-white rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs text-gray-300">
+              <p>
+                您当前是本放映厅的<strong className="text-white font-bold">【创建者 / 房主】</strong>。
+              </p>
+              {otherMembers.length > 0 ? (
+                <p className="text-gray-400">
+                  房间内当前还有 <span className="text-cyan-400 font-bold">{otherMembers.length}</span> 位观众在线。您可以选择将房主特权顺延移交给下一位观众继续放映，或者直接解散关闭房间：
+                </p>
+              ) : (
+                <p className="text-gray-400">
+                  当前房间内暂无其他观众，退出将自动关闭本放映厅。
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-3 pt-2">
+              {otherMembers.length > 0 && nextSuccessor && (
+                <button
+                  type="button"
+                  onClick={handleHostTransferAndExit}
+                  className="w-full p-3.5 rounded-2xl bg-cyan-500/10 hover:bg-cyan-500 text-cyan-400 hover:text-dark-950 font-bold text-xs border border-cyan-500/30 transition flex items-center justify-between group shadow-lg"
+                >
+                  <div className="flex items-center gap-2 text-left">
+                    <UserCheck className="w-4 h-4 mt-0.5" />
+                    <div>
+                      <p className="font-bold">👑 顺延房主并退出</p>
+                      <p className="text-[10px] opacity-75 font-normal">移交给【{nextSuccessor.name}】，其他人继续看</p>
+                    </div>
+                  </div>
+                  <ArrowLeft className="w-4 h-4 rotate-180 opacity-60 group-hover:opacity-100" />
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={handleHostDisbandAndExit}
+                className="w-full p-3.5 rounded-2xl bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white font-bold text-xs border border-rose-500/30 transition flex items-center justify-between group shadow-lg"
+              >
+                <div className="flex items-center gap-2 text-left">
+                  <Trash2 className="w-4 h-4 mt-0.5" />
+                  <div>
+                    <p className="font-bold">💥 直接解散关闭放映厅</p>
+                    <p className="text-[10px] opacity-75 font-normal">全员退出并解散该房间</p>
+                  </div>
+                </div>
+                <ArrowLeft className="w-4 h-4 rotate-180 opacity-60 group-hover:opacity-100" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setExitModalOpen(false)}
+                className="w-full py-2.5 rounded-xl bg-dark-800 hover:bg-dark-700 text-gray-300 hover:text-white font-semibold text-xs transition"
+              >
+                取消，留在房间
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Host Settings Modal */}
       {isHost && (
