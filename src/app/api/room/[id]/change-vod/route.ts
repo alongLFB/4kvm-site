@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { RoomStore } from "@/lib/room-store";
+import { fetchLiveVodDetail } from "@/lib/vod-service";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -7,11 +8,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const body = await request.json();
     const { hostId, vodItem } = body;
 
-    if (!vodItem) {
+    if (!vodItem || !vodItem.id) {
       return NextResponse.json({ code: 400, message: "缺少影视数据" }, { status: 400 });
     }
 
-    const result = RoomStore.changeVod(id, hostId, vodItem);
+    // Enrich with full sources and episodes if not loaded
+    let fullVod = vodItem;
+    if (!vodItem.sources || vodItem.sources.length === 0 || !vodItem.sources[0]?.episodes?.length) {
+      const detail = await fetchLiveVodDetail(vodItem.id);
+      if (detail) {
+        fullVod = detail;
+      }
+    }
+
+    const result = RoomStore.changeVod(id, hostId, fullVod);
     if (result.success) {
       return NextResponse.json({ code: 200, data: result.room });
     } else {

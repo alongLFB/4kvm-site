@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
+import React, { useEffect, useRef } from "react";
 import Artplayer from "artplayer";
 import Hls from "hls.js";
 
@@ -39,6 +39,7 @@ export default function RoomVideoPlayer({
 }: RoomVideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const artRef = useRef<Artplayer | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const isRemoteSyncingRef = useRef(false);
   const lastSyncedTimeRef = useRef(initialTime);
   const canControlRef = useRef(canControl);
@@ -47,9 +48,17 @@ export default function RoomVideoPlayer({
   useEffect(() => {
     if (!containerRef.current || !url) return;
 
+    // Cleanly destroy previous Hls & Artplayer instances
+    if (hlsRef.current) {
+      try {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      } catch (e) {}
+    }
     if (artRef.current) {
       try {
         artRef.current.destroy(false);
+        artRef.current = null;
       } catch (e) {}
     }
 
@@ -89,15 +98,20 @@ export default function RoomVideoPlayer({
       customType: {
         m3u8: function (video: HTMLMediaElement, targetUrl: string, artInstance: Artplayer) {
           if (Hls.isSupported()) {
-            if (artInstance.hls) artInstance.hls.destroy();
+            if (hlsRef.current) {
+              hlsRef.current.destroy();
+            }
             const hls = new Hls({
               maxBufferLength: 60,
               maxMaxBufferLength: 120,
               startFragPrefetch: true,
+              enableWorker: true,
             });
+            hlsRef.current = hls;
+            artInstance.hls = hls;
+
             hls.loadSource(targetUrl);
             hls.attachMedia(video);
-            artInstance.hls = hls;
 
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
               if (initialTime > 0) {
@@ -105,12 +119,15 @@ export default function RoomVideoPlayer({
                 artInstance.currentTime = initialTime;
                 setTimeout(() => {
                   isRemoteSyncingRef.current = false;
-                }, 400);
+                }, 300);
               }
               artInstance.play().catch(() => {});
             });
 
-            artInstance.on("destroy", () => hls.destroy());
+            artInstance.on("destroy", () => {
+              hls.destroy();
+              hlsRef.current = null;
+            });
           } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
             video.src = targetUrl;
             if (initialTime > 0) {
@@ -118,7 +135,7 @@ export default function RoomVideoPlayer({
               artInstance.currentTime = initialTime;
               setTimeout(() => {
                 isRemoteSyncingRef.current = false;
-              }, 400);
+              }, 300);
             }
             artInstance.play().catch(() => {});
           } else {
@@ -138,7 +155,7 @@ export default function RoomVideoPlayer({
         art.currentTime = time;
         setTimeout(() => {
           isRemoteSyncingRef.current = false;
-        }, 400);
+        }, 350);
       },
       syncPlay: (time?: number) => {
         isRemoteSyncingRef.current = true;
@@ -151,7 +168,7 @@ export default function RoomVideoPlayer({
         }
         setTimeout(() => {
           isRemoteSyncingRef.current = false;
-        }, 400);
+        }, 350);
       },
       syncPause: (time?: number) => {
         isRemoteSyncingRef.current = true;
@@ -164,7 +181,7 @@ export default function RoomVideoPlayer({
         }
         setTimeout(() => {
           isRemoteSyncingRef.current = false;
-        }, 400);
+        }, 350);
       },
       syncWebFullscreen: (isFull: boolean) => {
         art.fullscreenWeb = isFull;
@@ -182,7 +199,7 @@ export default function RoomVideoPlayer({
         lastSyncedTimeRef.current = initialTime;
         setTimeout(() => {
           isRemoteSyncingRef.current = false;
-        }, 400);
+        }, 300);
       }
       art.play().catch(() => {});
     });
@@ -238,9 +255,16 @@ export default function RoomVideoPlayer({
     });
 
     return () => {
+      if (hlsRef.current) {
+        try {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+        } catch (e) {}
+      }
       if (art && art.destroy) {
         try {
           art.destroy(false);
+          artRef.current = null;
         } catch (e) {}
       }
     };

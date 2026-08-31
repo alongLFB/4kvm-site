@@ -320,9 +320,10 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
 
   const handleConfirmChangeVod = async (newVod: VodItem) => {
     if (!canSwitch) {
-      showPermToast("👑 房主已设置【仅房主可换集换源】权限");
+      showPermToast("👑 房主已开启【仅房主可换集换源】特权");
       return;
     }
+    setChangeVodModalOpen(false);
     try {
       const res = await fetch(`/api/room/${roomId}/change-vod`, {
         method: "POST",
@@ -333,8 +334,9 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
         }),
       });
       const data = await res.json();
-      if (data.code === 200) {
-        setChangeVodModalOpen(false);
+      if (data.code === 200 && data.data) {
+        setRoom(data.data);
+        if (data.data.vodItem) setVodItem(data.data.vodItem);
       } else {
         showPermToast(data.message || "更换影片失败");
       }
