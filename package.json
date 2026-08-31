@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:seed": "node scripts/seed-db.mjs",
+    "db:sync": "node scripts/sync-upstream.mjs"
   },
   "dependencies": {
     "artplayer": "^5.4.0",
