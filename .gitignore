@@ -16,6 +16,7 @@
 # misc
 .DS_Store
 *.pem
+*.tar.gz
 
 # debug
 npm-debug.log*
@@ -29,3 +30,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# SQLite Database & WAL logs (Data persistence handled via Docker Volume)
+/data/*.db
+/data/*.db-wal
+/data/*.db-shm
+/data/*.db-journal
+!/data/.gitkeep
