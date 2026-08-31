@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       name: user.name,
       avatar: user.avatar,
       device: user.device,
-      location: `📍 ${location}`,
+      location,
       maskedIp,
       fullIp: rawIp,
     },

@@ -1,8 +1,8 @@
 const ipCache = new Map<string, string>();
 
-const COUNTRY_NAME_MAP: Record<string, string> = {
-  CN: "中国",
+const COUNTRY_MAP: Record<string, string> = {
   AE: "阿联酋",
+  CN: "中国",
   US: "美国",
   GB: "英国",
   JP: "日本",
@@ -22,6 +22,78 @@ const COUNTRY_NAME_MAP: Record<string, string> = {
   VN: "越南",
   PH: "菲律宾",
   ID: "印度尼西亚",
+  NL: "荷兰",
+  IT: "意大利",
+  ES: "西班牙",
+};
+
+const CITY_MAP: Record<string, string> = {
+  "Abu Dhabi": "阿布扎比",
+  "Dubai": "迪拜",
+  "Sharjah": "沙迦",
+  "Ajman": "阿治曼",
+  "Beijing": "北京",
+  "Shanghai": "上海",
+  "Guangzhou": "广州",
+  "Shenzhen": "深圳",
+  "Hangzhou": "杭州",
+  "Chengdu": "成都",
+  "Wuhan": "武汉",
+  "Nanjing": "南京",
+  "Chongqing": "重庆",
+  "Tianjin": "天津",
+  "Xi'an": "西安",
+  "Changsha": "长沙",
+  "Zhengzhou": "郑州",
+  "Suzhou": "苏州",
+  "Dongguan": "东莞",
+  "Foshan": "佛山",
+  "Xiamen": "厦门",
+  "Fuzhou": "福州",
+  "Qingdao": "青岛",
+  "Jinan": "济南",
+  "Hefei": "合肥",
+  "Kunming": "昆明",
+  "Dalian": "大连",
+  "Shenyang": "沈阳",
+  "Harbin": "哈尔滨",
+  "Changchun": "长春",
+  "Nanning": "南宁",
+  "Guiyang": "贵阳",
+  "Haikou": "海口",
+  "Sanya": "三亚",
+  "Urumqi": "乌鲁木齐",
+  "Lanzhou": "兰州",
+  "Yinchuan": "银川",
+  "Xining": "西宁",
+  "Lhasa": "拉萨",
+  "Hohhot": "呼和浩特",
+  "Taiyuan": "太原",
+  "Shijiazhuang": "石家庄",
+  "Nanchang": "南昌",
+  "Wuxi": "无锡",
+  "Ningbo": "宁波",
+  "Wenzhou": "温州",
+  "Hong Kong": "香港",
+  "Macao": "澳门",
+  "Macau": "澳门",
+  "Taipei": "台北",
+  "Tokyo": "东京",
+  "Osaka": "大阪",
+  "Seoul": "首尔",
+  "Singapore": "新加坡",
+  "London": "伦敦",
+  "New York": "纽约",
+  "Los Angeles": "洛杉矶",
+  "San Francisco": "旧金山",
+  "Seattle": "西雅图",
+  "Chicago": "芝加哥",
+  "Frankfurt": "法兰克福",
+  "Paris": "巴黎",
+  "Sydney": "悉尼",
+  "Melbourne": "墨尔本",
+  "Toronto": "多伦多",
+  "Vancouver": "温哥华",
 };
 
 export function getClientIp(request: Request): string {
@@ -91,26 +163,33 @@ export function formatTwoTierLocation(country: string, region: string, city: str
     .replace("中华人民共和国", "中国")
     .replace("United Arab Emirates", "阿联酋")
     .replace("China", "中国")
+    .replace(/^📍\s*/, "")
     .trim();
 
   let secondTier = "";
 
   if (city && region) {
-    const cleanCity = city.replace(/市|自治州|地区|特别行政区/g, "").trim();
-    const cleanRegion = region.replace(/省|自治区|特别行政区|酋長國|酋长国/g, "").trim();
+    let cleanCity = city.replace(/市|自治州|地区|特别行政区/g, "").trim();
+    let cleanRegion = region.replace(/省|自治区|特别行政区|酋長國|酋长国/g, "").trim();
+
+    cleanCity = CITY_MAP[cleanCity] || cleanCity;
+    cleanRegion = CITY_MAP[cleanRegion] || cleanRegion;
+
     if (cleanCity === cleanRegion || cleanCity.includes(cleanRegion) || cleanRegion.includes(cleanCity)) {
       secondTier = cleanCity;
     } else {
       secondTier = `${cleanRegion} ${cleanCity}`.trim();
     }
   } else if (city) {
-    secondTier = city.replace(/市|自治州|地区|特别行政区/g, "").trim();
+    let cleanCity = city.replace(/市|自治州|地区|特别行政区/g, "").trim();
+    secondTier = CITY_MAP[cleanCity] || cleanCity;
   } else if (region) {
-    secondTier = region.replace(/省|自治区|特别行政区|酋長國|酋长国/g, "").trim();
+    let cleanRegion = region.replace(/省|自治区|特别行政区|酋長國|酋长国/g, "").trim();
+    secondTier = CITY_MAP[cleanRegion] || cleanRegion;
   }
 
   if (!secondTier || secondTier === country) {
-    if (country === "中国") return "中国 · 核心枢纽";
+    if (country === "中国") return "中国 · 综合枢纽";
     return `${country} · 本地`;
   }
 
@@ -119,7 +198,7 @@ export function formatTwoTierLocation(country: string, region: string, city: str
 
 export async function resolveIpLocation(ip: string, headers?: Headers): Promise<string> {
   if (!ip || ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172.16.")) {
-    return "局域网 · 本地节点";
+    return "本地局域网";
   }
 
   if (ipCache.has(ip)) {
@@ -130,7 +209,7 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
   if (headers) {
     const countryCode = (headers.get("cf-ipcountry") || "").toUpperCase();
     const city = headers.get("cf-ipcity") || "";
-    const countryName = COUNTRY_NAME_MAP[countryCode] || countryCode;
+    const countryName = COUNTRY_MAP[countryCode] || countryCode;
     if (countryName && city) {
       const loc = formatTwoTierLocation(countryName, "", city);
       ipCache.set(ip, loc);
@@ -138,44 +217,21 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
     }
   }
 
-  // 2. Query ip-api.com with Chinese localization (supports IPv4 & IPv6 worldwide)
+  // 2. Query HTTPS ipwho.is (Multi-lingual, returns rich Chinese data)
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 1800);
-
-    const res = await fetch(`http://ip-api.com/json/${ip}?lang=zh-CN`, {
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data.status === "success") {
-        const country = data.country || "";
-        const region = data.regionName || "";
-        const city = data.city || "";
-
-        const loc = formatTwoTierLocation(country, region, city);
-        ipCache.set(ip, loc);
-        return loc;
-      }
-    }
-  } catch (e) {}
-
-  // 3. Fallback to ipwho.is (global GeoIP with zh-CN support)
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 1800);
+    const timeout = setTimeout(() => controller.abort(), 2000);
 
     const res = await fetch(`https://ipwho.is/${ip}?lang=zh-CN`, {
       signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0" },
     });
     clearTimeout(timeout);
 
     if (res.ok) {
       const data = await res.json();
       if (data.success) {
-        const country = data.country || "";
+        let country = data.country || "";
         const city = data.city || "";
         const region = data.region || "";
 
@@ -186,7 +242,55 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
     }
   } catch (e) {}
 
-  // 4. China domestic fallback
+  // 3. Fallback: Query HTTPS freeipapi.com (Super fast global GeoIP)
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+
+    const res = await fetch(`https://freeipapi.com/api/json/${ip}`, {
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const data = await res.json();
+      const countryCode = (data.countryCode || "").toUpperCase();
+      const country = COUNTRY_MAP[countryCode] || data.countryName || "";
+      const city = data.cityName || "";
+      const region = data.regionName || "";
+
+      const loc = formatTwoTierLocation(country, region, city);
+      ipCache.set(ip, loc);
+      return loc;
+    }
+  } catch (e) {}
+
+  // 4. Fallback: Query HTTPS api.ip.sb
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+
+    const res = await fetch(`https://api.ip.sb/geoip/${ip}`, {
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const data = await res.json();
+      const countryCode = (data.country_code || "").toUpperCase();
+      const country = COUNTRY_MAP[countryCode] || data.country || "";
+      const city = data.city || "";
+      const region = data.region || "";
+
+      const loc = formatTwoTierLocation(country, region, city);
+      ipCache.set(ip, loc);
+      return loc;
+    }
+  } catch (e) {}
+
+  // 5. Domestic Chinese fallback
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 1500);
@@ -206,5 +310,5 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
     }
   } catch (e) {}
 
-  return "中国 · 综合网络";
+  return "中国 · 综合枢纽";
 }

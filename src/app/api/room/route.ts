@@ -1,21 +1,19 @@
 import { NextResponse } from "next/server";
 import { RoomStore } from "@/lib/room-store";
-import { fetchLiveVodDetail } from "@/lib/vod-service";
 import { getClientIp, resolveIpLocation, maskIp } from "@/lib/ip-service";
 
 export async function GET() {
-  const list = RoomStore.getAllRoomsForHall();
-  return NextResponse.json({ code: 200, list });
+  const rooms = RoomStore.getAllRoomsForHall();
+  return NextResponse.json({ code: 200, list: rooms });
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { title, vodId, vodItem: passedVodItem, sourceIndex = 0, episodeIndex = 0, isPublic = true, password = "", controlMode = "free", host } = body;
+    const { title, vodItem, sourceIndex = 0, episodeIndex = 0, isPublic = true, password = "", controlMode = "free", switchMode = "free", host } = body;
 
-    const vodItem = passedVodItem || (await fetchLiveVodDetail(vodId));
     if (!vodItem) {
-      return NextResponse.json({ code: 404, message: "影视不存在" }, { status: 404 });
+      return NextResponse.json({ code: 400, message: "缺少影片信息" }, { status: 400 });
     }
 
     const rawIp = getClientIp(request);
@@ -23,16 +21,20 @@ export async function POST(request: Request) {
     const maskedIp = maskIp(rawIp);
 
     const room = RoomStore.createRoom({
-      title: title || `${vodItem.name} 观影房`,
+      title,
       vodItem,
       sourceIndex,
       episodeIndex,
       isPublic,
       password,
       controlMode,
+      switchMode,
       host: {
-        ...host,
-        location: `📍 ${location}`,
+        id: host.id,
+        name: host.name,
+        avatar: host.avatar,
+        device: host.device,
+        location,
         maskedIp,
         fullIp: rawIp,
       },
