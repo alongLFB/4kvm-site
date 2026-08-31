@@ -7,7 +7,6 @@ import Hls from "hls.js";
 import {
   Users,
   Share2,
-  Copy,
   Check,
   Send,
   Sparkles,
@@ -20,15 +19,21 @@ import {
   Edit2,
   ArrowLeft,
   Loader2,
+  Shield,
+  Eye,
+  EyeOff,
+  Smartphone,
+  Laptop,
+  MapPin,
 } from "lucide-react";
 import { WatchRoom, ChatMessage, RoomMember } from "@/lib/room-store";
 import { VodItem } from "@/lib/types";
-import { getGuestUser, updateGuestUser, GuestUser } from "@/lib/guest";
+import { getGuestUser, updateGuestUser, GuestUser, detectDevice } from "@/lib/guest";
 
 export default function RoomPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: roomId } = use(params);
 
-  const [currentUser, setCurrentUser] = useState<GuestUser>({ id: "", name: "游客", avatar: "🐱" });
+  const [currentUser, setCurrentUser] = useState<GuestUser>({ id: "", name: "游客", avatar: "🐱", device: "💻 网页端" });
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState("");
 
@@ -36,6 +41,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const [vodItem, setVodItem] = useState<VodItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [showFullIp, setShowFullIp] = useState(false);
 
   // Tabs: chat | members | episodes
   const [activeTab, setActiveTab] = useState<"chat" | "members" | "episodes">("chat");
@@ -47,8 +53,9 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const artContainerRef = useRef<HTMLDivElement>(null);
   const artInstanceRef = useRef<Artplayer | null>(null);
 
-  // State sync control
   const isSyncingFromRemote = useRef(false);
+
+  const isHost = room ? room.hostId === currentUser.id : false;
 
   useEffect(() => {
     const user = getGuestUser();
@@ -195,7 +202,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
       }
     });
 
-    // Local user interaction triggers remote sync
+    // Local interaction emits sync
     const emitSync = (actionType: "play" | "pause" | "seek") => {
       if (isSyncingFromRemote.current) return;
 
@@ -326,10 +333,10 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             <div className="flex items-center gap-2">
               <h1 className="text-base sm:text-lg font-bold text-white">{room.title}</h1>
               <span className="px-2 py-0.5 text-[10px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 rounded-md">
-                房间码: {room.id}
+                房号: {room.id}
               </span>
             </div>
-            <p className="text-xs text-gray-400 flex items-center gap-2 mt-0.5">
+            <p className="text-xs text-gray-400 flex flex-wrap items-center gap-2 mt-0.5">
               <span>片名: {room.vodName}</span>
               <span>·</span>
               <span className="text-cyan-400 font-semibold">{room.episodeName}</span>
@@ -359,6 +366,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             ) : (
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-white">{currentUser.name}</span>
+                <span className="text-[10px] text-cyan-400/80 bg-cyan-500/10 px-1.5 py-0.5 rounded">{currentUser.device}</span>
                 <button onClick={() => setEditingName(true)} className="text-gray-500 hover:text-cyan-400">
                   <Edit2 className="w-3 h-3" />
                 </button>
@@ -385,20 +393,20 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           </div>
 
           {/* Quick Info bar */}
-          <div className="p-4 rounded-2xl bg-dark-900 border border-white/10 flex items-center justify-between text-xs text-gray-400">
+          <div className="p-4 rounded-2xl bg-dark-900 border border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              <span>实时进度同步已开启（延迟 &lt; 30ms）</span>
+              <span>实时同步通道已就绪 · 延迟 &lt; 30ms</span>
             </div>
-            <div className="flex items-center gap-1.5 text-cyan-400 font-bold">
+            <div className="flex items-center gap-2 text-cyan-400 font-bold">
               <Users className="w-4 h-4" />
-              <span>{members.length} 人正在实时共赏</span>
+              <span>{members.length} 人在线实时共赏</span>
             </div>
           </div>
         </div>
 
         {/* Right 1 Col: Chat, Members & Episodes */}
-        <div className="bg-dark-900 border border-white/10 rounded-2xl flex flex-col h-[480px] lg:h-[540px] shadow-2xl overflow-hidden">
+        <div className="bg-dark-900 border border-white/10 rounded-2xl flex flex-col h-[500px] lg:h-[560px] shadow-2xl overflow-hidden">
           {/* Tabs */}
           <div className="flex border-b border-white/10 bg-dark-950/50">
             <button
@@ -410,7 +418,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
               }`}
             >
               <MessageSquare className="w-3.5 h-3.5" />
-              实时公屏
+              公屏聊天
             </button>
             <button
               onClick={() => setActiveTab("members")}
@@ -454,6 +462,11 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                         <span className="font-bold text-cyan-400 flex items-center gap-1">
                           <span>{msg.senderAvatar || "🐱"}</span>
                           <span>{msg.senderName}</span>
+                          {msg.senderDevice && (
+                            <span className="text-[9px] text-gray-400 bg-dark-900 px-1 py-0.2 rounded font-normal">
+                              {msg.senderDevice}
+                            </span>
+                          )}
                         </span>
                         <span>{msg.time}</span>
                       </div>
@@ -466,23 +479,75 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             )}
 
             {activeTab === "members" && (
-              <div className="space-y-2">
-                {members.map((m) => (
-                  <div
-                    key={m.id}
-                    className="flex items-center justify-between p-2.5 rounded-xl bg-dark-800/80 border border-white/5 text-xs"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">{m.avatar}</span>
-                      <span className="font-bold text-white">{m.name}</span>
-                    </div>
-                    {m.id === room.hostId && (
-                      <span className="px-2 py-0.5 text-[10px] font-bold text-gold-400 bg-gold-400/10 rounded-md flex items-center gap-1">
-                        <Crown className="w-3 h-3" /> 房主
-                      </span>
-                    )}
+              <div className="space-y-2.5">
+                {/* Host Admin Bar */}
+                {isHost && (
+                  <div className="p-2.5 rounded-xl bg-gold-500/10 border border-gold-500/30 flex items-center justify-between text-[11px]">
+                    <span className="text-gold-400 font-bold flex items-center gap-1">
+                      <Shield className="w-3.5 h-3.5" /> 房主管理视角 (全量敏感信息)
+                    </span>
+                    <button
+                      onClick={() => setShowFullIp(!showFullIp)}
+                      className="text-gold-300 hover:text-white flex items-center gap-1 font-semibold"
+                    >
+                      {showFullIp ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      {showFullIp ? "隐藏明文 IP" : "查看完整 IP"}
+                    </button>
                   </div>
-                ))}
+                )}
+
+                {members.map((m) => {
+                  const memberIsHost = m.id === room.hostId;
+                  const displayIp = isHost && showFullIp && m.fullIp ? m.fullIp : m.maskedIp;
+
+                  return (
+                    <div
+                      key={m.id}
+                      className="p-3 rounded-xl bg-dark-800/80 border border-white/5 space-y-1.5"
+                    >
+                      {/* Top: Avatar & Name */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{m.avatar}</span>
+                          <span className="font-bold text-white text-xs">{m.name}</span>
+                          {memberIsHost && (
+                            <span className="px-1.5 py-0.5 text-[9px] font-bold text-gold-400 bg-gold-400/10 rounded-md border border-gold-400/20 flex items-center gap-0.5">
+                              <Crown className="w-2.5 h-2.5" /> 房主
+                            </span>
+                          )}
+                          {m.id === currentUser.id && (
+                            <span className="px-1.5 py-0.5 text-[9px] font-bold text-cyan-400 bg-cyan-500/10 rounded">
+                              我
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Location Badge */}
+                        <div className="flex items-center gap-1 text-[10px] text-cyan-400 font-medium bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">
+                          <MapPin className="w-3 h-3 text-cyan-400" />
+                          <span>{m.location || "中国"}</span>
+                        </div>
+                      </div>
+
+                      {/* Bottom metadata: Device & IP */}
+                      <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t border-white/5">
+                        {/* Device */}
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-300 font-medium">{m.device || "💻 网页端"}</span>
+                        </div>
+
+                        {/* IP (Masked or Host-revealed) */}
+                        <div className="flex items-center gap-1 text-[10px] text-gray-500">
+                          <span>IP:</span>
+                          <span className={`font-mono ${isHost && showFullIp ? "text-amber-400 font-bold" : "text-gray-400"}`}>
+                            {displayIp || "127.0.0.*"}
+                          </span>
+                          {!isHost && <Lock className="w-2.5 h-2.5 text-gray-600" title="仅房主可看完整IP" />}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 

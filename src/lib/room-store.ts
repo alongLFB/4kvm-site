@@ -4,6 +4,10 @@ export interface RoomMember {
   id: string;
   name: string;
   avatar: string;
+  device: string;
+  location: string;
+  maskedIp: string;
+  fullIp?: string;
   joinedAt: number;
   lastActive: number;
 }
@@ -13,6 +17,7 @@ export interface ChatMessage {
   senderId: string;
   senderName: string;
   senderAvatar: string;
+  senderDevice?: string;
   text: string;
   time: string;
   isSystem?: boolean;
@@ -36,6 +41,7 @@ export interface WatchRoom {
   hostId: string;
   hostName: string;
   hostAvatar: string;
+  hostDevice: string;
   members: RoomMember[];
   chatMessages: ChatMessage[];
   createdAt: number;
@@ -59,7 +65,7 @@ if (!global.__4kvm_subscribers__) {
 const rooms = global.__4kvm_rooms__;
 const subscribers = global.__4kvm_subscribers__;
 
-// Seed 2 default public demonstration rooms if empty
+// Demo seed rooms
 if (rooms.size === 0) {
   const demoRoom1: WatchRoom = {
     id: "8888",
@@ -79,51 +85,21 @@ if (rooms.size === 0) {
     hostId: "system_host_1",
     hostName: "灵狐看客_9921",
     hostAvatar: "🦊",
+    hostDevice: "📱 iPhone 手机",
     members: [
-      { id: "system_host_1", name: "灵狐看客_9921", avatar: "🦊", joinedAt: Date.now() - 600000, lastActive: Date.now() },
-      { id: "member_2", name: "萌熊影迷_3312", avatar: "🐼", joinedAt: Date.now() - 300000, lastActive: Date.now() },
-      { id: "member_3", name: "橘猫追剧_7718", avatar: "🐱", joinedAt: Date.now() - 120000, lastActive: Date.now() },
+      { id: "system_host_1", name: "灵狐看客_9921", avatar: "🦊", device: "📱 iPhone 手机", location: "📍 北京", maskedIp: "123.114.*.*", fullIp: "123.114.88.21", joinedAt: Date.now() - 600000, lastActive: Date.now() },
+      { id: "member_2", name: "萌熊影迷_3312", avatar: "🐼", device: "💻 Windows PC", location: "📍 广东 广州", maskedIp: "113.108.*.*", fullIp: "113.108.22.45", joinedAt: Date.now() - 300000, lastActive: Date.now() },
+      { id: "member_3", name: "橘猫追剧_7718", avatar: "🐱", device: "📱 iPad 平板", location: "📍 浙江 杭州", maskedIp: "122.224.*.*", fullIp: "122.224.19.82", joinedAt: Date.now() - 120000, lastActive: Date.now() },
     ],
     chatMessages: [
       { id: "msg_1", senderId: "sys", senderName: "系统提示", senderAvatar: "📢", text: "欢迎来到《早春晴朗》公开放映厅，大家可以一边看剧一边交流！", time: "刚刚", isSystem: true },
-      { id: "msg_2", senderId: "system_host_1", senderName: "灵狐看客_9921", senderAvatar: "🦊", text: "这一集男女主对峙戏份太好看了！", time: "刚刚" },
+      { id: "msg_2", senderId: "system_host_1", senderName: "灵狐看客_9921", senderAvatar: "🦊", senderDevice: "📱 iPhone 手机", text: "这一集男女主对峙戏份太好看了！", time: "刚刚" },
     ],
     createdAt: Date.now() - 600000,
     updatedAt: Date.now(),
   };
 
-  const demoRoom2: WatchRoom = {
-    id: "6666",
-    title: "✨ 《繁花》沪语 4K 原画共赏房",
-    vodId: "blossoms-shanghai",
-    vodName: "繁花",
-    vodPic: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=600&auto=format&fit=crop",
-    sourceIndex: 0,
-    episodeIndex: 0,
-    episodeName: "第01集",
-    streamUrl: "https://vod.feifei-online.com/20260408/537930_e534c6c3/index.m3u8",
-    currentTime: 350,
-    duration: 2800,
-    isPlaying: true,
-    isPublic: true,
-    controlMode: "free",
-    hostId: "system_host_2",
-    hostName: "上海宝总_888",
-    hostAvatar: "🦁",
-    members: [
-      { id: "system_host_2", name: "上海宝总_888", avatar: "🦁", joinedAt: Date.now() - 800000, lastActive: Date.now() },
-      { id: "member_4", name: "独角兽_1102", avatar: "🦄", joinedAt: Date.now() - 400000, lastActive: Date.now() },
-    ],
-    chatMessages: [
-      { id: "msg_3", senderId: "sys", senderName: "系统提示", senderAvatar: "📢", text: "欢迎进入《繁花》共赏房，画质已开启 1080P 超清！", time: "刚刚", isSystem: true },
-      { id: "msg_4", senderId: "system_host_2", senderName: "上海宝总_888", senderAvatar: "🦁", text: "王家卫的镜头语言是真的绝！", time: "刚刚" },
-    ],
-    createdAt: Date.now() - 800000,
-    updatedAt: Date.now(),
-  };
-
   rooms.set(demoRoom1.id, demoRoom1);
-  rooms.set(demoRoom2.id, demoRoom2);
 }
 
 export function broadcastRoomEvent(roomId: string, eventData: any) {
@@ -174,7 +150,7 @@ export const RoomStore = {
     episodeIndex?: number;
     isPublic?: boolean;
     controlMode?: "host" | "free";
-    host: { id: string; name: string; avatar: string };
+    host: { id: string; name: string; avatar: string; device?: string; location?: string; maskedIp?: string; fullIp?: string };
   }): WatchRoom {
     const { title, vodItem, sourceIndex = 0, episodeIndex = 0, isPublic = true, controlMode = "free", host } = params;
 
@@ -183,6 +159,18 @@ export const RoomStore = {
 
     const roomId = String(Math.floor(1000 + Math.random() * 9000));
     const now = Date.now();
+
+    const hostMember: RoomMember = {
+      id: host.id,
+      name: host.name,
+      avatar: host.avatar,
+      device: host.device || "💻 网页端",
+      location: host.location || "📍 中国",
+      maskedIp: host.maskedIp || "127.0.0.*",
+      fullIp: host.fullIp || "127.0.0.1",
+      joinedAt: now,
+      lastActive: now,
+    };
 
     const room: WatchRoom = {
       id: roomId,
@@ -202,15 +190,8 @@ export const RoomStore = {
       hostId: host.id,
       hostName: host.name,
       hostAvatar: host.avatar,
-      members: [
-        {
-          id: host.id,
-          name: host.name,
-          avatar: host.avatar,
-          joinedAt: now,
-          lastActive: now,
-        },
-      ],
+      hostDevice: hostMember.device,
+      members: [hostMember],
       chatMessages: [
         {
           id: `msg_${now}`,
@@ -230,7 +211,7 @@ export const RoomStore = {
     return room;
   },
 
-  joinRoom(roomId: string, user: { id: string; name: string; avatar: string }): WatchRoom | null {
+  joinRoom(roomId: string, user: { id: string; name: string; avatar: string; device?: string; location?: string; maskedIp?: string; fullIp?: string }): WatchRoom | null {
     const room = rooms.get(roomId);
     if (!room) return null;
 
@@ -240,23 +221,32 @@ export const RoomStore = {
     if (existingIdx >= 0) {
       room.members[existingIdx].name = user.name;
       room.members[existingIdx].avatar = user.avatar;
+      if (user.device) room.members[existingIdx].device = user.device;
+      if (user.location) room.members[existingIdx].location = user.location;
+      if (user.maskedIp) room.members[existingIdx].maskedIp = user.maskedIp;
+      if (user.fullIp) room.members[existingIdx].fullIp = user.fullIp;
       room.members[existingIdx].lastActive = now;
     } else {
-      room.members.push({
+      const newMember: RoomMember = {
         id: user.id,
         name: user.name,
         avatar: user.avatar,
+        device: user.device || "💻 网页端",
+        location: user.location || "📍 中国",
+        maskedIp: user.maskedIp || "127.0.0.*",
+        fullIp: user.fullIp || "127.0.0.1",
         joinedAt: now,
         lastActive: now,
-      });
+      };
 
-      // System notification
+      room.members.push(newMember);
+
       const joinMsg: ChatMessage = {
         id: `msg_${now}_${Math.random()}`,
         senderId: "system",
         senderName: "系统",
         senderAvatar: "👋",
-        text: `【${user.name}】进入了观影房`,
+        text: `【${user.name}】（来自 ${newMember.location} · ${newMember.device}）进入了观影房`,
         time: "刚刚",
         isSystem: true,
       };
@@ -308,7 +298,6 @@ export const RoomStore = {
     const room = rooms.get(roomId);
     if (!room) return false;
 
-    // Check permission if controlMode is host
     if (room.controlMode === "host" && room.hostId !== action.sender.id && action.type !== "heartbeat") {
       return false;
     }
@@ -357,7 +346,7 @@ export const RoomStore = {
     return true;
   },
 
-  addChat(roomId: string, sender: { id: string; name: string; avatar: string }, text: string): ChatMessage | null {
+  addChat(roomId: string, sender: { id: string; name: string; avatar: string; device?: string }, text: string): ChatMessage | null {
     const room = rooms.get(roomId);
     if (!room || !text.trim()) return null;
 
@@ -366,6 +355,7 @@ export const RoomStore = {
       senderId: sender.id,
       senderName: sender.name,
       senderAvatar: sender.avatar,
+      senderDevice: sender.device,
       text: text.trim(),
       time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
     };
