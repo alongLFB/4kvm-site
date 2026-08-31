@@ -16,6 +16,7 @@ interface RoomVideoPlayerProps {
   url: string;
   poster?: string;
   initialTime?: number;
+  initialIsPlaying?: boolean;
   canControl?: boolean;
   onTimeUpdate?: (currentTime: number, duration: number) => void;
   onPlay?: (currentTime: number) => void;
@@ -29,6 +30,7 @@ export default function RoomVideoPlayer({
   url,
   poster,
   initialTime = 0,
+  initialIsPlaying = true,
   canControl = true,
   onTimeUpdate,
   onPlay,
@@ -41,12 +43,17 @@ export default function RoomVideoPlayer({
   const artRef = useRef<Artplayer | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const isRemoteSyncingRef = useRef(false);
+  const isInitializingRef = useRef(true);
   const lastSyncedTimeRef = useRef(initialTime);
   const canControlRef = useRef(canControl);
   canControlRef.current = canControl;
 
   useEffect(() => {
     if (!containerRef.current || !url) return;
+
+    // Start in silent initialization mode
+    isInitializingRef.current = true;
+    isRemoteSyncingRef.current = true;
 
     // Cleanly destroy previous Hls & Artplayer instances
     if (hlsRef.current) {
@@ -67,7 +74,7 @@ export default function RoomVideoPlayer({
       url: url,
       poster: poster || "",
       volume: 0.8,
-      autoplay: true,
+      autoplay: initialIsPlaying,
       pip: true,
       autoSize: true,
       autoMini: true,
@@ -115,13 +122,13 @@ export default function RoomVideoPlayer({
 
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
               if (initialTime > 0) {
-                isRemoteSyncingRef.current = true;
                 artInstance.currentTime = initialTime;
-                setTimeout(() => {
-                  isRemoteSyncingRef.current = false;
-                }, 300);
               }
-              artInstance.play().catch(() => {});
+              if (initialIsPlaying) {
+                artInstance.play().catch(() => {});
+              } else {
+                artInstance.pause();
+              }
             });
 
             artInstance.on("destroy", () => {
@@ -131,13 +138,13 @@ export default function RoomVideoPlayer({
           } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
             video.src = targetUrl;
             if (initialTime > 0) {
-              isRemoteSyncingRef.current = true;
               artInstance.currentTime = initialTime;
-              setTimeout(() => {
-                isRemoteSyncingRef.current = false;
-              }, 300);
             }
-            artInstance.play().catch(() => {});
+            if (initialIsPlaying) {
+              artInstance.play().catch(() => {});
+            } else {
+              artInstance.pause();
+            }
           } else {
             video.src = targetUrl;
           }
@@ -153,9 +160,10 @@ export default function RoomVideoPlayer({
         isRemoteSyncingRef.current = true;
         lastSyncedTimeRef.current = time;
         art.currentTime = time;
+        if (art.video) art.video.currentTime = time;
         setTimeout(() => {
           isRemoteSyncingRef.current = false;
-        }, 350);
+        }, 400);
       },
       syncPlay: (time?: number) => {
         isRemoteSyncingRef.current = true;
@@ -163,12 +171,13 @@ export default function RoomVideoPlayer({
           art.currentTime = time;
           lastSyncedTimeRef.current = time;
         }
-        if (!art.playing) {
-          art.play().catch(() => {});
+        art.play().catch(() => {});
+        if (art.video && art.video.paused) {
+          art.video.play().catch(() => {});
         }
         setTimeout(() => {
           isRemoteSyncingRef.current = false;
-        }, 350);
+        }, 400);
       },
       syncPause: (time?: number) => {
         isRemoteSyncingRef.current = true;
@@ -176,12 +185,13 @@ export default function RoomVideoPlayer({
           art.currentTime = time;
           lastSyncedTimeRef.current = time;
         }
-        if (art.playing) {
-          art.pause();
+        art.pause();
+        if (art.video && !art.video.paused) {
+          art.video.pause();
         }
         setTimeout(() => {
           isRemoteSyncingRef.current = false;
-        }, 350);
+        }, 400);
       },
       syncWebFullscreen: (isFull: boolean) => {
         art.fullscreenWeb = isFull;
@@ -194,61 +204,76 @@ export default function RoomVideoPlayer({
 
     art.on("ready", () => {
       if (initialTime > 0) {
-        isRemoteSyncingRef.current = true;
         art.currentTime = initialTime;
         lastSyncedTimeRef.current = initialTime;
-        setTimeout(() => {
-          isRemoteSyncingRef.current = false;
-        }, 300);
       }
-      art.play().catch(() => {});
+      if (initialIsPlaying) {
+        art.play().catch(() => {});
+      } else {
+        art.pause();
+      }
+
+      // End silent initial state after player has stabilized
+      setTimeout(() => {
+        isInitializingRef.current = false;
+        isRemoteSyncingRef.current = false;
+      }, 1000);
     });
 
     art.on("play", () => {
-      if (isRemoteSyncingRef.current) return;
+      if (isInitializingRef.current || isRemoteSyncingRef.current) return;
+
       if (!canControlRef.current) {
         isRemoteSyncingRef.current = true;
         art.pause();
+        if (art.video) art.video.pause();
         setTimeout(() => {
           isRemoteSyncingRef.current = false;
         }, 300);
         onPermissionDenied?.("👑 仅房主有进度控制特权");
         return;
       }
+
       onPlay?.(art.currentTime);
     });
 
     art.on("pause", () => {
-      if (isRemoteSyncingRef.current) return;
+      if (isInitializingRef.current || isRemoteSyncingRef.current) return;
+
       if (!canControlRef.current) {
         isRemoteSyncingRef.current = true;
         art.play().catch(() => {});
+        if (art.video) art.video.play().catch(() => {});
         setTimeout(() => {
           isRemoteSyncingRef.current = false;
         }, 300);
         onPermissionDenied?.("👑 仅房主有进度控制特权");
         return;
       }
+
       onPause?.(art.currentTime);
     });
 
     art.on("seek", (time) => {
-      if (isRemoteSyncingRef.current) return;
+      if (isInitializingRef.current || isRemoteSyncingRef.current) return;
+
       if (!canControlRef.current) {
         isRemoteSyncingRef.current = true;
         art.currentTime = lastSyncedTimeRef.current;
+        if (art.video) art.video.currentTime = lastSyncedTimeRef.current;
         setTimeout(() => {
           isRemoteSyncingRef.current = false;
         }, 300);
         onPermissionDenied?.("👑 仅房主有进度控制特权");
         return;
       }
+
       lastSyncedTimeRef.current = time;
       onSeek?.(time);
     });
 
     art.on("video:timeupdate", () => {
-      if (!isRemoteSyncingRef.current) {
+      if (!isRemoteSyncingRef.current && !isInitializingRef.current) {
         lastSyncedTimeRef.current = art.currentTime;
       }
       onTimeUpdate?.(art.currentTime, art.duration);

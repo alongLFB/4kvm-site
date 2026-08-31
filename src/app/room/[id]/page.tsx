@@ -757,6 +757,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             url={room.streamUrl}
             poster={room.vodPic || ""}
             initialTime={room.currentTime}
+            initialIsPlaying={room.isPlaying}
             canControl={canControl}
             onReadyInstance={(handle) => {
               playerHandleRef.current = handle;
