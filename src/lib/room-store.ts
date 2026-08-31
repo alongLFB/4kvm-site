@@ -41,6 +41,7 @@ export interface WatchRoom {
   password?: string;
   controlMode: "host" | "free";
   switchMode: "host" | "free";
+  isWebFullscreen?: boolean;
   hostId: string;
   hostName: string;
   hostAvatar: string;
@@ -69,6 +70,13 @@ if (!global.__4kvm_subscribers__) {
 
 const rooms = global.__4kvm_rooms__;
 const subscribers = global.__4kvm_subscribers__;
+
+function formatTime(seconds: number): string {
+  if (!seconds || isNaN(seconds)) return "00:00";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
 export function broadcastRoomEvent(roomId: string, eventData: any) {
   const set = subscribers.get(roomId);
@@ -101,7 +109,6 @@ if (!global.__4kvm_cleaner_interval__) {
   global.__4kvm_cleaner_interval__ = setInterval(() => {
     const now = Date.now();
     rooms.forEach((room, roomId) => {
-      // 1. Remove members who haven't pinged in > 45 seconds
       const activeMembers = room.members.filter((m) => now - m.lastActive <= 45000);
       const offlineCount = room.members.length - activeMembers.length;
 
@@ -143,7 +150,6 @@ if (!global.__4kvm_cleaner_interval__) {
         broadcastRoomEvent(roomId, { type: "members", members: room.members });
       }
 
-      // 2. Track empty rooms and auto prune after 15 minutes of inactivity
       if (room.members.length === 0) {
         if (!room.emptySince) room.emptySince = now;
         if (now - room.emptySince > 900000) {
@@ -259,6 +265,50 @@ export const RoomStore = {
 
     rooms.set(roomId, room);
     return room;
+  },
+
+  changeVod(roomId: string, hostId: string, newVodItem: VodItem): { success: boolean; message?: string; room?: WatchRoom } {
+    const room = rooms.get(roomId);
+    if (!room) return { success: false, message: "房间不存在" };
+    if (room.switchMode === "host" && room.hostId !== hostId) {
+      return { success: false, message: "只有房主有权限更换放映影片" };
+    }
+
+    const source = newVodItem.sources[0] || { sourceName: "默认专线", episodes: [] };
+    const episode = source.episodes[0] || { name: "正片", url: "" };
+    const oldVodName = room.vodName;
+
+    room.vodId = newVodItem.id;
+    room.vodName = newVodItem.name;
+    room.vodPic = newVodItem.pic;
+    room.vodItem = newVodItem;
+    room.sourceIndex = 0;
+    room.episodeIndex = 0;
+    room.episodeName = episode.name;
+    room.streamUrl = episode.url;
+    room.currentTime = 0;
+    room.isPlaying = true;
+    room.title = `${newVodItem.name} 观影房`;
+    room.updatedAt = Date.now();
+
+    const changeMsg: ChatMessage = {
+      id: `msg_${Date.now()}_vod_change`,
+      senderId: "system",
+      senderName: "系统",
+      senderAvatar: "🎬",
+      text: `👑 房主已将放映影片从《${oldVodName}》更换为《${newVodItem.name}》！`,
+      time: "刚刚",
+      isSystem: true,
+    };
+    room.chatMessages.push(changeMsg);
+    broadcastRoomEvent(roomId, { type: "chat", message: changeMsg });
+    broadcastRoomEvent(roomId, {
+      type: "vod_changed",
+      room,
+      vodItem: newVodItem,
+    });
+
+    return { success: true, room };
   },
 
   updateSettings(roomId: string, hostId: string, updates: {
@@ -495,7 +545,6 @@ export const RoomStore = {
       broadcastRoomEvent(roomId, { type: "chat", message: leaveMsg });
     }
 
-    // If host left, automatically transfer to next member
     if (isHost) {
       if (room.members.length > 0) {
         room.members.sort((a, b) => a.joinedAt - b.joinedAt);
@@ -538,14 +587,15 @@ export const RoomStore = {
   syncPlayback(
     roomId: string,
     action: {
-      type: "play" | "pause" | "seek" | "source" | "episode" | "heartbeat";
-      currentTime: number;
+      type: "play" | "pause" | "seek" | "source" | "episode" | "web_fullscreen" | "heartbeat";
+      currentTime?: number;
       duration?: number;
       sourceIndex?: number;
       sourceName?: string;
       episodeIndex?: number;
       episodeName?: string;
       streamUrl?: string;
+      isWebFullscreen?: boolean;
       sender: { id: string; name: string };
     }
   ): boolean {
@@ -562,18 +612,69 @@ export const RoomStore = {
       return false;
     }
 
-    room.currentTime = action.currentTime;
+    if (typeof action.currentTime === "number") {
+      room.currentTime = action.currentTime;
+    }
     if (action.duration) room.duration = action.duration;
     room.updatedAt = Date.now();
 
+    const timeStr = formatTime(room.currentTime);
+
     if (action.type === "play") {
       room.isPlaying = true;
+      const playMsg: ChatMessage = {
+        id: `msg_${Date.now()}_play`,
+        senderId: "system",
+        senderName: "系统",
+        senderAvatar: "▶️",
+        text: `【${action.sender.name}】恢复了播放 (${timeStr})`,
+        time: "刚刚",
+        isSystem: true,
+      };
+      room.chatMessages.push(playMsg);
+      broadcastRoomEvent(roomId, { type: "chat", message: playMsg });
       broadcastRoomEvent(roomId, { type: "sync", action: "play", currentTime: room.currentTime, sender: action.sender });
     } else if (action.type === "pause") {
       room.isPlaying = false;
+      const pauseMsg: ChatMessage = {
+        id: `msg_${Date.now()}_pause`,
+        senderId: "system",
+        senderName: "系统",
+        senderAvatar: "⏸️",
+        text: `【${action.sender.name}】暂停了播放 (${timeStr})`,
+        time: "刚刚",
+        isSystem: true,
+      };
+      room.chatMessages.push(pauseMsg);
+      broadcastRoomEvent(roomId, { type: "chat", message: pauseMsg });
       broadcastRoomEvent(roomId, { type: "sync", action: "pause", currentTime: room.currentTime, sender: action.sender });
     } else if (action.type === "seek") {
+      const seekMsg: ChatMessage = {
+        id: `msg_${Date.now()}_seek`,
+        senderId: "system",
+        senderName: "系统",
+        senderAvatar: "⏩",
+        text: `【${action.sender.name}】将播放进度跳转至 ${timeStr}`,
+        time: "刚刚",
+        isSystem: true,
+      };
+      room.chatMessages.push(seekMsg);
+      broadcastRoomEvent(roomId, { type: "chat", message: seekMsg });
       broadcastRoomEvent(roomId, { type: "sync", action: "seek", currentTime: room.currentTime, sender: action.sender });
+    } else if (action.type === "web_fullscreen") {
+      room.isWebFullscreen = action.isWebFullscreen;
+      const fsMsg: ChatMessage = {
+        id: `msg_${Date.now()}_fs`,
+        senderId: "system",
+        senderName: "系统",
+        senderAvatar: "📺",
+        text: `【${action.sender.name}】${action.isWebFullscreen ? "开启了网页全屏剧场模式" : "退出了全屏剧场模式"}`,
+        time: "刚刚",
+        isSystem: true,
+      };
+      room.chatMessages.push(fsMsg);
+      broadcastRoomEvent(roomId, { type: "chat", message: fsMsg });
+      broadcastRoomEvent(roomId, { type: "sync", action: "web_fullscreen", isWebFullscreen: action.isWebFullscreen, sender: action.sender });
     } else if (action.type === "source") {
       if (typeof action.sourceIndex === "number") room.sourceIndex = action.sourceIndex;
       if (typeof action.episodeIndex === "number") room.episodeIndex = action.episodeIndex;

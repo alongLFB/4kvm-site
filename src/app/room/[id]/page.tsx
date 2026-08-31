@@ -30,6 +30,10 @@ import {
   UserX,
   X,
   AlertTriangle,
+  Maximize2,
+  Minimize2,
+  Search,
+  Plus,
 } from "lucide-react";
 import { WatchRoom, ChatMessage, RoomMember } from "@/lib/room-store";
 import { VodItem } from "@/lib/types";
@@ -66,6 +70,13 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const [showFullIp, setShowFullIp] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [permissionTip, setPermissionTip] = useState<string | null>(null);
+  const [isWebFullscreen, setIsWebFullscreen] = useState(false);
+
+  // In-Room Film Switcher Modal state
+  const [changeVodModalOpen, setChangeVodModalOpen] = useState(false);
+  const [searchVodQuery, setSearchVodQuery] = useState("");
+  const [searchingVods, setSearchingVods] = useState(false);
+  const [switchVodList, setSwitchVodList] = useState<VodItem[]>([]);
 
   // Host Exit Modal state
   const [exitModalOpen, setExitModalOpen] = useState(false);
@@ -84,6 +95,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const artInstanceRef = useRef<any>(null);
   const isSyncingFromRemote = useRef(false);
+  const seekTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isHost = room ? room.hostId === currentUser.id : false;
   const canSwitch = isHost || (room?.switchMode !== "host");
@@ -171,6 +183,9 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           setMembers(payload.members);
         } else if (payload.type === "settings_updated") {
           setRoom((prev) => (prev ? { ...prev, ...payload } : null));
+        } else if (payload.type === "vod_changed") {
+          setRoom(payload.room);
+          setVodItem(payload.vodItem);
         } else if (payload.type === "host_changed") {
           setRoom((prev) =>
             prev
@@ -206,6 +221,11 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             if (art) art.currentTime = payload.currentTime;
           } else if (payload.action === "seek") {
             if (art) art.currentTime = payload.currentTime;
+          } else if (payload.action === "web_fullscreen") {
+            setIsWebFullscreen(!!payload.isWebFullscreen);
+            if (art) {
+              art.fullscreenWeb = !!payload.isWebFullscreen;
+            }
           } else if (payload.action === "source" || payload.action === "episode") {
             if (payload.streamUrl) {
               setRoom((prev) =>
@@ -309,6 +329,81 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ hostId: currentUser.id, targetUserId }),
+    });
+  };
+
+  // Open in-room film switcher modal
+  const openInRoomFilmPicker = async () => {
+    if (!canSwitch) {
+      showPermToast("👑 房主已设置【仅房主可换集换源】权限");
+      return;
+    }
+    setChangeVodModalOpen(true);
+    if (switchVodList.length === 0) {
+      setSearchingVods(true);
+      try {
+        const res = await fetch("/api/vod?type=全部&pg=1");
+        const data = await res.json();
+        if (data.list) setSwitchVodList(data.list);
+      } catch (e) {
+      } finally {
+        setSearchingVods(false);
+      }
+    }
+  };
+
+  const handleSearchSwitchVods = async (query: string) => {
+    setSearchVodQuery(query);
+    setSearchingVods(true);
+    try {
+      const res = await fetch(`/api/vod?wd=${encodeURIComponent(query)}&pg=1`);
+      const data = await res.json();
+      if (data.list) setSwitchVodList(data.list);
+    } catch (e) {
+    } finally {
+      setSearchingVods(false);
+    }
+  };
+
+  const handleConfirmChangeVod = async (newVod: VodItem) => {
+    try {
+      const res = await fetch(`/api/room/${roomId}/change-vod`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hostId: currentUser.id,
+          vodItem: newVod,
+        }),
+      });
+      const data = await res.json();
+      if (data.code === 200) {
+        setChangeVodModalOpen(false);
+      } else {
+        showPermToast(data.message || "更换影片失败");
+      }
+    } catch (e) {
+      showPermToast("请求失败");
+    }
+  };
+
+  // Toggle Web Fullscreen & Sync across room
+  const toggleWebFullscreen = () => {
+    const nextState = !isWebFullscreen;
+    setIsWebFullscreen(nextState);
+    const art = artInstanceRef.current;
+    if (art) {
+      art.fullscreenWeb = nextState;
+    }
+
+    const user = getGuestUser();
+    fetch(`/api/room/${roomId}/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "web_fullscreen",
+        isWebFullscreen: nextState,
+        sender: { id: user.id, name: user.name },
+      }),
     });
   };
 
@@ -419,7 +514,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     });
   };
 
-  // Player Sync Handlers
+  // Player Sync Handlers with Seek Debouncing
   const handlePlayerPlay = () => {
     if (isSyncingFromRemote.current) return;
     const art = artInstanceRef.current;
@@ -454,16 +549,21 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
 
   const handlePlayerSeek = (seekTime: number) => {
     if (isSyncingFromRemote.current) return;
-    const user = getGuestUser();
-    fetch(`/api/room/${roomId}/sync`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "seek",
-        currentTime: seekTime,
-        sender: { id: user.id, name: user.name },
-      }),
-    });
+    if (seekTimeoutRef.current) {
+      clearTimeout(seekTimeoutRef.current);
+    }
+    seekTimeoutRef.current = setTimeout(() => {
+      const user = getGuestUser();
+      fetch(`/api/room/${roomId}/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "seek",
+          currentTime: seekTime,
+          sender: { id: user.id, name: user.name },
+        }),
+      });
+    }, 300);
   };
 
   const copyRoomLink = () => {
@@ -607,7 +707,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
               )}
             </div>
             <p className="text-xs text-gray-400 flex flex-wrap items-center gap-2 mt-0.5">
-              <span>片名: {room.vodName}</span>
+              <span>片名: <strong className="text-white">{room.vodName}</strong></span>
               <span>·</span>
               <span className="text-cyan-400 font-semibold">{room.episodeName}</span>
               <span>·</span>
@@ -620,8 +720,28 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           </div>
         </div>
 
-        {/* User Identity, Settings & Copy Button */}
+        {/* User Identity, Settings & Action Buttons */}
         <div className="flex items-center gap-2.5">
+          {/* Change Film Button (In-Room Movie Switcher) */}
+          {canSwitch && (
+            <button
+              onClick={openInRoomFilmPicker}
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600/20 to-cyan-500/20 hover:from-blue-600 hover:to-cyan-500 text-cyan-300 hover:text-dark-950 font-bold text-xs transition flex items-center gap-1.5 border border-cyan-500/30 shadow-md"
+            >
+              <Film className="w-3.5 h-3.5" />
+              更换放映影片
+            </button>
+          )}
+
+          {/* Web Fullscreen Sync Toggle */}
+          <button
+            onClick={toggleWebFullscreen}
+            className="p-2 rounded-xl bg-dark-800 hover:bg-dark-700 text-gray-300 hover:text-white transition border border-white/10"
+            title={isWebFullscreen ? "退出网页全屏" : "同步网页全屏剧场模式"}
+          >
+            {isWebFullscreen ? <Minimize2 className="w-4 h-4 text-cyan-400" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
+
           {/* Host Settings button */}
           {isHost && (
             <button
@@ -741,6 +861,20 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           <div className="flex-1 overflow-hidden flex flex-col">
             {activeTab === "episodes" && (
               <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
+                {/* Change Film Quick Banner */}
+                {canSwitch && (
+                  <button
+                    onClick={openInRoomFilmPicker}
+                    className="w-full p-2.5 rounded-xl bg-gradient-to-r from-blue-600/10 to-cyan-500/10 hover:from-blue-600/20 hover:to-cyan-500/20 border border-cyan-500/20 text-cyan-400 text-xs font-bold transition flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Film className="w-4 h-4 text-cyan-400" />
+                      <span>正在放映：《{room.vodName}》</span>
+                    </span>
+                    <span className="text-[11px] underline">更换影片 →</span>
+                  </button>
+                )}
+
                 {/* 1. Line / Source Switcher */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs font-bold text-gray-400">
@@ -821,7 +955,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                       key={msg.id}
                       className={`text-xs p-2 rounded-xl ${
                         msg.isSystem
-                          ? "bg-white/5 text-gray-400 text-center italic text-[11px]"
+                          ? "bg-white/5 text-gray-300 text-center text-[11px] py-1.5 px-3 border border-white/5"
                           : "bg-dark-800/80 border border-white/5 space-y-1"
                       }`}
                     >
@@ -839,7 +973,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                           <span>{msg.time}</span>
                         </div>
                       )}
-                      <p className={msg.isSystem ? "" : "text-white font-medium pl-5"}>{msg.text}</p>
+                      <p className={msg.isSystem ? "font-medium" : "text-white font-medium pl-5"}>{msg.text}</p>
                     </div>
                   ))}
                 </div>
@@ -967,6 +1101,75 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           </div>
         </div>
       </div>
+
+      {/* In-Room Film Picker Modal */}
+      {changeVodModalOpen && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-2xl bg-dark-900 border border-white/10 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2 text-base font-bold text-white">
+                <Film className="w-5 h-5 text-cyan-400" />
+                更换本放映厅播放影片
+              </div>
+              <button onClick={() => setChangeVodModalOpen(false)} className="p-1 text-gray-400 hover:text-white rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchVodQuery}
+                onChange={(e) => handleSearchSwitchVods(e.target.value)}
+                placeholder="搜索片名、演员或导演..."
+                className="w-full bg-dark-800 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 scrollbar-thin">
+              {searchingVods ? (
+                <div className="py-16 text-center text-gray-400 flex flex-col items-center gap-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-cyan-400" />
+                  <span className="text-xs">正在检索影视库...</span>
+                </div>
+              ) : switchVodList.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {switchVodList.map((item) => (
+                    <div
+                      key={item.id}
+                      className="p-3 rounded-2xl bg-dark-850 border border-white/5 hover:border-cyan-500/40 flex items-center justify-between gap-3 transition group"
+                    >
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <img
+                          src={item.pic}
+                          alt={item.name}
+                          className="w-12 h-16 rounded-xl object-cover shadow shrink-0"
+                        />
+                        <div className="overflow-hidden space-y-0.5">
+                          <h4 className="text-xs font-bold text-white truncate group-hover:text-cyan-400 transition">{item.name}</h4>
+                          <p className="text-[10px] text-gray-400">{item.year} · {item.type_name}</p>
+                          <p className="text-[10px] text-cyan-400/80">{item.remarks}</p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleConfirmChangeVod(item)}
+                        className="px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500 text-cyan-400 hover:text-dark-950 font-bold text-xs shrink-0 transition flex items-center gap-1 border border-cyan-500/30"
+                      >
+                        <Check className="w-3.5 h-3.5" /> 换看这部
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-16 text-center text-gray-500 text-xs">未找到相关影视</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Host Exit Confirmation Dialog */}
       {exitModalOpen && (
