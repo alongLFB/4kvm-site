@@ -11,6 +11,8 @@ services:
       - PORT=3028
       - HOSTNAME=0.0.0.0
       - NODE_OPTIONS=--dns-result-order=ipv4first
+    volumes:
+      - ./data:/app/data
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3028/api/health || exit 1"]
       interval: 30s

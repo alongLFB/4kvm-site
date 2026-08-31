@@ -1,5 +1,5 @@
 import { VodItem } from "./types";
-import { VOD_DATABASE } from "./data";
+import { getDatabase, rowToVodItem } from "./db";
 
 export interface FilterParams {
   type?: string;
@@ -31,114 +31,106 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
     query = "",
   } = params;
 
-  let filtered = [...VOD_DATABASE];
+  const db = getDatabase();
+  const conditions: string[] = [];
+  const queryParams: any[] = [];
 
   // 1. 板块 / 类型过滤
   if (type && type !== "全部") {
-    filtered = filtered.filter(
-      (v) =>
-        v.type_name === type ||
-        v.sub_type === type ||
-        (v.tags && v.tags.some((t) => t.includes(type)))
-    );
+    conditions.push("(type_name = ? OR sub_type = ? OR tags LIKE ?)");
+    queryParams.push(type, type, `%${type}%`);
   }
 
   // 2. 地区过滤
   if (area && area !== "全部") {
     if (area === "大陆") {
-      filtered = filtered.filter((v) => v.area.includes("大陆") || v.area.includes("内地") || v.area.includes("中国"));
+      conditions.push("(area LIKE '%大陆%' OR area LIKE '%内地%' OR area LIKE '%中国%')");
     } else if (area === "欧美") {
-      filtered = filtered.filter((v) => v.area.includes("欧美") || v.area.includes("美国") || v.area.includes("英国") || v.area.includes("加拿大") || v.area.includes("法国") || v.area.includes("德国"));
+      conditions.push("(area LIKE '%欧美%' OR area LIKE '%美国%' OR area LIKE '%英国%' OR area LIKE '%加拿大%' OR area LIKE '%法国%' OR area LIKE '%德国%')");
     } else if (area === "其它") {
-      const mainAreas = ["大陆", "内地", "香港", "台湾", "日本", "韩国", "美国", "英国", "欧美", "泰国"];
-      filtered = filtered.filter((v) => !mainAreas.some((ma) => v.area.includes(ma)));
+      conditions.push("(area NOT LIKE '%大陆%' AND area NOT LIKE '%内地%' AND area NOT LIKE '%香港%' AND area NOT LIKE '%台湾%' AND area NOT LIKE '%日本%' AND area NOT LIKE '%韩国%' AND area NOT LIKE '%美国%' AND area NOT LIKE '%英国%' AND area NOT LIKE '%欧美%' AND area NOT LIKE '%泰国%')");
     } else {
-      filtered = filtered.filter((v) => v.area.includes(area));
+      conditions.push("area LIKE ?");
+      queryParams.push(`%${area}%`);
     }
   }
 
   // 3. 语言过滤
   if (lang && lang !== "全部") {
     if (lang === "国语") {
-      filtered = filtered.filter((v) => v.lang.includes("国语") || v.lang.includes("普通话") || v.lang.includes("汉语"));
+      conditions.push("(lang LIKE '%国语%' OR lang LIKE '%普通话%' OR lang LIKE '%汉语%')");
     } else if (lang === "其它") {
-      const mainLangs = ["国语", "普通话", "汉语", "粤语", "英语", "韩语", "日语", "泰语"];
-      filtered = filtered.filter((v) => !mainLangs.some((ml) => v.lang.includes(ml)));
+      conditions.push("(lang NOT LIKE '%国语%' AND lang NOT LIKE '%普通话%' AND lang NOT LIKE '%汉语%' AND lang NOT LIKE '%粤语%' AND lang NOT LIKE '%英语%' AND lang NOT LIKE '%韩语%' AND lang NOT LIKE '%日语%' AND lang NOT LIKE '%泰语%')");
     } else {
-      filtered = filtered.filter((v) => v.lang.includes(lang));
+      conditions.push("lang LIKE ?");
+      queryParams.push(`%${lang}%`);
     }
   }
 
   // 4. 年份过滤
   if (year && year !== "全部") {
     if (year === "今年") {
-      filtered = filtered.filter((v) => v.year === "2026");
+      conditions.push("year = '2026'");
     } else if (year === "去年") {
-      filtered = filtered.filter((v) => v.year === "2025");
+      conditions.push("year = '2025'");
     } else if (year === "10年代" || year === "2010年代") {
-      filtered = filtered.filter((v) => v.year >= "2010" && v.year <= "2019");
+      conditions.push("(year >= '2010' AND year <= '2019')");
     } else if (year === "00年代" || year === "2000年代") {
-      filtered = filtered.filter((v) => v.year >= "2000" && v.year <= "2009");
+      conditions.push("(year >= '2000' AND year <= '2009')");
     } else if (year === "90年代") {
-      filtered = filtered.filter((v) => v.year >= "1990" && v.year <= "1999");
+      conditions.push("(year >= '1990' AND year <= '1999')");
     } else if (year === "80年代") {
-      filtered = filtered.filter((v) => v.year >= "1980" && v.year <= "1989");
+      conditions.push("(year >= '1980' AND year <= '1989')");
     } else if (year === "更早" || year === "怀旧") {
-      filtered = filtered.filter((v) => v.year < "1980");
+      conditions.push("year < '1980'");
     } else {
-      filtered = filtered.filter((v) => v.year.includes(year));
+      conditions.push("year LIKE ?");
+      queryParams.push(`%${year}%`);
     }
   }
 
   // 5. 画质过滤
   if (quality && quality !== "全部") {
-    const qLower = quality.toLowerCase();
-    filtered = filtered.filter(
-      (v) =>
-        v.remarks.toLowerCase().includes(qLower) ||
-        (v.tags && v.tags.some((t) => t.toLowerCase().includes(qLower)))
-    );
+    conditions.push("(remarks LIKE ? OR tags LIKE ?)");
+    queryParams.push(`%${quality}%`, `%${quality}%`);
   }
 
   // 6. 状态过滤
   if (status && status !== "全部") {
     if (status === "全集" || status === "完结") {
-      filtered = filtered.filter(
-        (v) =>
-          v.type_name === "电影" ||
-          v.remarks.includes("全") ||
-          v.remarks.includes("完结") ||
-          v.remarks.includes("HD") ||
-          v.remarks.includes("BD")
-      );
+      conditions.push("(type_name = '电影' OR remarks LIKE '%全%' OR remarks LIKE '%完结%' OR remarks LIKE '%HD%' OR remarks LIKE '%BD%')");
     } else if (status === "连载中" || status === "更新中") {
-      filtered = filtered.filter(
-        (v) =>
-          v.remarks.includes("更新") ||
-          v.remarks.includes("第") ||
-          v.remarks.includes("连载")
-      );
+      conditions.push("(remarks LIKE '%更新%' OR remarks LIKE '%第%' OR remarks LIKE '%连载%')");
     }
   }
 
-  // 7. 关键词搜索
-  if (query.trim()) {
-    const q = query.trim().toLowerCase();
-    filtered = filtered.filter(
-      (v) =>
-        v.name.toLowerCase().includes(q) ||
-        v.actor.toLowerCase().includes(q) ||
-        v.director.toLowerCase().includes(q) ||
-        (v.tags && v.tags.some((t) => t.toLowerCase().includes(q))) ||
-        v.content.toLowerCase().includes(q)
-    );
+  // 7. 关键词搜索 (同时利用 FTS5 和 LIKE 模糊匹配)
+  if (query && query.trim()) {
+    const q = query.trim();
+    conditions.push("(id IN (SELECT id FROM vods_fts WHERE vods_fts MATCH ?) OR name LIKE ? OR actor LIKE ? OR director LIKE ? OR tags LIKE ?)");
+    // Format query for FTS5 prefix match
+    const ftsQuery = `"${q}"*`;
+    queryParams.push(ftsQuery, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
   }
 
-  const total = filtered.length;
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  // 1. Query Total Count
+  const countSql = `SELECT COUNT(*) as total FROM vods ${whereClause}`;
+  const countStmt = db.prepare(countSql);
+  const countResult = (countStmt.get(...queryParams) as any) || { total: 0 };
+  const total = Number(countResult.total || 0);
+
+  // 2. Query Paginated List
   const pagecount = Math.max(1, Math.ceil(total / limit));
   const validPage = Math.min(Math.max(1, page), pagecount);
-  const start = (validPage - 1) * limit;
-  const list = filtered.slice(start, start + limit);
+  const offset = (validPage - 1) * limit;
+
+  const listSql = `SELECT * FROM vods ${whereClause} ORDER BY hits DESC, rating DESC LIMIT ? OFFSET ?`;
+  const listStmt = db.prepare(listSql);
+  const rows = listStmt.all(...queryParams, limit, offset) as any[];
+
+  const list = rows.map(rowToVodItem);
 
   return {
     list,
@@ -149,7 +141,14 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
 }
 
 export async function fetchLiveVodDetail(id: string): Promise<VodItem | null> {
-  const item = VOD_DATABASE.find((v) => v.id === id);
-  if (item) return item;
-  return VOD_DATABASE[0] || null;
+  const db = getDatabase();
+  const stmt = db.prepare("SELECT * FROM vods WHERE id = ? LIMIT 1");
+  const row = stmt.get(id);
+  if (row) {
+    return rowToVodItem(row);
+  }
+  // Fallback to first item if not found
+  const fallbackStmt = db.prepare("SELECT * FROM vods ORDER BY hits DESC LIMIT 1");
+  const fallbackRow = fallbackStmt.get();
+  return fallbackRow ? rowToVodItem(fallbackRow) : null;
 }
