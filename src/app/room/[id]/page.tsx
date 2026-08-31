@@ -32,14 +32,13 @@ import {
   AlertTriangle,
   Maximize2,
   Minimize2,
-  Search,
-  Plus,
 } from "lucide-react";
 import { WatchRoom, ChatMessage, RoomMember } from "@/lib/room-store";
 import { VodItem } from "@/lib/types";
 import { getGuestUser, updateGuestUser, GuestUser } from "@/lib/guest";
 import { RoomSettingsModal } from "@/components/RoomSettingsModal";
 import { FilmPickerModal } from "@/components/FilmPickerModal";
+import { RoomPlayerHandle } from "@/components/Player/RoomVideoPlayer";
 
 const RoomVideoPlayer = dynamic(() => import("@/components/Player/RoomVideoPlayer"), {
   ssr: false,
@@ -75,9 +74,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
 
   // In-Room Film Switcher Modal state
   const [changeVodModalOpen, setChangeVodModalOpen] = useState(false);
-  const [searchVodQuery, setSearchVodQuery] = useState("");
-  const [searchingVods, setSearchingVods] = useState(false);
-  const [switchVodList, setSwitchVodList] = useState<VodItem[]>([]);
 
   // Host Exit Modal state
   const [exitModalOpen, setExitModalOpen] = useState(false);
@@ -87,18 +83,18 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const [passwordRequired, setPasswordRequired] = useState(false);
   const [roomPasswordInput, setRoomPasswordInput] = useState(urlPassword);
 
-  // Tabs: chat | members | episodes
+  // Tabs: episodes | chat | members
   const [activeTab, setActiveTab] = useState<"episodes" | "chat" | "members">("episodes");
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [members, setMembers] = useState<RoomMember[]>([]);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const artInstanceRef = useRef<any>(null);
-  const isSyncingFromRemote = useRef(false);
+  const playerHandleRef = useRef<RoomPlayerHandle | null>(null);
   const seekTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isHost = room ? room.hostId === currentUser.id : false;
+  const canControl = isHost || (room?.controlMode !== "host");
   const canSwitch = isHost || (room?.switchMode !== "host");
   const otherMembers = members.filter((m) => m.id !== currentUser.id);
 
@@ -208,25 +204,18 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             setTimeout(() => router.push("/hall"), 2500);
           }
         } else if (payload.type === "sync") {
-          const art = artInstanceRef.current;
-
-          isSyncingFromRemote.current = true;
+          const handle = playerHandleRef.current;
+          if (!handle) return;
 
           if (payload.action === "play") {
-            if (art && !art.playing) art.play().catch(() => {});
-            if (art && Math.abs(art.currentTime - payload.currentTime) > 1.5) {
-              art.currentTime = payload.currentTime;
-            }
+            handle.syncPlay(payload.currentTime);
           } else if (payload.action === "pause") {
-            if (art && art.playing) art.pause();
-            if (art) art.currentTime = payload.currentTime;
+            handle.syncPause(payload.currentTime);
           } else if (payload.action === "seek") {
-            if (art) art.currentTime = payload.currentTime;
+            handle.syncTime(payload.currentTime);
           } else if (payload.action === "web_fullscreen") {
             setIsWebFullscreen(!!payload.isWebFullscreen);
-            if (art) {
-              art.fullscreenWeb = !!payload.isWebFullscreen;
-            }
+            handle.syncWebFullscreen(!!payload.isWebFullscreen);
           } else if (payload.action === "source" || payload.action === "episode") {
             if (payload.streamUrl) {
               setRoom((prev) =>
@@ -243,10 +232,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
               );
             }
           }
-
-          setTimeout(() => {
-            isSyncingFromRemote.current = false;
-          }, 300);
         }
       } catch (err) {}
     };
@@ -278,7 +263,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     };
   }, [roomId, router]);
 
-  // Fix 1: Auto scroll chat inside container only (NEVER scrolls outer window)
+  // Auto scroll chat inside container only
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -333,40 +318,11 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     });
   };
 
-  // Open in-room film switcher modal
-  const openInRoomFilmPicker = async () => {
+  const handleConfirmChangeVod = async (newVod: VodItem) => {
     if (!canSwitch) {
       showPermToast("👑 房主已设置【仅房主可换集换源】权限");
       return;
     }
-    setChangeVodModalOpen(true);
-    if (switchVodList.length === 0) {
-      setSearchingVods(true);
-      try {
-        const res = await fetch("/api/vod?type=全部&pg=1");
-        const data = await res.json();
-        if (data.list) setSwitchVodList(data.list);
-      } catch (e) {
-      } finally {
-        setSearchingVods(false);
-      }
-    }
-  };
-
-  const handleSearchSwitchVods = async (query: string) => {
-    setSearchVodQuery(query);
-    setSearchingVods(true);
-    try {
-      const res = await fetch(`/api/vod?wd=${encodeURIComponent(query)}&pg=1`);
-      const data = await res.json();
-      if (data.list) setSwitchVodList(data.list);
-    } catch (e) {
-    } finally {
-      setSearchingVods(false);
-    }
-  };
-
-  const handleConfirmChangeVod = async (newVod: VodItem) => {
     try {
       const res = await fetch(`/api/room/${roomId}/change-vod`, {
         method: "POST",
@@ -391,9 +347,9 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const toggleWebFullscreen = () => {
     const nextState = !isWebFullscreen;
     setIsWebFullscreen(nextState);
-    const art = artInstanceRef.current;
-    if (art) {
-      art.fullscreenWeb = nextState;
+    const handle = playerHandleRef.current;
+    if (handle) {
+      handle.syncWebFullscreen(nextState);
     }
 
     const user = getGuestUser();
@@ -437,7 +393,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   // Switch Line / Source with permission check
   const handleSwitchSource = (sourceIdx: number) => {
     if (!canSwitch) {
-      showPermToast("👑 房主已设置【仅房主可换集换源】权限");
+      showPermToast("👑 房主已开启【仅房主可换集换源】特权");
       return;
     }
     if (!vodItem || !room) return;
@@ -446,7 +402,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
 
     const targetEpIndex = Math.min(room.episodeIndex, targetSource.episodes.length - 1);
     const targetEp = targetSource.episodes[targetEpIndex] || targetSource.episodes[0];
-    const art = artInstanceRef.current;
+    const art = playerHandleRef.current?.art;
     const currentTime = art ? art.currentTime : room.currentTime;
 
     setRoom((prev) =>
@@ -482,7 +438,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   // Switch Episode with permission check
   const handleSwitchEpisode = (idx: number, ep: { name: string; url: string }) => {
     if (!canSwitch) {
-      showPermToast("👑 房主已设置【仅房主可换集换源】权限");
+      showPermToast("👑 房主已开启【仅房主可换集换源】特权");
       return;
     }
     if (!room) return;
@@ -515,41 +471,34 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     });
   };
 
-  // Player Sync Handlers with Seek Debouncing
-  const handlePlayerPlay = () => {
-    if (isSyncingFromRemote.current) return;
-    const art = artInstanceRef.current;
+  // Player Sync Handlers
+  const handlePlayerPlay = (currentTime: number) => {
     const user = getGuestUser();
     fetch(`/api/room/${roomId}/sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         type: "play",
-        currentTime: art ? art.currentTime : room?.currentTime || 0,
-        duration: art?.duration,
+        currentTime: currentTime,
         sender: { id: user.id, name: user.name },
       }),
     });
   };
 
-  const handlePlayerPause = () => {
-    if (isSyncingFromRemote.current) return;
-    const art = artInstanceRef.current;
+  const handlePlayerPause = (currentTime: number) => {
     const user = getGuestUser();
     fetch(`/api/room/${roomId}/sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         type: "pause",
-        currentTime: art ? art.currentTime : room?.currentTime || 0,
-        duration: art?.duration,
+        currentTime: currentTime,
         sender: { id: user.id, name: user.name },
       }),
     });
   };
 
   const handlePlayerSeek = (seekTime: number) => {
-    if (isSyncingFromRemote.current) return;
     if (seekTimeoutRef.current) {
       clearTimeout(seekTimeoutRef.current);
     }
@@ -564,7 +513,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           sender: { id: user.id, name: user.name },
         }),
       });
-    }, 300);
+    }, 250);
   };
 
   const copyRoomLink = () => {
@@ -714,9 +663,13 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
               <span>·</span>
               <span className="text-emerald-400 font-medium">{currentSource.sourceName}</span>
               <span>·</span>
-              <span>{room.controlMode === "host" ? "👑 仅房主控进度" : "⚡ 全员控进度"}</span>
+              <span className={room.controlMode === "host" ? "text-amber-400 font-bold" : "text-gray-300"}>
+                {room.controlMode === "host" ? "👑 仅房主控进度" : "⚡ 全员自由控进度"}
+              </span>
               <span>·</span>
-              <span>{room.switchMode === "host" ? "👑 仅房主可换集换源" : "⚡ 全员可换集换源"}</span>
+              <span className={room.switchMode === "host" ? "text-amber-400 font-bold" : "text-gray-300"}>
+                {room.switchMode === "host" ? "👑 仅房主可换集换源" : "⚡ 全员自由换集换源"}
+              </span>
             </p>
           </div>
         </div>
@@ -724,15 +677,19 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
         {/* User Identity, Settings & Action Buttons */}
         <div className="flex items-center gap-2.5">
           {/* Change Film Button (In-Room Movie Switcher) */}
-          {canSwitch && (
-            <button
-              onClick={openInRoomFilmPicker}
-              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600/20 to-cyan-500/20 hover:from-blue-600 hover:to-cyan-500 text-cyan-300 hover:text-dark-950 font-bold text-xs transition flex items-center gap-1.5 border border-cyan-500/30 shadow-md"
-            >
-              <Film className="w-3.5 h-3.5" />
-              更换放映影片
-            </button>
-          )}
+          <button
+            onClick={() => {
+              if (!canSwitch) {
+                showPermToast("👑 房主已开启【仅房主可换集换源】特权");
+                return;
+              }
+              setChangeVodModalOpen(true);
+            }}
+            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600/20 to-cyan-500/20 hover:from-blue-600 hover:to-cyan-500 text-cyan-300 hover:text-dark-950 font-bold text-xs transition flex items-center gap-1.5 border border-cyan-500/30 shadow-md"
+          >
+            <Film className="w-3.5 h-3.5" />
+            更换放映影片
+          </button>
 
           {/* Web Fullscreen Sync Toggle */}
           <button
@@ -798,12 +755,14 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             url={room.streamUrl}
             poster={room.vodPic || ""}
             initialTime={room.currentTime}
-            getInstance={(art) => {
-              artInstanceRef.current = art;
+            canControl={canControl}
+            onReadyInstance={(handle) => {
+              playerHandleRef.current = handle;
             }}
             onPlay={handlePlayerPlay}
             onPause={handlePlayerPause}
             onSeek={handlePlayerSeek}
+            onPermissionDenied={(msg) => showPermToast(msg)}
           />
 
           {/* Quick Info bar */}
@@ -863,18 +822,22 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             {activeTab === "episodes" && (
               <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
                 {/* Change Film Quick Banner */}
-                {canSwitch && (
-                  <button
-                    onClick={openInRoomFilmPicker}
-                    className="w-full p-2.5 rounded-xl bg-gradient-to-r from-blue-600/10 to-cyan-500/10 hover:from-blue-600/20 hover:to-cyan-500/20 border border-cyan-500/20 text-cyan-400 text-xs font-bold transition flex items-center justify-between"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Film className="w-4 h-4 text-cyan-400" />
-                      <span>正在放映：《{room.vodName}》</span>
-                    </span>
-                    <span className="text-[11px] underline">更换影片 →</span>
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    if (!canSwitch) {
+                      showPermToast("👑 房主已开启【仅房主可换集换源】特权");
+                      return;
+                    }
+                    setChangeVodModalOpen(true);
+                  }}
+                  className="w-full p-2.5 rounded-xl bg-gradient-to-r from-blue-600/10 to-cyan-500/10 hover:from-blue-600/20 hover:to-cyan-500/20 border border-cyan-500/20 text-cyan-400 text-xs font-bold transition flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-2">
+                    <Film className="w-4 h-4 text-cyan-400" />
+                    <span>正在放映：《{room.vodName}》</span>
+                  </span>
+                  <span className="text-[11px] underline">更换影片 →</span>
+                </button>
 
                 {/* 1. Line / Source Switcher */}
                 <div className="space-y-2">
@@ -937,7 +900,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                             isEpActive
                               ? "bg-cyan-500 text-dark-950 font-black shadow-md shadow-cyan-500/20 scale-[1.02]"
                               : "bg-dark-800 text-gray-300 hover:bg-dark-700 hover:text-white border border-white/5"
-                          } ${!canSwitch && !isEpActive ? "opacity-75" : ""}`}
+                          } ${!canSwitch && !isEpActive ? "opacity-75 cursor-not-allowed" : ""}`}
                         >
                           {ep.name}
                         </button>
@@ -1034,6 +997,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                 {members.map((m) => {
                   const memberIsHost = m.id === room.hostId;
                   const displayIp = isHost && showFullIp && m.fullIp ? m.fullIp : m.maskedIp;
+                  const cleanLoc = (m.location || "中国").replace(/^📍\s*/, "");
 
                   return (
                     <div
@@ -1058,7 +1022,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
 
                         <div className="flex items-center gap-1 text-[10px] text-cyan-400 font-medium bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">
                           <MapPin className="w-3 h-3 text-cyan-400" />
-                          <span>{m.location || "中国"}</span>
+                          <span>{cleanLoc}</span>
                         </div>
                       </div>
 
@@ -1103,7 +1067,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
         </div>
       </div>
 
-      {/* In-Room Film Picker Modal with Category Filters + Search */}
+      {/* In-Room Film Picker Modal with 6-Dimension Category Filters + Search */}
       <FilmPickerModal
         isOpen={changeVodModalOpen}
         title="更换本放映厅播放影片"

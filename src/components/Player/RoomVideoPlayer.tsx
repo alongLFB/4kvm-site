@@ -1,32 +1,48 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import Artplayer from "artplayer";
 import Hls from "hls.js";
+
+export interface RoomPlayerHandle {
+  art: Artplayer | null;
+  syncTime: (time: number) => void;
+  syncPlay: (time?: number) => void;
+  syncPause: (time?: number) => void;
+  syncWebFullscreen: (isFull: boolean) => void;
+}
 
 interface RoomVideoPlayerProps {
   url: string;
   poster?: string;
   initialTime?: number;
+  canControl?: boolean;
   onTimeUpdate?: (currentTime: number, duration: number) => void;
-  onPlay?: () => void;
-  onPause?: () => void;
+  onPlay?: (currentTime: number) => void;
+  onPause?: (currentTime: number) => void;
   onSeek?: (time: number) => void;
-  getInstance?: (art: Artplayer) => void;
+  onPermissionDenied?: (msg: string) => void;
+  onReadyInstance?: (handle: RoomPlayerHandle) => void;
 }
 
 export default function RoomVideoPlayer({
   url,
   poster,
   initialTime = 0,
+  canControl = true,
   onTimeUpdate,
   onPlay,
   onPause,
   onSeek,
-  getInstance,
+  onPermissionDenied,
+  onReadyInstance,
 }: RoomVideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const artRef = useRef<Artplayer | null>(null);
+  const isRemoteSyncingRef = useRef(false);
+  const lastSyncedTimeRef = useRef(initialTime);
+  const canControlRef = useRef(canControl);
+  canControlRef.current = canControl;
 
   useEffect(() => {
     if (!containerRef.current || !url) return;
@@ -85,7 +101,11 @@ export default function RoomVideoPlayer({
 
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
               if (initialTime > 0) {
+                isRemoteSyncingRef.current = true;
                 artInstance.currentTime = initialTime;
+                setTimeout(() => {
+                  isRemoteSyncingRef.current = false;
+                }, 400);
               }
               artInstance.play().catch(() => {});
             });
@@ -94,7 +114,11 @@ export default function RoomVideoPlayer({
           } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
             video.src = targetUrl;
             if (initialTime > 0) {
+              isRemoteSyncingRef.current = true;
               artInstance.currentTime = initialTime;
+              setTimeout(() => {
+                isRemoteSyncingRef.current = false;
+              }, 400);
             }
             artInstance.play().catch(() => {});
           } else {
@@ -106,33 +130,111 @@ export default function RoomVideoPlayer({
 
     artRef.current = art;
 
-    if (getInstance) {
-      getInstance(art);
+    const handle: RoomPlayerHandle = {
+      art,
+      syncTime: (time: number) => {
+        isRemoteSyncingRef.current = true;
+        lastSyncedTimeRef.current = time;
+        art.currentTime = time;
+        setTimeout(() => {
+          isRemoteSyncingRef.current = false;
+        }, 400);
+      },
+      syncPlay: (time?: number) => {
+        isRemoteSyncingRef.current = true;
+        if (typeof time === "number" && Math.abs(art.currentTime - time) > 1.5) {
+          art.currentTime = time;
+          lastSyncedTimeRef.current = time;
+        }
+        if (!art.playing) {
+          art.play().catch(() => {});
+        }
+        setTimeout(() => {
+          isRemoteSyncingRef.current = false;
+        }, 400);
+      },
+      syncPause: (time?: number) => {
+        isRemoteSyncingRef.current = true;
+        if (typeof time === "number") {
+          art.currentTime = time;
+          lastSyncedTimeRef.current = time;
+        }
+        if (art.playing) {
+          art.pause();
+        }
+        setTimeout(() => {
+          isRemoteSyncingRef.current = false;
+        }, 400);
+      },
+      syncWebFullscreen: (isFull: boolean) => {
+        art.fullscreenWeb = isFull;
+      },
+    };
+
+    if (onReadyInstance) {
+      onReadyInstance(handle);
     }
 
     art.on("ready", () => {
       if (initialTime > 0) {
+        isRemoteSyncingRef.current = true;
         art.currentTime = initialTime;
+        lastSyncedTimeRef.current = initialTime;
+        setTimeout(() => {
+          isRemoteSyncingRef.current = false;
+        }, 400);
       }
       art.play().catch(() => {});
     });
 
     art.on("play", () => {
-      if (onPlay) onPlay();
+      if (isRemoteSyncingRef.current) return;
+      if (!canControlRef.current) {
+        isRemoteSyncingRef.current = true;
+        art.pause();
+        setTimeout(() => {
+          isRemoteSyncingRef.current = false;
+        }, 300);
+        onPermissionDenied?.("👑 仅房主有进度控制特权");
+        return;
+      }
+      onPlay?.(art.currentTime);
     });
 
     art.on("pause", () => {
-      if (onPause) onPause();
+      if (isRemoteSyncingRef.current) return;
+      if (!canControlRef.current) {
+        isRemoteSyncingRef.current = true;
+        art.play().catch(() => {});
+        setTimeout(() => {
+          isRemoteSyncingRef.current = false;
+        }, 300);
+        onPermissionDenied?.("👑 仅房主有进度控制特权");
+        return;
+      }
+      onPause?.(art.currentTime);
     });
 
     art.on("seek", (time) => {
-      if (onSeek) onSeek(time);
+      if (isRemoteSyncingRef.current) return;
+      if (!canControlRef.current) {
+        isRemoteSyncingRef.current = true;
+        art.currentTime = lastSyncedTimeRef.current;
+        setTimeout(() => {
+          isRemoteSyncingRef.current = false;
+        }, 300);
+        onPermissionDenied?.("👑 仅房主有进度控制特权");
+        return;
+      }
+      lastSyncedTimeRef.current = time;
+      onSeek?.(time);
     });
 
     art.on("video:timeupdate", () => {
-      if (onTimeUpdate) {
-        onTimeUpdate(art.currentTime, art.duration);
+      if (!isRemoteSyncingRef.current) {
+        lastSyncedTimeRef.current = art.currentTime;
       }
+      onTimeUpdate?.(art.currentTime, art.duration);
     });
 
     return () => {
@@ -145,8 +247,14 @@ export default function RoomVideoPlayer({
   }, [url]);
 
   return (
-    <div className="relative w-full aspect-video rounded-2xl overflow-hidden shadow-2xl bg-black border border-white/10">
+    <div className="relative w-full aspect-video rounded-2xl overflow-hidden shadow-2xl bg-black border border-white/10 group">
       <div ref={containerRef} className="w-full h-full" />
+      {!canControl && (
+        <div className="absolute top-3 right-3 z-30 pointer-events-none px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-bold backdrop-blur-md flex items-center gap-1 shadow-lg">
+          <span>👑</span>
+          <span>仅房主控进度</span>
+        </div>
+      )}
     </div>
   );
 }

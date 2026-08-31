@@ -189,7 +189,7 @@ export function formatTwoTierLocation(country: string, region: string, city: str
   }
 
   if (!secondTier || secondTier === country) {
-    if (country === "中国") return "中国 · 综合枢纽";
+    if (country === "中国") return "中国 · 核心节点";
     return `${country} · 本地`;
   }
 
@@ -217,7 +217,7 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
     }
   }
 
-  // 2. Query HTTPS ipwho.is (Multi-lingual, returns rich Chinese data)
+  // 2. Query HTTPS ipwho.is
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2000);
@@ -242,7 +242,7 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
     }
   } catch (e) {}
 
-  // 3. Fallback: Query HTTPS freeipapi.com (Super fast global GeoIP)
+  // 3. Fallback: Query HTTPS freeipapi.com
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2000);
@@ -266,49 +266,5 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
     }
   } catch (e) {}
 
-  // 4. Fallback: Query HTTPS api.ip.sb
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
-
-    const res = await fetch(`https://api.ip.sb/geoip/${ip}`, {
-      signal: controller.signal,
-      headers: { "User-Agent": "Mozilla/5.0" },
-    });
-    clearTimeout(timeout);
-
-    if (res.ok) {
-      const data = await res.json();
-      const countryCode = (data.country_code || "").toUpperCase();
-      const country = COUNTRY_MAP[countryCode] || data.country || "";
-      const city = data.city || "";
-      const region = data.region || "";
-
-      const loc = formatTwoTierLocation(country, region, city);
-      ipCache.set(ip, loc);
-      return loc;
-    }
-  } catch (e) {}
-
-  // 5. Domestic Chinese fallback
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 1500);
-
-    const res = await fetch(`https://whois.pconline.com.cn/ipJson.jsp?ip=${ip}&json=true`, {
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data.pro || data.city) {
-        const loc = formatTwoTierLocation("中国", data.pro || "", data.city || "");
-        ipCache.set(ip, loc);
-        return loc;
-      }
-    }
-  } catch (e) {}
-
-  return "中国 · 综合枢纽";
+  return "中国 · 综合节点";
 }

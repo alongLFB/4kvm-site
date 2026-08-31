@@ -5,12 +5,12 @@ services:
       dockerfile: Dockerfile
     container_name: 4kvm-app
     restart: unless-stopped
-    ports:
-      - "3028:3028"
+    network_mode: host
     environment:
       - NODE_ENV=production
       - PORT=3028
       - HOSTNAME=0.0.0.0
+      - NODE_OPTIONS=--dns-result-order=ipv4first
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3028/api/health || exit 1"]
       interval: 30s
