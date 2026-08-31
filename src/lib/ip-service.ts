@@ -25,15 +25,12 @@ const COUNTRY_NAME_MAP: Record<string, string> = {
 };
 
 export function getClientIp(request: Request): string {
-  // 1. Cloudflare header
   const cfConnectingIp = request.headers.get("cf-connecting-ip");
   if (cfConnectingIp) return cfConnectingIp.trim();
 
-  // 2. Real IP header
   const xRealIp = request.headers.get("x-real-ip");
   if (xRealIp) return xRealIp.trim();
 
-  // 3. Forwarded For header
   const xForwardedFor = request.headers.get("x-forwarded-for");
   if (xForwardedFor) {
     return xForwardedFor.split(",")[0].trim();
@@ -45,7 +42,6 @@ export function getClientIp(request: Request): string {
 export function maskIp(ip: string): string {
   if (!ip || ip === "127.0.0.1" || ip === "::1") return "127.0.0.*";
 
-  // IPv6 masking: e.g. 240e:388:1234:5678:abcd:ef01:2345:6789 -> 240e:388:****:****::*
   if (ip.includes(":")) {
     const parts = ip.split(":");
     if (parts.length >= 2) {
@@ -54,13 +50,36 @@ export function maskIp(ip: string): string {
     return `${ip.slice(0, 8)}::*`;
   }
 
-  // IPv4 masking: e.g. 217.165.201.169 -> 217.165.*.*
   const parts = ip.split(".");
   if (parts.length === 4) {
     return `${parts[0]}.${parts[1]}.*.*`;
   }
 
   return ip;
+}
+
+function formatTwoTier(country: string, region: string, city: string): string {
+  country = (country || "中国").replace("阿拉伯联合酋长国", "阿联酋").replace("中华人民共和国", "中国").trim();
+  
+  let secondTier = "";
+  if (city && region) {
+    const cleanCity = city.replace(/市|自治州|地区|特别行政区/g, "").trim();
+    const cleanRegion = region.replace(/省|自治区|特别行政区|酋長國|酋长国/g, "").trim();
+    if (cleanCity === cleanRegion || cleanCity.includes(cleanRegion) || cleanRegion.includes(cleanCity)) {
+      secondTier = cleanCity;
+    } else {
+      secondTier = `${cleanRegion} ${cleanCity}`.trim();
+    }
+  } else if (city) {
+    secondTier = city.replace(/市|自治州|地区|特别行政区/g, "").trim();
+  } else if (region) {
+    secondTier = region.replace(/省|自治区|特别行政区|酋長國|酋长国/g, "").trim();
+  }
+
+  if (!secondTier || secondTier === country) {
+    return country;
+  }
+  return `${country} · ${secondTier}`;
 }
 
 export async function resolveIpLocation(ip: string, headers?: Headers): Promise<string> {
@@ -72,13 +91,13 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
     return ipCache.get(ip)!;
   }
 
-  // 1. Check Cloudflare Geo Headers if available
+  // 1. Check Cloudflare Geo Headers
   if (headers) {
     const countryCode = (headers.get("cf-ipcountry") || "").toUpperCase();
     const city = headers.get("cf-ipcity");
     const countryName = COUNTRY_NAME_MAP[countryCode] || countryCode;
     if (countryName && city) {
-      const loc = `${countryName} · ${city}`;
+      const loc = formatTwoTier(countryName, "", city);
       ipCache.set(ip, loc);
       return loc;
     } else if (countryName && countryName !== "XX" && countryName !== "T1") {
@@ -88,7 +107,7 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
     }
   }
 
-  // 2. Query ip-api.com with Chinese localization (supports both IPv4 & IPv6 worldwide)
+  // 2. Query ip-api.com with Chinese localization (supports IPv4 & IPv6 worldwide)
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 1500);
@@ -101,26 +120,11 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
     if (res.ok) {
       const data = await res.json();
       if (data.status === "success") {
-        let country = data.country || "";
-        if (country === "阿拉伯联合酋长国") country = "阿联酋";
-
+        const country = data.country || "";
         const region = data.regionName || "";
         const city = data.city || "";
 
-        let parts: string[] = [];
-        if (country) parts.push(country);
-
-        if (city && city !== country) {
-          if (region && region !== city && region !== country && !city.includes(region)) {
-            parts.push(`${region} ${city}`);
-          } else {
-            parts.push(city);
-          }
-        } else if (region && region !== country) {
-          parts.push(region);
-        }
-
-        const loc = parts.join(" · ") || country || "海外";
+        const loc = formatTwoTier(country, region, city);
         ipCache.set(ip, loc);
         return loc;
       }
@@ -140,20 +144,11 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
     if (res.ok) {
       const data = await res.json();
       if (data.success) {
-        let country = data.country || "";
-        if (country === "阿拉伯联合酋长国") country = "阿联酋";
+        const country = data.country || "";
         const city = data.city || "";
         const region = data.region || "";
 
-        let parts: string[] = [];
-        if (country) parts.push(country);
-        if (city && city !== country) {
-          parts.push(city);
-        } else if (region && region !== country) {
-          parts.push(region);
-        }
-
-        const loc = parts.join(" · ") || country || "海外";
+        const loc = formatTwoTier(country, region, city);
         ipCache.set(ip, loc);
         return loc;
       }

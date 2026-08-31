@@ -39,6 +39,7 @@ import { WatchRoom, ChatMessage, RoomMember } from "@/lib/room-store";
 import { VodItem } from "@/lib/types";
 import { getGuestUser, updateGuestUser, GuestUser } from "@/lib/guest";
 import { RoomSettingsModal } from "@/components/RoomSettingsModal";
+import { FilmPickerModal } from "@/components/FilmPickerModal";
 
 const RoomVideoPlayer = dynamic(() => import("@/components/Player/RoomVideoPlayer"), {
   ssr: false,
@@ -1102,74 +1103,14 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
         </div>
       </div>
 
-      {/* In-Room Film Picker Modal */}
-      {changeVodModalOpen && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="relative w-full max-w-2xl bg-dark-900 border border-white/10 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <div className="flex items-center gap-2 text-base font-bold text-white">
-                <Film className="w-5 h-5 text-cyan-400" />
-                更换本放映厅播放影片
-              </div>
-              <button onClick={() => setChangeVodModalOpen(false)} className="p-1 text-gray-400 hover:text-white rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                value={searchVodQuery}
-                onChange={(e) => handleSearchSwitchVods(e.target.value)}
-                placeholder="搜索片名、演员或导演..."
-                className="w-full bg-dark-800 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-
-            <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 scrollbar-thin">
-              {searchingVods ? (
-                <div className="py-16 text-center text-gray-400 flex flex-col items-center gap-2">
-                  <Loader2 className="w-6 h-6 animate-spin text-cyan-400" />
-                  <span className="text-xs">正在检索影视库...</span>
-                </div>
-              ) : switchVodList.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {switchVodList.map((item) => (
-                    <div
-                      key={item.id}
-                      className="p-3 rounded-2xl bg-dark-850 border border-white/5 hover:border-cyan-500/40 flex items-center justify-between gap-3 transition group"
-                    >
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <img
-                          src={item.pic}
-                          alt={item.name}
-                          className="w-12 h-16 rounded-xl object-cover shadow shrink-0"
-                        />
-                        <div className="overflow-hidden space-y-0.5">
-                          <h4 className="text-xs font-bold text-white truncate group-hover:text-cyan-400 transition">{item.name}</h4>
-                          <p className="text-[10px] text-gray-400">{item.year} · {item.type_name}</p>
-                          <p className="text-[10px] text-cyan-400/80">{item.remarks}</p>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleConfirmChangeVod(item)}
-                        className="px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500 text-cyan-400 hover:text-dark-950 font-bold text-xs shrink-0 transition flex items-center gap-1 border border-cyan-500/30"
-                      >
-                        <Check className="w-3.5 h-3.5" /> 换看这部
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-16 text-center text-gray-500 text-xs">未找到相关影视</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* In-Room Film Picker Modal with Category Filters + Search */}
+      <FilmPickerModal
+        isOpen={changeVodModalOpen}
+        title="更换本放映厅播放影片"
+        actionLabel="换看这部"
+        onClose={() => setChangeVodModalOpen(false)}
+        onSelect={handleConfirmChangeVod}
+      />
 
       {/* Host Exit Confirmation Dialog */}
       {exitModalOpen && (

@@ -18,6 +18,7 @@ export async function GET(request: Request) {
   const quality = searchParams.get("quality") || "全部";
   const status = searchParams.get("status") || "全部";
   const page = parseInt(searchParams.get("pg") || "1", 10);
+  const limit = parseInt(searchParams.get("limit") || "18", 10);
   const query = searchParams.get("wd") || "";
 
   const result = await fetchLiveVods({
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
     quality,
     status,
     page,
+    limit,
     query,
   });
 

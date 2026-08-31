@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Users, Tv, Play, Plus, Sparkles, RefreshCw, Loader2, Globe, Lock, Clock, KeyRound, X, Search, Film } from "lucide-react";
+import { Users, Tv, Play, Plus, Sparkles, RefreshCw, Loader2, Globe, Lock, Clock, KeyRound, X } from "lucide-react";
 import { VodItem } from "@/lib/types";
+import { FilmPickerModal } from "@/components/FilmPickerModal";
 import { CreateRoomModal } from "@/components/CreateRoomModal";
 
 function formatTime(seconds: number) {
@@ -26,11 +27,8 @@ export default function HallPage() {
   const [inputPassword, setInputPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
 
-  // Quick Film Picker Modal for instant creation without entering detail page
+  // Category + Search Film Picker Modal
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searching, setSearching] = useState(false);
-  const [vodList, setVodList] = useState<VodItem[]>([]);
   const [selectedVod, setSelectedVod] = useState<VodItem | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
@@ -54,34 +52,6 @@ export default function HallPage() {
     const interval = setInterval(fetchRooms, 6000);
     return () => clearInterval(interval);
   }, []);
-
-  const openQuickPicker = async () => {
-    setPickerOpen(true);
-    if (vodList.length === 0) {
-      setSearching(true);
-      try {
-        const res = await fetch("/api/vod?type=全部&pg=1");
-        const data = await res.json();
-        if (data.list) setVodList(data.list);
-      } catch (e) {
-      } finally {
-        setSearching(false);
-      }
-    }
-  };
-
-  const handleSearchVods = async (query: string) => {
-    setSearchQuery(query);
-    setSearching(true);
-    try {
-      const res = await fetch(`/api/vod?wd=${encodeURIComponent(query)}&pg=1`);
-      const data = await res.json();
-      if (data.list) setVodList(data.list);
-    } catch (e) {
-    } finally {
-      setSearching(false);
-    }
-  };
 
   const handlePickFilmToCreate = (item: VodItem) => {
     setSelectedVod(item);
@@ -132,9 +102,8 @@ export default function HallPage() {
           </p>
 
           <div className="flex flex-wrap items-center gap-3 pt-2">
-            {/* Direct Quick Film Picker Button without entering detail page */}
             <button
-              onClick={openQuickPicker}
+              onClick={() => setPickerOpen(true)}
               className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-dark-950 font-black text-xs sm:text-sm transition flex items-center gap-2 shadow-lg shadow-cyan-500/20"
             >
               <Plus className="w-4 h-4" />
@@ -263,7 +232,7 @@ export default function HallPage() {
             <p className="text-gray-400 text-xs">挑选一部精彩影视，成为全站第一位放映发起人吧！</p>
           </div>
           <button
-            onClick={openQuickPicker}
+            onClick={() => setPickerOpen(true)}
             className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-dark-950 font-bold text-xs transition inline-flex items-center gap-1.5 shadow-lg shadow-cyan-500/20"
           >
             <Plus className="w-4 h-4" /> 挑选影片 · 立即发起放映房
@@ -271,76 +240,14 @@ export default function HallPage() {
         </div>
       )}
 
-      {/* Quick Film Picker Modal (Direct Launch without Detail Page) */}
-      {pickerOpen && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="relative w-full max-w-2xl bg-dark-900 border border-white/10 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <div className="flex items-center gap-2 text-base font-bold text-white">
-                <Film className="w-5 h-5 text-cyan-400" />
-                挑选影片 · 立即发起放映厅
-              </div>
-              <button onClick={() => setPickerOpen(false)} className="p-1 text-gray-400 hover:text-white rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => handleSearchVods(e.target.value)}
-                placeholder="搜索片名、演员或导演..."
-                className="w-full bg-dark-800 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-
-            {/* Film Grid */}
-            <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 scrollbar-thin">
-              {searching ? (
-                <div className="py-16 text-center text-gray-400 flex flex-col items-center gap-2">
-                  <Loader2 className="w-6 h-6 animate-spin text-cyan-400" />
-                  <span className="text-xs">正在搜索影视库...</span>
-                </div>
-              ) : vodList.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {vodList.map((item) => (
-                    <div
-                      key={item.id}
-                      className="p-3 rounded-2xl bg-dark-850 border border-white/5 hover:border-cyan-500/40 flex items-center justify-between gap-3 transition group"
-                    >
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <img
-                          src={item.pic}
-                          alt={item.name}
-                          className="w-12 h-16 rounded-xl object-cover shadow shrink-0"
-                        />
-                        <div className="overflow-hidden space-y-0.5">
-                          <h4 className="text-xs font-bold text-white truncate group-hover:text-cyan-400 transition">{item.name}</h4>
-                          <p className="text-[10px] text-gray-400">{item.year} · {item.type_name}</p>
-                          <p className="text-[10px] text-cyan-400/80">{item.remarks}</p>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handlePickFilmToCreate(item)}
-                        className="px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500 text-cyan-400 hover:text-dark-950 font-bold text-xs shrink-0 transition flex items-center gap-1 border border-cyan-500/30"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> 发起
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-16 text-center text-gray-500 text-xs">未找到相关影视</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Category + Search Film Picker Modal */}
+      <FilmPickerModal
+        isOpen={pickerOpen}
+        title="挑选影片 · 立即发起放映房"
+        actionLabel="发起一起看"
+        onClose={() => setPickerOpen(false)}
+        onSelect={handlePickFilmToCreate}
+      />
 
       {/* Create Room Modal when picked */}
       {selectedVod && (
