@@ -3,14 +3,12 @@
 import React, { useState, useEffect, useRef, use } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import Artplayer from "artplayer";
-import Hls from "hls.js";
+import dynamic from "next/dynamic";
 import {
   Users,
   Share2,
   Check,
   Send,
-  Sparkles,
   Globe,
   Lock,
   Crown,
@@ -24,11 +22,9 @@ import {
   Eye,
   EyeOff,
   Settings,
-  KeyRound,
   Radio,
   Film,
   MapPin,
-  LogOut,
   Trash2,
   UserCheck,
   UserX,
@@ -40,47 +36,17 @@ import { VodItem } from "@/lib/types";
 import { getGuestUser, updateGuestUser, GuestUser } from "@/lib/guest";
 import { RoomSettingsModal } from "@/components/RoomSettingsModal";
 
-// Helper to switch video stream reliably with Hls
-function loadHlsStream(art: Artplayer, streamUrl: string, startTime: number = 0) {
-  if (!art || !streamUrl) return;
-
-  if (art.hls) {
-    try {
-      art.hls.destroy();
-      art.hls = null;
-    } catch (e) {}
-  }
-
-  if (Hls.isSupported()) {
-    const hls = new Hls({
-      maxBufferLength: 60,
-      maxMaxBufferLength: 120,
-      startFragPrefetch: true,
-    });
-    hls.loadSource(streamUrl);
-    hls.attachMedia(art.video);
-    art.hls = hls;
-
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      if (startTime > 0) {
-        art.currentTime = startTime;
-      }
-      art.play().catch(() => {});
-    });
-  } else if (art.video.canPlayType("application/vnd.apple.mpegurl")) {
-    art.video.src = streamUrl;
-    if (startTime > 0) {
-      art.currentTime = startTime;
-    }
-    art.play().catch(() => {});
-  } else {
-    art.video.src = streamUrl;
-    if (startTime > 0) {
-      art.currentTime = startTime;
-    }
-    art.play().catch(() => {});
-  }
-}
+const RoomVideoPlayer = dynamic(() => import("@/components/Player/RoomVideoPlayer"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full aspect-video rounded-2xl bg-dark-900 flex items-center justify-center border border-white/10 text-gray-400">
+      <div className="animate-pulse flex flex-col items-center gap-2">
+        <div className="w-8 h-8 rounded-full border-2 border-cyan-500 border-t-transparent animate-spin" />
+        <span className="text-xs">加载放映流中...</span>
+      </div>
+    </div>
+  ),
+});
 
 export default function RoomPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: roomId } = use(params);
@@ -99,6 +65,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const [copied, setCopied] = useState(false);
   const [showFullIp, setShowFullIp] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [permissionTip, setPermissionTip] = useState<string | null>(null);
 
   // Host Exit Modal state
   const [exitModalOpen, setExitModalOpen] = useState(false);
@@ -114,14 +81,18 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [members, setMembers] = useState<RoomMember[]>([]);
 
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const artContainerRef = useRef<HTMLDivElement>(null);
-  const artInstanceRef = useRef<Artplayer | null>(null);
-
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const artInstanceRef = useRef<any>(null);
   const isSyncingFromRemote = useRef(false);
 
   const isHost = room ? room.hostId === currentUser.id : false;
+  const canSwitch = isHost || (room?.switchMode !== "host");
   const otherMembers = members.filter((m) => m.id !== currentUser.id);
+
+  const showPermToast = (msg: string) => {
+    setPermissionTip(msg);
+    setTimeout(() => setPermissionTip(null), 3000);
+  };
 
   const joinWithPassword = (pwd: string) => {
     const user = getGuestUser();
@@ -146,7 +117,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
         }
         setLoading(false);
       })
-      .catch((err) => {
+      .catch(() => {
         setErrorMsg("连接房间失败");
         setLoading(false);
       });
@@ -222,24 +193,21 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           }
         } else if (payload.type === "sync") {
           const art = artInstanceRef.current;
-          if (!art) return;
 
           isSyncingFromRemote.current = true;
 
           if (payload.action === "play") {
-            if (!art.playing) art.play().catch(() => {});
-            if (Math.abs(art.currentTime - payload.currentTime) > 1.5) {
+            if (art && !art.playing) art.play().catch(() => {});
+            if (art && Math.abs(art.currentTime - payload.currentTime) > 1.5) {
               art.currentTime = payload.currentTime;
             }
           } else if (payload.action === "pause") {
-            if (art.playing) art.pause();
-            art.currentTime = payload.currentTime;
+            if (art && art.playing) art.pause();
+            if (art) art.currentTime = payload.currentTime;
           } else if (payload.action === "seek") {
-            art.currentTime = payload.currentTime;
+            if (art) art.currentTime = payload.currentTime;
           } else if (payload.action === "source" || payload.action === "episode") {
             if (payload.streamUrl) {
-              const prevTime = payload.currentTime || 0;
-              loadHlsStream(art, payload.streamUrl, prevTime);
               setRoom((prev) =>
                 prev
                   ? {
@@ -248,6 +216,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                       episodeIndex: typeof payload.episodeIndex === "number" ? payload.episodeIndex : prev.episodeIndex,
                       episodeName: payload.episodeName || prev.episodeName,
                       streamUrl: payload.streamUrl,
+                      currentTime: payload.currentTime || 0,
                     }
                   : null
               );
@@ -288,104 +257,12 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     };
   }, [roomId, router]);
 
-  // Auto scroll chat
+  // Fix 1: Auto scroll chat inside container only (NEVER scrolls outer window)
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // Initialize ArtPlayer
-  useEffect(() => {
-    if (!room || !artContainerRef.current || passwordRequired) return;
-
-    if (artInstanceRef.current) {
-      artInstanceRef.current.destroy(false);
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-
-    const art = new Artplayer({
-      container: artContainerRef.current,
-      url: room.streamUrl,
-      poster: room.vodPic || "",
-      volume: 0.8,
-      autoplay: true,
-      pip: true,
-      autoSize: true,
-      autoMini: true,
-      screenshot: true,
-      setting: true,
-      playbackRate: true,
-      aspectRatio: true,
-      hotkey: true,
-      fullscreen: true,
-      fullscreenWeb: true,
-      autoOrientation: true,
-      playsInline: true,
-      lock: true,
-      fastForward: true,
-      airplay: true,
-      theme: "#06b6d4",
-      lang: "zh-cn",
-      moreVideoAttr: {
-        crossOrigin: "anonymous",
-        preload: "auto",
-        "x5-video-player-type": "h5",
-        "x5-video-player-fullscreen": "true",
-        "x5-playsinline": "true",
-      },
-      customType: {
-        m3u8: function (video: HTMLMediaElement, url: string, art: Artplayer) {
-          if (Hls.isSupported()) {
-            if (art.hls) art.hls.destroy();
-            const hls = new Hls({
-              maxBufferLength: 60,
-              maxMaxBufferLength: 120,
-              startFragPrefetch: true,
-            });
-            hls.loadSource(url);
-            hls.attachMedia(video);
-            art.hls = hls;
-            art.on("destroy", () => hls.destroy());
-          } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-            video.src = url;
-          }
-        },
-      },
-    });
-
-    artInstanceRef.current = art;
-
-    art.on("ready", () => {
-      if (room.currentTime > 0) {
-        art.currentTime = room.currentTime;
-      }
-    });
-
-    // Local interaction emits sync
-    const emitSync = (actionType: "play" | "pause" | "seek") => {
-      if (isSyncingFromRemote.current) return;
-
-      const user = getGuestUser();
-      fetch(`/api/room/${roomId}/sync`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: actionType,
-          currentTime: art.currentTime,
-          duration: art.duration,
-          sender: { id: user.id, name: user.name },
-        }),
-      });
-    };
-
-    art.on("play", () => emitSync("play"));
-    art.on("pause", () => emitSync("pause"));
-    art.on("seek", () => emitSync("seek"));
-
-    return () => {
-      if (art && art.destroy) {
-        art.destroy(false);
-      }
-    };
-  }, [room?.id, passwordRequired]);
+  }, [messages]);
 
   // Back button click handler with Host Protection Modal
   const handleBackClick = () => {
@@ -461,8 +338,12 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     });
   };
 
-  // Switch Line / Source with real-time sync and instant optimistic UI
+  // Switch Line / Source with permission check
   const handleSwitchSource = (sourceIdx: number) => {
+    if (!canSwitch) {
+      showPermToast("👑 房主已设置【仅房主可换集换源】权限");
+      return;
+    }
     if (!vodItem || !room) return;
     const targetSource = vodItem.sources[sourceIdx];
     if (!targetSource) return;
@@ -472,7 +353,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     const art = artInstanceRef.current;
     const currentTime = art ? art.currentTime : room.currentTime;
 
-    // 1. Instantly update local player & UI selection
     setRoom((prev) =>
       prev
         ? {
@@ -481,15 +361,11 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             episodeIndex: targetEpIndex,
             episodeName: targetEp.name,
             streamUrl: targetEp.url,
+            currentTime,
           }
         : null
     );
 
-    if (art) {
-      loadHlsStream(art, targetEp.url, currentTime);
-    }
-
-    // 2. Broadcast to all members
     const user = getGuestUser();
     fetch(`/api/room/${roomId}/sync`, {
       method: "POST",
@@ -507,12 +383,14 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     });
   };
 
-  // Switch Episode with real-time sync and instant optimistic UI
+  // Switch Episode with permission check
   const handleSwitchEpisode = (idx: number, ep: { name: string; url: string }) => {
+    if (!canSwitch) {
+      showPermToast("👑 房主已设置【仅房主可换集换源】权限");
+      return;
+    }
     if (!room) return;
-    const art = artInstanceRef.current;
 
-    // 1. Instantly update local player & UI selection
     setRoom((prev) =>
       prev
         ? {
@@ -520,15 +398,11 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             episodeIndex: idx,
             episodeName: ep.name,
             streamUrl: ep.url,
+            currentTime: 0,
           }
         : null
     );
 
-    if (art) {
-      loadHlsStream(art, ep.url, 0);
-    }
-
-    // 2. Broadcast to all members
     const user = getGuestUser();
     fetch(`/api/room/${roomId}/sync`, {
       method: "POST",
@@ -540,6 +414,53 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
         episodeName: ep.name,
         streamUrl: ep.url,
         currentTime: 0,
+        sender: { id: user.id, name: user.name },
+      }),
+    });
+  };
+
+  // Player Sync Handlers
+  const handlePlayerPlay = () => {
+    if (isSyncingFromRemote.current) return;
+    const art = artInstanceRef.current;
+    const user = getGuestUser();
+    fetch(`/api/room/${roomId}/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "play",
+        currentTime: art ? art.currentTime : room?.currentTime || 0,
+        duration: art?.duration,
+        sender: { id: user.id, name: user.name },
+      }),
+    });
+  };
+
+  const handlePlayerPause = () => {
+    if (isSyncingFromRemote.current) return;
+    const art = artInstanceRef.current;
+    const user = getGuestUser();
+    fetch(`/api/room/${roomId}/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "pause",
+        currentTime: art ? art.currentTime : room?.currentTime || 0,
+        duration: art?.duration,
+        sender: { id: user.id, name: user.name },
+      }),
+    });
+  };
+
+  const handlePlayerSeek = (seekTime: number) => {
+    if (isSyncingFromRemote.current) return;
+    const user = getGuestUser();
+    fetch(`/api/room/${roomId}/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "seek",
+        currentTime: seekTime,
         sender: { id: user.id, name: user.name },
       }),
     });
@@ -654,6 +575,14 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
 
   return (
     <div className="space-y-6">
+      {/* Permission Alert Toast */}
+      {permissionTip && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[999999] px-4 py-2 bg-amber-500 text-dark-950 font-bold text-xs rounded-full shadow-2xl animate-in fade-in slide-in-from-top-4 flex items-center gap-1.5">
+          <Lock className="w-3.5 h-3.5" />
+          {permissionTip}
+        </div>
+      )}
+
       {/* Top Header Bar */}
       <div className="p-4 sm:p-5 rounded-2xl bg-dark-900 border border-white/10 flex flex-wrap items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-3">
@@ -684,7 +613,9 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
               <span>·</span>
               <span className="text-emerald-400 font-medium">{currentSource.sourceName}</span>
               <span>·</span>
-              <span>{room.controlMode === "host" ? "👑 仅房主可控" : "⚡ 全员自由控制"}</span>
+              <span>{room.controlMode === "host" ? "👑 仅房主控进度" : "⚡ 全员控进度"}</span>
+              <span>·</span>
+              <span>{room.switchMode === "host" ? "👑 仅房主可换集换源" : "⚡ 全员可换集换源"}</span>
             </p>
           </div>
         </div>
@@ -740,11 +671,19 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
 
       {/* Main Grid: Player + Interaction Sidebar */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Sync Player */}
+        {/* Left 2 Cols: Dedicated Room Video Player */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="relative w-full aspect-video rounded-2xl overflow-hidden shadow-2xl bg-black border border-white/10">
-            <div ref={artContainerRef} className="w-full h-full" />
-          </div>
+          <RoomVideoPlayer
+            url={room.streamUrl}
+            poster={room.vodPic || ""}
+            initialTime={room.currentTime}
+            getInstance={(art) => {
+              artInstanceRef.current = art;
+            }}
+            onPlay={handlePlayerPlay}
+            onPause={handlePlayerPause}
+            onSeek={handlePlayerSeek}
+          />
 
           {/* Quick Info bar */}
           <div className="p-4 rounded-2xl bg-dark-900 border border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
@@ -799,9 +738,9 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           </div>
 
           {/* Tab Content */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
+          <div className="flex-1 overflow-hidden flex flex-col">
             {activeTab === "episodes" && (
-              <div className="space-y-4">
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
                 {/* 1. Line / Source Switcher */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs font-bold text-gray-400">
@@ -809,7 +748,11 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                       <Radio className="w-3.5 h-3.5 text-cyan-400" />
                       切换播放源线路
                     </span>
-                    <span className="text-[10px] text-gray-500">共 {vodItem.sources.length} 条可用专线</span>
+                    {!canSwitch && (
+                      <span className="text-[10px] text-amber-400 flex items-center gap-0.5">
+                        <Lock className="w-2.5 h-2.5" /> 仅房主可换
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex flex-col gap-1.5">
@@ -824,7 +767,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                             isCurrent
                               ? "bg-cyan-500/20 border-2 border-cyan-400 text-cyan-300 shadow-md shadow-cyan-500/10 font-bold"
                               : "bg-dark-800 hover:bg-dark-700 text-gray-300 border border-white/5"
-                          }`}
+                          } ${!canSwitch ? "cursor-not-allowed opacity-80" : ""}`}
                         >
                           <span className="flex items-center gap-2">
                             <span className={`w-2 h-2 rounded-full ${isCurrent ? "bg-cyan-400 animate-pulse" : "bg-gray-600"}`} />
@@ -859,7 +802,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                             isEpActive
                               ? "bg-cyan-500 text-dark-950 font-black shadow-md shadow-cyan-500/20 scale-[1.02]"
                               : "bg-dark-800 text-gray-300 hover:bg-dark-700 hover:text-white border border-white/5"
-                          }`}
+                          } ${!canSwitch && !isEpActive ? "opacity-75" : ""}`}
                         >
                           {ep.name}
                         </button>
@@ -872,38 +815,71 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
 
             {activeTab === "chat" && (
               <>
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`text-xs p-2 rounded-xl ${
-                      msg.isSystem
-                        ? "bg-white/5 text-gray-400 text-center italic text-[11px]"
-                        : "bg-dark-800/80 border border-white/5 space-y-1"
-                    }`}
-                  >
-                    {!msg.isSystem && (
-                      <div className="flex items-center justify-between text-gray-500 text-[10px]">
-                        <span className="font-bold text-cyan-400 flex items-center gap-1">
-                          <span>{msg.senderAvatar || "🐱"}</span>
-                          <span>{msg.senderName}</span>
-                          {msg.senderDevice && (
-                            <span className="text-[9px] text-gray-400 bg-dark-900 px-1 py-0.2 rounded font-normal">
-                              {msg.senderDevice}
-                            </span>
-                          )}
-                        </span>
-                        <span>{msg.time}</span>
-                      </div>
-                    )}
-                    <p className={msg.isSystem ? "" : "text-white font-medium pl-5"}>{msg.text}</p>
+                <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin">
+                  {messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`text-xs p-2 rounded-xl ${
+                        msg.isSystem
+                          ? "bg-white/5 text-gray-400 text-center italic text-[11px]"
+                          : "bg-dark-800/80 border border-white/5 space-y-1"
+                      }`}
+                    >
+                      {!msg.isSystem && (
+                        <div className="flex items-center justify-between text-gray-500 text-[10px]">
+                          <span className="font-bold text-cyan-400 flex items-center gap-1">
+                            <span>{msg.senderAvatar || "🐱"}</span>
+                            <span>{msg.senderName}</span>
+                            {msg.senderDevice && (
+                              <span className="text-[9px] text-gray-400 bg-dark-900 px-1 py-0.2 rounded font-normal">
+                                {msg.senderDevice}
+                              </span>
+                            )}
+                          </span>
+                          <span>{msg.time}</span>
+                        </div>
+                      )}
+                      <p className={msg.isSystem ? "" : "text-white font-medium pl-5"}>{msg.text}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Chat Input & Emoji footer */}
+                <div className="p-3 border-t border-white/10 bg-dark-950/60 space-y-2">
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-base">
+                    {["🍿", "👏", "🤣", "😱", "🔥", "❤️", "👍", "🍻"].map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => handleSendEmoji(emoji)}
+                        className="p-1 hover:scale-125 transition active:scale-95"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
                   </div>
-                ))}
-                <div ref={chatEndRef} />
+
+                  <form onSubmit={handleSendChat} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      placeholder="说点什么，全员实时同步..."
+                      className="flex-1 bg-dark-800 text-xs text-white placeholder-gray-500 px-3.5 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-cyan-500"
+                    />
+                    <button
+                      type="submit"
+                      className="p-2 rounded-xl bg-cyan-500 text-dark-950 font-bold hover:bg-cyan-400 transition"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </form>
+                </div>
               </>
             )}
 
             {activeTab === "members" && (
-              <div className="space-y-2.5">
+              <div className="flex-1 overflow-y-auto p-4 space-y-2.5 scrollbar-thin">
                 {/* Host Admin Bar */}
                 {isHost && (
                   <div className="p-2.5 rounded-xl bg-gold-500/10 border border-gold-500/30 flex items-center justify-between text-[11px]">
@@ -929,7 +905,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                       key={m.id}
                       className="p-3 rounded-xl bg-dark-800/80 border border-white/5 space-y-2"
                     >
-                      {/* Top: Avatar & Name & Actions */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">{m.avatar}</span>
@@ -946,21 +921,17 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                           )}
                         </div>
 
-                        {/* Location Badge */}
                         <div className="flex items-center gap-1 text-[10px] text-cyan-400 font-medium bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">
                           <MapPin className="w-3 h-3 text-cyan-400" />
                           <span>{m.location || "中国"}</span>
                         </div>
                       </div>
 
-                      {/* Bottom metadata: Device, IP & Host Admin actions */}
                       <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1.5 border-t border-white/5">
-                        {/* Device */}
                         <div className="flex items-center gap-1">
                           <span className="text-gray-300 font-medium">{m.device || "💻 网页端"}</span>
                         </div>
 
-                        {/* IP (Masked or Host-revealed) */}
                         <div className="flex items-center gap-1 text-[10px] text-gray-500">
                           <span>IP:</span>
                           <span className={`font-mono ${isHost && showFullIp ? "text-amber-400 font-bold" : "text-gray-400"}`}>
@@ -970,7 +941,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                         </div>
                       </div>
 
-                      {/* Host Actions on other members */}
                       {isHost && m.id !== currentUser.id && (
                         <div className="flex items-center justify-end gap-2 pt-1">
                           <button
@@ -995,42 +965,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
               </div>
             )}
           </div>
-
-          {/* Chat Input & Emoji footer */}
-          {activeTab === "chat" && (
-            <div className="p-3 border-t border-white/10 bg-dark-950/60 space-y-2">
-              {/* Quick Emojis */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-base">
-                {["🍿", "👏", "🤣", "😱", "🔥", "❤️", "👍", "🍻"].map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => handleSendEmoji(emoji)}
-                    className="p-1 hover:scale-125 transition active:scale-95"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-
-              {/* Text Input */}
-              <form onSubmit={handleSendChat} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  placeholder="说点什么，全员实时同步..."
-                  className="flex-1 bg-dark-800 text-xs text-white placeholder-gray-500 px-3.5 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-cyan-500"
-                />
-                <button
-                  type="submit"
-                  className="p-2 rounded-xl bg-cyan-500 text-dark-950 font-bold hover:bg-cyan-400 transition"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </form>
-            </div>
-          )}
         </div>
       </div>
 

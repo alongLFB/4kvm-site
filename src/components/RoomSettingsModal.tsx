@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Settings, Globe, Lock, Crown, Zap, KeyRound, Check, Loader2 } from "lucide-react";
+import { X, Settings, Globe, Lock, Crown, Zap, KeyRound, Check, Loader2, Radio } from "lucide-react";
 import { WatchRoom } from "@/lib/room-store";
 
 interface RoomSettingsModalProps {
@@ -16,6 +16,7 @@ export function RoomSettingsModal({ room, isOpen, onClose, onSaved }: RoomSettin
   const [isPublic, setIsPublic] = useState(room.isPublic);
   const [password, setPassword] = useState(room.password || "8888");
   const [controlMode, setControlMode] = useState<"host" | "free">(room.controlMode);
+  const [switchMode, setSwitchMode] = useState<"host" | "free">(room.switchMode || "free");
   const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
@@ -32,6 +33,7 @@ export function RoomSettingsModal({ room, isOpen, onClose, onSaved }: RoomSettin
           isPublic,
           password: isPublic ? undefined : password,
           controlMode,
+          switchMode,
         }),
       });
       const data = await res.json();
@@ -48,11 +50,11 @@ export function RoomSettingsModal({ room, isOpen, onClose, onSaved }: RoomSettin
 
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-      <div className="relative w-full max-w-lg bg-dark-900 border border-white/10 rounded-3xl p-6 shadow-2xl space-y-5">
+      <div className="relative w-full max-w-lg bg-dark-900 border border-white/10 rounded-3xl p-6 shadow-2xl space-y-5 max-h-[92vh] overflow-y-auto scrollbar-thin">
         <div className="flex items-center justify-between pb-3 border-b border-white/10">
           <div className="flex items-center gap-2 text-base font-bold text-white">
             <Settings className="w-5 h-5 text-gold-400" />
-            👑 房主管理 · 房间属性设置
+            👑 房主管理 · 房间属性与权限设置
           </div>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-white rounded-lg">
             <X className="w-5 h-5" />
@@ -127,7 +129,7 @@ export function RoomSettingsModal({ room, isOpen, onClose, onSaved }: RoomSettin
 
           {/* Control Mode */}
           <div>
-            <label className="block text-xs font-semibold text-gray-400 mb-2">进度控制权限</label>
+            <label className="block text-xs font-semibold text-gray-400 mb-2">① 播放进度控制权限</label>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
@@ -141,7 +143,7 @@ export function RoomSettingsModal({ room, isOpen, onClose, onSaved }: RoomSettin
                 <Zap className={`w-4 h-4 mt-0.5 ${controlMode === "free" ? "text-cyan-400" : "text-gray-500"}`} />
                 <div>
                   <p className="text-xs font-bold text-white">⚡ 全员自由控制</p>
-                  <p className="text-[11px] text-gray-400">全员皆可暂停/快进/换集</p>
+                  <p className="text-[11px] text-gray-400">全员皆可暂停/快进</p>
                 </div>
               </button>
 
@@ -158,6 +160,44 @@ export function RoomSettingsModal({ room, isOpen, onClose, onSaved }: RoomSettin
                 <div>
                   <p className="text-xs font-bold text-white">👑 仅房主可控</p>
                   <p className="text-[11px] text-gray-400">仅房主能控制进度</p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Switch Mode */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-400 mb-2">② 选集与换源权限</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setSwitchMode("free")}
+                className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition ${
+                  switchMode === "free"
+                    ? "bg-cyan-500/10 border-cyan-500/50 text-white"
+                    : "bg-dark-800 border-white/5 text-gray-400 hover:bg-dark-700"
+                }`}
+              >
+                <Radio className={`w-4 h-4 mt-0.5 ${switchMode === "free" ? "text-cyan-400" : "text-gray-500"}`} />
+                <div>
+                  <p className="text-xs font-bold text-white">⚡ 全员自由换集换源</p>
+                  <p className="text-[11px] text-gray-400">观众亦可切线路/选集</p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSwitchMode("host")}
+                className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition ${
+                  switchMode === "host"
+                    ? "bg-cyan-500/10 border-cyan-500/50 text-white"
+                    : "bg-dark-800 border-white/5 text-gray-400 hover:bg-dark-700"
+                }`}
+              >
+                <Lock className={`w-4 h-4 mt-0.5 ${switchMode === "host" ? "text-gold-400" : "text-gray-500"}`} />
+                <div>
+                  <p className="text-xs font-bold text-white">👑 仅房主可换集换源</p>
+                  <p className="text-[11px] text-gray-400">防止他人误切</p>
                 </div>
               </button>
             </div>

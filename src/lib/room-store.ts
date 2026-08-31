@@ -40,6 +40,7 @@ export interface WatchRoom {
   isPublic: boolean;
   password?: string;
   controlMode: "host" | "free";
+  switchMode: "host" | "free";
   hostId: string;
   hostName: string;
   hostAvatar: string;
@@ -109,7 +110,6 @@ if (!global.__4kvm_cleaner_interval__) {
         room.members = activeMembers;
 
         if (wasHostOffline && room.members.length > 0) {
-          // Auto transfer host to the next earliest joined member
           room.members.sort((a, b) => a.joinedAt - b.joinedAt);
           const newHost = room.members[0];
           const oldHostName = room.hostName;
@@ -176,6 +176,7 @@ export const RoomStore = {
         isPublic: r.isPublic,
         hasPassword: !r.isPublic && !!r.password,
         controlMode: r.controlMode,
+        switchMode: r.switchMode || "free",
         hostId: r.hostId,
         hostName: r.hostName,
         hostAvatar: r.hostAvatar,
@@ -195,9 +196,10 @@ export const RoomStore = {
     isPublic?: boolean;
     password?: string;
     controlMode?: "host" | "free";
+    switchMode?: "host" | "free";
     host: { id: string; name: string; avatar: string; device?: string; location?: string; maskedIp?: string; fullIp?: string };
   }): WatchRoom {
-    const { title, vodItem, sourceIndex = 0, episodeIndex = 0, isPublic = true, password = "", controlMode = "free", host } = params;
+    const { title, vodItem, sourceIndex = 0, episodeIndex = 0, isPublic = true, password = "", controlMode = "free", switchMode = "free", host } = params;
 
     const source = vodItem.sources[sourceIndex] || vodItem.sources[0];
     const episode = source?.episodes[episodeIndex] || source?.episodes[0] || { name: "正片", url: "" };
@@ -223,7 +225,7 @@ export const RoomStore = {
       vodId: vodItem.id,
       vodName: vodItem.name,
       vodPic: vodItem.pic,
-      vodItem: vodItem,
+      vodItem,
       sourceIndex,
       episodeIndex,
       episodeName: episode.name,
@@ -234,6 +236,7 @@ export const RoomStore = {
       isPublic,
       password: isPublic ? undefined : password.trim(),
       controlMode,
+      switchMode,
       hostId: host.id,
       hostName: host.name,
       hostAvatar: host.avatar,
@@ -263,6 +266,7 @@ export const RoomStore = {
     isPublic?: boolean;
     password?: string;
     controlMode?: "host" | "free";
+    switchMode?: "host" | "free";
     hostName?: string;
     hostAvatar?: string;
   }): { success: boolean; message?: string; room?: WatchRoom } {
@@ -283,6 +287,7 @@ export const RoomStore = {
     }
 
     if (updates.controlMode) room.controlMode = updates.controlMode;
+    if (updates.switchMode) room.switchMode = updates.switchMode;
     if (updates.hostName) room.hostName = updates.hostName.trim();
     if (updates.hostAvatar) room.hostAvatar = updates.hostAvatar;
 
@@ -294,6 +299,7 @@ export const RoomStore = {
       isPublic: room.isPublic,
       hasPassword: !room.isPublic && !!room.password,
       controlMode: room.controlMode,
+      switchMode: room.switchMode,
       hostName: room.hostName,
       hostAvatar: room.hostAvatar,
     });
@@ -303,7 +309,7 @@ export const RoomStore = {
       senderId: "system",
       senderName: "系统",
       senderAvatar: "⚙️",
-      text: `房主更新了房间设置（${room.isPublic ? "🌐 公开放映" : "🔒 私密放映"} · ${room.controlMode === "host" ? "👑 仅房主可控" : "⚡ 全员自由控制"}）`,
+      text: `房主更新了房间设置（${room.isPublic ? "🌐 公开放映" : "🔒 私密放映"} · ${room.controlMode === "host" ? "👑 仅房主控进度" : "⚡ 全员自由控进度"} · ${room.switchMode === "host" ? "👑 仅房主可换集换源" : "⚡ 全员自由换集换源"}）`,
       time: "刚刚",
       isSystem: true,
     };
@@ -546,7 +552,13 @@ export const RoomStore = {
     const room = rooms.get(roomId);
     if (!room) return false;
 
-    if (room.controlMode === "host" && room.hostId !== action.sender.id && action.type !== "heartbeat") {
+    // Progress permission check
+    if (room.controlMode === "host" && room.hostId !== action.sender.id && (action.type === "play" || action.type === "pause" || action.type === "seek")) {
+      return false;
+    }
+
+    // Switch permission check
+    if (room.switchMode === "host" && room.hostId !== action.sender.id && (action.type === "source" || action.type === "episode")) {
       return false;
     }
 

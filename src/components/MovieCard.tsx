@@ -1,20 +1,18 @@
 import React from "react";
 import Link from "next/link";
-import { Play, Star } from "lucide-react";
+import { Play, Star, Users } from "lucide-react";
 import { VodItem } from "@/lib/types";
 
 interface MovieCardProps {
   item: VodItem;
+  onCreateRoom?: (item: VodItem) => void;
 }
 
-export function MovieCard({ item }: MovieCardProps) {
+export function MovieCard({ item, onCreateRoom }: MovieCardProps) {
   return (
-    <Link
-      href={`/play/${item.id}`}
-      className="group relative flex flex-col rounded-xl overflow-hidden bg-dark-850 border border-white/5 hover:border-gold-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-gold-500/10 hover:-translate-y-1"
-    >
+    <div className="group relative flex flex-col rounded-xl overflow-hidden bg-dark-850 border border-white/5 hover:border-gold-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-gold-500/10 hover:-translate-y-1">
       {/* Poster Image Container */}
-      <div className="relative aspect-[2/3] w-full overflow-hidden bg-dark-800">
+      <Link href={`/play/${item.id}`} className="relative aspect-[2/3] w-full overflow-hidden bg-dark-800 block">
         <img
           src={item.pic}
           alt={item.name}
@@ -43,19 +41,34 @@ export function MovieCard({ item }: MovieCardProps) {
             <Play className="w-6 h-6 fill-dark-950 ml-0.5" />
           </div>
         </div>
-      </div>
+      </Link>
 
       {/* Info Container */}
-      <div className="p-3 flex flex-col justify-between flex-1">
-        <div>
+      <div className="p-3 flex flex-col justify-between flex-1 space-y-2">
+        <Link href={`/play/${item.id}`} className="block">
           <h3 className="text-sm font-bold text-white group-hover:text-gold-400 transition-colors line-clamp-1">
             {item.name}
           </h3>
           <p className="text-xs text-gray-400 mt-1 line-clamp-1">
             {item.actor || `${item.year} · ${item.type_name}`}
           </p>
-        </div>
+        </Link>
+
+        {onCreateRoom && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onCreateRoom(item);
+            }}
+            className="w-full py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500 text-cyan-400 hover:text-dark-950 text-xs font-bold transition flex items-center justify-center gap-1 border border-cyan-500/20 shadow-sm"
+          >
+            <Users className="w-3.5 h-3.5" />
+            👥 发起一起看
+          </button>
+        )}
       </div>
-    </Link>
+    </div>
   );
 }
