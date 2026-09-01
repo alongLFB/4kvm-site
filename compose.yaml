@@ -5,7 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: 4kvm-app
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - "127.0.0.1:3028:3028"  # 仅限宿主机本地（Nginx）访问
     environment:
       - NODE_ENV=production
       - PORT=3028
