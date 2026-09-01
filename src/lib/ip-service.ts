@@ -47,6 +47,47 @@ const COUNTRY_MAP: Record<string, string> = {
   KW: "科威特",
   OM: "阿曼",
   BH: "巴林",
+
+  // English & Alias Country Mappings
+  "United Arab Emirates": "阿联酋",
+  "阿拉伯联合酋长国": "阿联酋",
+  "United States": "美国",
+  "United States of America": "美国",
+  "USA": "美国",
+  "China": "中国",
+  "People's Republic of China": "中国",
+  "中华人民共和国": "中国",
+  "South Korea": "韩国",
+  "Republic of Korea": "韩国",
+  "Korea": "韩国",
+  "Japan": "日本",
+  "United Kingdom": "英国",
+  "Great Britain": "英国",
+  "UK": "英国",
+  "Germany": "德国",
+  "Deutschland": "德国",
+  "France": "法国",
+  "Canada": "加拿大",
+  "Australia": "澳大利亚",
+  "Singapore": "新加坡",
+  "Hong Kong": "中国香港",
+  "Macau": "中国澳门",
+  "Macao": "中国澳门",
+  "Taiwan": "中国台湾",
+  "Oman": "阿曼",
+  "Saudi Arabia": "沙特阿拉伯",
+  "Russia": "俄罗斯",
+  "Russian Federation": "俄罗斯",
+  "Netherlands": "荷兰",
+  "Italy": "意大利",
+  "Spain": "西班牙",
+  "Brazil": "巴西",
+  "India": "印度",
+  "Thailand": "泰国",
+  "Malaysia": "马来西亚",
+  "Vietnam": "越南",
+  "Indonesia": "印度尼西亚",
+  "Philippines": "菲律宾",
 };
 
 const PROVINCE_MAP: Record<string, string> = {
@@ -89,7 +130,7 @@ const PROVINCE_MAP: Record<string, string> = {
   "Macao": "澳门",
   "Taiwan": "台湾",
 
-  // UAE Emirates
+  // UAE Emirates & ISO-3166-2 Codes
   "Dubai": "迪拜",
   "Abu Dhabi": "阿布扎比",
   "Sharjah": "沙迦",
@@ -97,29 +138,66 @@ const PROVINCE_MAP: Record<string, string> = {
   "Ras Al Khaimah": "拉斯海马",
   "Fujairah": "富查伊拉",
   "Umm Al Quwain": "乌姆盖万",
+  "AZ": "阿布扎比",
+  "DU": "迪拜",
+  "SH": "沙迦",
+  "AJ": "阿治曼",
+  "RK": "拉斯海马",
+  "FU": "富查伊拉",
+  "UQ": "乌姆盖万",
+  "阿布達比": "阿布扎比",
+  "阿布達比酋長國": "阿布扎比",
+  "杜拜": "迪拜",
+  "沙迦酋長國": "沙迦",
 
-  // US States
+  // US States & ISO Codes
   "California": "加利福尼亚",
-  "New York": "纽约州",
+  "CA": "加利福尼亚",
+  "New York": "纽约",
+  "NY": "纽约",
   "Texas": "德克萨斯",
-  "Washington": "华盛顿州",
+  "TX": "德克萨斯",
+  "Washington": "华盛顿",
+  "WA": "华盛顿",
   "Illinois": "伊利诺伊",
+  "IL": "伊利诺伊",
   "Florida": "佛罗里达",
+  "FL": "佛罗里达",
   "Virginia": "弗吉尼亚",
+  "VA": "弗吉尼亚",
   "Massachusetts": "马萨诸塞",
+  "MA": "马萨诸塞",
   "New Jersey": "新泽西",
+  "NJ": "新泽西",
+  "Ohio": "俄亥俄",
+  "OH": "俄亥俄",
+  "Georgia": "佐治亚",
+  "GA": "佐治亚",
+  "North Carolina": "北卡罗来纳",
+  "NC": "北卡罗来纳",
+  "Michigan": "密歇根",
+  "MI": "密歇根",
+  "Colorado": "科罗拉多",
+  "CO": "科罗拉多",
+  "Arizona": "亚利桑那",
+  "Oregon": "俄勒冈",
+  "OR": "俄勒冈",
 
   // Japan & Others
   "Tokyo": "东京",
+  "東京都": "东京",
   "Osaka": "大阪",
+  "大阪府": "大阪",
   "Kanagawa": "神奈川",
   "Aichi": "爱知",
   "Kyoto": "京都",
+  "京都府": "京都",
   "Seoul": "首尔",
+  "首爾": "首尔",
   "Gyeonggi-do": "京畿道",
   "Busan": "釜山",
   "Singapore": "新加坡",
-  "London": "大伦敦",
+  "London": "伦敦",
   "England": "英格兰",
   "Ontario": "安大略",
   "British Columbia": "不列颠哥伦比亚",
@@ -127,15 +205,21 @@ const PROVINCE_MAP: Record<string, string> = {
   "Victoria": "维多利亚",
   "Bavaria": "巴伐利亚",
   "Hesse": "黑森",
+  "馬斯喀特": "马斯喀特",
 };
 
 const CITY_MAP: Record<string, string> = {
-  // UAE Cities
+  // UAE & Middle East Cities
   "Dubai": "迪拜",
   "Abu Dhabi": "阿布扎比",
   "Sharjah": "沙迦",
   "Ajman": "阿治曼",
   "Al Ain": "艾因",
+  "阿布達比": "阿布扎比",
+  "杜拜": "迪拜",
+  "沙迦": "沙迦",
+  "馬斯喀特": "马斯喀特",
+  "Muscat": "马斯喀特",
 
   // China Major Cities
   "Beijing": "北京",
@@ -371,6 +455,10 @@ function safeDecode(val: string): string {
   }
 }
 
+export function clearIpCache() {
+  ipCache.clear();
+}
+
 export function formatTwoTierLocation(country: string, region: string, city: string): string {
   country = (country || "中国")
     .replace("阿拉伯联合酋长国", "阿联酋")
@@ -383,11 +471,15 @@ export function formatTwoTierLocation(country: string, region: string, city: str
   let cleanCountry = COUNTRY_MAP[country] || country;
 
   let cleanRegion = region ? safeDecode(region) : "";
-  cleanRegion = cleanRegion.replace(/省|自治区|特别行政区|酋長國|酋长国|State of|Province of/g, "").trim();
+  cleanRegion = cleanRegion
+    .replace(/省|自治区|特别行政区|酋長國|酋长国|State of|Province of|Prefecture|市/g, "")
+    .trim();
   cleanRegion = PROVINCE_MAP[cleanRegion] || CITY_MAP[cleanRegion] || cleanRegion;
 
   let cleanCity = city ? safeDecode(city) : "";
-  cleanCity = cleanCity.replace(/市|自治州|地区|特别行政区/g, "").trim();
+  cleanCity = cleanCity
+    .replace(/市|自治州|地区|特别行政区|City/gi, "")
+    .trim();
   cleanCity = CITY_MAP[cleanCity] || cleanCity;
 
   let secondTier = "";
@@ -402,6 +494,14 @@ export function formatTwoTierLocation(country: string, region: string, city: str
     secondTier = cleanCity;
   } else if (cleanRegion) {
     secondTier = cleanRegion;
+  }
+
+  // Deduplicate repeated tokens (e.g. "马斯喀特 马斯喀特" -> "马斯喀特")
+  if (secondTier) {
+    const parts = secondTier.split(/\s+/);
+    if (parts.length === 2 && (parts[0] === parts[1] || parts[0].includes(parts[1]) || parts[1].includes(parts[0]))) {
+      secondTier = parts[0].length >= parts[1].length ? parts[0] : parts[1];
+    }
   }
 
   if (!secondTier || secondTier === cleanCountry) {
@@ -421,7 +521,9 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
     return ipCache.get(ip)!;
   }
 
-  // 1. Check Cloudflare Edge Headers (Zero Latency & 100% Reliable behind Cloudflare)
+  let cfFallback = "";
+
+  // 1. Check Cloudflare Edge Headers (Zero Latency if city or specific region is known)
   if (headers) {
     const countryCode = (headers.get("cf-ipcountry") || "").toUpperCase();
     const cfRegion = headers.get("cf-region") || headers.get("cf-region-code") || "";
@@ -429,9 +531,17 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
 
     if (countryCode && countryCode !== "XX" && countryCode !== "T1") {
       const countryName = COUNTRY_MAP[countryCode] || countryCode;
-      const loc = formatTwoTierLocation(countryName, cfRegion, cfCity);
-      ipCache.set(ip, loc);
-      return loc;
+      
+      // If Cloudflare provided city or region, format and use immediately if non-empty second tier
+      if (cfCity || cfRegion) {
+        const loc = formatTwoTierLocation(countryName, cfRegion, cfCity);
+        if (!loc.endsWith("· 本地") && !loc.endsWith("· 核心节点")) {
+          ipCache.set(ip, loc);
+          return loc;
+        }
+      }
+
+      cfFallback = countryName === "中国" ? "中国 · 核心节点" : `${countryName} · 本地`;
     }
   }
 
@@ -508,6 +618,11 @@ export async function resolveIpLocation(ip: string, headers?: Headers): Promise<
       return loc;
     }
   } catch (e) {}
+
+  if (cfFallback) {
+    ipCache.set(ip, cfFallback);
+    return cfFallback;
+  }
 
   return "中国 · 综合节点";
 }
