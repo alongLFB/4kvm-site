@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { X, Settings, Globe, Lock, Crown, Zap, KeyRound, Check, Loader2, Radio } from "lucide-react";
 import { WatchRoom } from "@/lib/room-store";
 
