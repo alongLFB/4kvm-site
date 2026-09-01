@@ -40,15 +40,15 @@ function SearchContent() {
   }, [q]);
 
   return (
-    <div className="space-y-8">
-      <div className="p-6 rounded-2xl bg-dark-900 border border-white/10 flex items-center gap-3">
-        <Search className="w-6 h-6 text-gold-400" />
-        <div>
-          <h1 className="text-lg font-bold text-white">
+    <div className="space-y-6 sm:space-y-8">
+      <div className="p-4 sm:p-6 rounded-2xl bg-dark-900 border border-white/10 flex items-center gap-3">
+        <Search className="w-5 h-5 sm:w-6 sm:h-6 text-gold-400 shrink-0" />
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-lg font-bold text-white truncate">
             搜索关键字：<span className="text-gold-400">“{q}”</span>
           </h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            实时检索 非凡 / 量子 片库，共找到 {results.length} 部匹配作品
+            实时检索片库，共找到 {results.length} 部匹配作品
           </p>
         </div>
       </div>
@@ -56,10 +56,10 @@ function SearchContent() {
       {loading ? (
         <div className="py-32 flex flex-col items-center justify-center gap-3 text-gray-400">
           <Loader2 className="w-8 h-8 text-gold-500 animate-spin" />
-          <span className="text-sm">正在从上游采集源检索 “{q}”...</span>
+          <span className="text-sm">正在检索 “{q}”...</span>
         </div>
       ) : results.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-6">
           {results.map((item) => (
             <MovieCard key={item.id} item={item} />
           ))}

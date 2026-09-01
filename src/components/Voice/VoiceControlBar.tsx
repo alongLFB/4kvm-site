@@ -113,26 +113,26 @@ export function VoiceControlBar({
       </div>
 
       {/* Right: Action Buttons */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
         {/* 1. Mic Button */}
         <button
           type="button"
           onClick={onToggleMic}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border shadow-md ${
+          className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1 sm:gap-1.5 border shadow-md active:scale-95 ${
             !isMuted
               ? "bg-emerald-500 hover:bg-emerald-400 text-dark-950 border-emerald-400 shadow-emerald-500/20"
               : "bg-dark-800 hover:bg-dark-700 text-gray-300 border-white/10 hover:text-white"
           }`}
         >
           {!isMuted ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5 text-rose-400" />}
-          <span>{!isMuted ? "已开麦" : "点击开麦"}</span>
+          <span>{!isMuted ? "已开麦" : "开麦"}</span>
         </button>
 
         {/* 2. Deafen / Speaker Button */}
         <button
           type="button"
           onClick={onToggleDeafen}
-          className={`p-2 rounded-xl text-xs font-bold transition border ${
+          className={`p-1.5 sm:p-2 rounded-xl text-xs font-bold transition border active:scale-95 ${
             !isDeafened
               ? "bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border-cyan-500/30"
               : "bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/30"
@@ -147,14 +147,15 @@ export function VoiceControlBar({
           <button
             type="button"
             onClick={onToggleMuteAll}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1 border ${
+            className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1 border active:scale-95 ${
               isMutedAll
                 ? "bg-amber-500 hover:bg-amber-400 text-dark-950 border-amber-400 shadow-amber-500/20"
                 : "bg-dark-800 hover:bg-dark-700 text-amber-400 border-amber-500/30"
             }`}
           >
             <ShieldAlert className="w-3.5 h-3.5" />
-            <span>{isMutedAll ? "解除全员禁言" : "全员静音"}</span>
+            <span className="hidden sm:inline">{isMutedAll ? "解除全员禁言" : "全员静音"}</span>
+            <span className="sm:hidden">{isMutedAll ? "解禁" : "禁言"}</span>
           </button>
         )}
       </div>
