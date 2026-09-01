@@ -35,12 +35,12 @@ export function VoiceControlBar({
   onToggleMuteAll,
 }: VoiceControlBarProps) {
   return (
-    <div className="p-3 sm:p-3.5 rounded-2xl bg-dark-900/90 border border-white/10 flex flex-wrap items-center justify-between gap-3 shadow-xl backdrop-blur-md">
+    <div className="p-3 sm:p-3.5 rounded-2xl bg-dark-900/90 border border-white/10 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 shadow-xl backdrop-blur-md">
       {/* Left: Status, Active Speakers & Audio Level */}
-      <div className="flex items-center gap-3">
-        <div className="relative">
+      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+        <div className="relative shrink-0">
           <div
-            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+            className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center transition-all ${
               !isMuted
                 ? isSpeaking
                   ? "bg-emerald-500 text-dark-950 shadow-lg shadow-emerald-500/40 ring-4 ring-emerald-500/30 scale-105"
@@ -48,33 +48,34 @@ export function VoiceControlBar({
                 : "bg-dark-800 text-gray-400 border border-white/5"
             }`}
           >
-            {!isMuted ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4 text-rose-400" />}
+            {!isMuted ? <Mic className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <MicOff className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400" />}
           </div>
           {isSpeaking && (
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
           )}
         </div>
 
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-white">语音连麦室</span>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            <span className="text-xs font-bold text-white shrink-0">语音连麦室</span>
 
             {/* Dynamic Active Speakers display */}
             {activeSpeakers.length > 0 ? (
-              <div className="px-2 py-0.5 text-[10px] font-bold text-emerald-300 bg-emerald-500/15 border border-emerald-500/40 rounded-full flex items-center gap-1.5 animate-pulse shadow-sm shadow-emerald-500/10">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                <span className="truncate max-w-[180px]">
-                  {activeSpeakers.map((s) => s.name).join("、")} 正在讲话
+              <div className="px-2 py-0.5 text-[10px] font-bold text-emerald-300 bg-emerald-500/15 border border-emerald-500/40 rounded-full flex items-center gap-1.5 animate-pulse shadow-sm shadow-emerald-500/10 max-w-[180px] sm:max-w-none">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                <span className="truncate max-w-[90px] sm:max-w-[180px]">
+                  {activeSpeakers.map((s) => s.name).join("、")}
                 </span>
+                <span className="shrink-0">讲话中</span>
                 {/* 4-bar equalizer */}
-                <div className="flex items-end gap-0.5 h-2.5">
+                <div className="flex items-end gap-0.5 h-2.5 shrink-0">
                   <span className="w-0.5 bg-emerald-400 animate-[bounce_0.6s_infinite_100ms] h-full" />
                   <span className="w-0.5 bg-emerald-400 animate-[bounce_0.6s_infinite_250ms] h-2/3" />
                   <span className="w-0.5 bg-emerald-400 animate-[bounce_0.6s_infinite_400ms] h-full" />
                 </div>
               </div>
             ) : !isMuted ? (
-              <span className="px-1.5 py-0.2 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded">
+              <span className="px-1.5 py-0.2 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded truncate">
                 🎙️ 开麦就绪 · 全屋静默
               </span>
             ) : (
@@ -95,7 +96,7 @@ export function VoiceControlBar({
             {!isMuted ? (
               <div className="flex items-center gap-1 text-[10px] text-gray-400">
                 <span>麦克风音量:</span>
-                <div className="w-16 h-1.5 bg-dark-800 rounded-full overflow-hidden border border-white/10">
+                <div className="w-14 sm:w-16 h-1.5 bg-dark-800 rounded-full overflow-hidden border border-white/10">
                   <div
                     className="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all duration-75"
                     style={{ width: `${Math.min(100, Math.max(localLevel, isSpeaking ? 30 : 0))}%` }}
@@ -103,8 +104,8 @@ export function VoiceControlBar({
                 </div>
               </div>
             ) : (
-              <p className="text-[10px] text-gray-400">
-                硬件级降噪 & 回声消除，观众列表中可独立调节各成员音量
+              <p className="text-[10px] text-gray-400 line-clamp-1">
+                硬件级降噪 & 回声消除，观众列表中可调节音量
               </p>
             )}
           </div>

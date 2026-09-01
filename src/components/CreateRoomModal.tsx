@@ -146,7 +146,7 @@ export function CreateRoomModal({
                   type="text"
                   value={tempName}
                   onChange={(e) => setTempName(e.target.value)}
-                  className="flex-1 bg-dark-800 text-xs text-white px-3 py-1.5 rounded-xl border border-cyan-500 focus:outline-none"
+                  className="flex-1 bg-dark-800 text-base sm:text-xs text-white px-3 py-1.5 rounded-xl border border-cyan-500 focus:outline-none"
                   placeholder="输入您的新昵称..."
                 />
                 <button
@@ -184,7 +184,7 @@ export function CreateRoomModal({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-dark-800 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"
+              className="w-full bg-dark-800 border border-white/10 rounded-xl px-4 py-2.5 text-base sm:text-sm text-white focus:outline-none focus:border-cyan-500"
             />
           </div>
 
@@ -200,7 +200,7 @@ export function CreateRoomModal({
                     setSourceIndex(newSrc);
                     setEpisodeIndex(0);
                   }}
-                  className="w-full bg-dark-800 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full bg-dark-800 border border-white/10 rounded-xl px-3 py-2 text-base sm:text-xs text-white focus:outline-none focus:border-cyan-500"
                 >
                   {vodItem.sources.map((src, idx) => (
                     <option key={idx} value={idx}>
@@ -217,7 +217,7 @@ export function CreateRoomModal({
                 <select
                   value={episodeIndex}
                   onChange={(e) => setEpisodeIndex(Number(e.target.value))}
-                  className="w-full bg-dark-800 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full bg-dark-800 border border-white/10 rounded-xl px-3 py-2 text-base sm:text-xs text-white focus:outline-none focus:border-cyan-500"
                 >
                   {episodes.map((ep, idx) => (
                     <option key={idx} value={idx}>
@@ -279,7 +279,7 @@ export function CreateRoomModal({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="例如: 8888 或 专属口令"
-                  className="flex-1 bg-dark-800 border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                  className="flex-1 bg-dark-800 border border-white/10 rounded-xl px-4 py-2 text-base sm:text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
                 />
                 <button
                   type="button"

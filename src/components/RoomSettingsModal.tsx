@@ -69,7 +69,7 @@ export function RoomSettingsModal({ room, isOpen, onClose, onSaved }: RoomSettin
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-dark-800 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"
+              className="w-full bg-dark-800 border border-white/10 rounded-xl px-4 py-2.5 text-base sm:text-sm text-white focus:outline-none focus:border-cyan-500"
             />
           </div>
 
@@ -122,7 +122,7 @@ export function RoomSettingsModal({ room, isOpen, onClose, onSaved }: RoomSettin
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="设置 4-8 位口令"
-                className="w-full bg-dark-800 border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                className="w-full bg-dark-800 border border-white/10 rounded-xl px-4 py-2 text-base sm:text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
               />
             </div>
           )}

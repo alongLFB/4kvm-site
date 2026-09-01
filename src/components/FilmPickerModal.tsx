@@ -146,8 +146,8 @@ export function FilmPickerModal({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="搜索片名、演员、导演、关键词（例如：早春晴朗、繁花、辛芷蕾）..."
-              className="w-full bg-dark-800 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition"
+              placeholder="搜索片名、演员、导演..."
+              className="w-full bg-dark-800 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-base sm:text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition"
             />
             {searchQuery && (
               <button
@@ -162,14 +162,15 @@ export function FilmPickerModal({
           <button
             type="button"
             onClick={() => setExpandFilters(!expandFilters)}
-            className={`px-3.5 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 shrink-0 transition ${
+            className={`px-3 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 shrink-0 transition active:scale-95 ${
               expandFilters || activeFilterCount > 0
                 ? "bg-cyan-500/15 text-cyan-400 border-cyan-500/30"
                 : "bg-dark-800 hover:bg-dark-700 border-white/10 text-gray-300"
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span>全部 6 维筛选</span>
+            <span className="hidden sm:inline">全部 6 维筛选</span>
+            <span className="sm:hidden">筛选</span>
             {expandFilters ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
 

@@ -1109,7 +1109,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
                       placeholder="说点什么，全员实时同步..."
-                      className="flex-1 bg-dark-800 text-xs text-white placeholder-gray-500 px-3.5 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-cyan-500"
+                      className="flex-1 bg-dark-800 text-base sm:text-xs text-white placeholder-gray-500 px-3.5 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-cyan-500"
                     />
                     <button
                       type="submit"

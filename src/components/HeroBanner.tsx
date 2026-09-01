@@ -23,7 +23,7 @@ export function HeroBanner({ featured }: HeroBannerProps) {
   const current = featured[currentIndex];
 
   return (
-    <div className="relative w-full h-[420px] sm:h-[500px] lg:h-[560px] overflow-hidden rounded-3xl mb-12 shadow-2xl border border-white/10">
+    <div className="relative w-full h-[380px] sm:h-[480px] lg:h-[540px] overflow-hidden rounded-2xl sm:rounded-3xl mb-8 sm:mb-12 shadow-2xl border border-white/10">
       {/* Background Image with Gradient Overlays */}
       <div className="absolute inset-0">
         <img
@@ -31,63 +31,63 @@ export function HeroBanner({ featured }: HeroBannerProps) {
           alt={current.name}
           className="w-full h-full object-cover object-center transform scale-105 transition-all duration-1000 ease-out"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-dark-950 via-dark-950/60 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-dark-950 via-dark-950/70 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-dark-950 via-dark-950/70 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-dark-950 via-dark-950/80 to-transparent" />
       </div>
 
       {/* Content */}
-      <div className="absolute bottom-0 left-0 max-w-3xl p-6 sm:p-10 lg:p-14 z-10">
+      <div className="absolute bottom-0 left-0 right-0 max-w-3xl p-4 sm:p-10 lg:p-14 z-10">
         {/* Tags */}
-        <div className="flex items-center gap-2 mb-3">
-          <span className="px-2.5 py-1 rounded-md bg-gold-500/20 text-gold-400 text-xs font-bold border border-gold-500/30 flex items-center gap-1">
-            <Star className="w-3.5 h-3.5 fill-gold-400 text-gold-400" />
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+          <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md bg-gold-500/20 text-gold-400 text-[10px] sm:text-xs font-bold border border-gold-500/30 flex items-center gap-1">
+            <Star className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-gold-400 text-gold-400" />
             {current.rating} 高分热推
           </span>
-          <span className="px-2.5 py-1 rounded-md bg-white/10 backdrop-blur-md text-gray-200 text-xs font-medium">
+          <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md bg-white/10 backdrop-blur-md text-gray-200 text-[10px] sm:text-xs font-medium">
             {current.year} · {current.type_name}
           </span>
-          <span className="px-2.5 py-1 rounded-md bg-white/10 backdrop-blur-md text-gray-200 text-xs font-medium">
+          <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md bg-white/10 backdrop-blur-md text-gray-200 text-[10px] sm:text-xs font-medium truncate max-w-[120px] sm:max-w-none">
             {current.remarks}
           </span>
         </div>
 
         {/* Title */}
-        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight mb-3">
+        <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight mb-2 sm:mb-3 line-clamp-1 sm:line-clamp-2">
           {current.name}
         </h1>
 
         {/* Description */}
-        <p className="text-sm sm:text-base text-gray-300 line-clamp-2 sm:line-clamp-3 mb-6 max-w-2xl leading-relaxed">
+        <p className="text-xs sm:text-sm text-gray-300 line-clamp-2 mb-4 sm:mb-6 max-w-2xl leading-relaxed">
           {current.content}
         </p>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2.5 sm:gap-4">
           <Link
             href={`/play/${current.id}`}
-            className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-gold-500 to-gold-400 hover:from-gold-400 hover:to-gold-300 text-dark-950 font-black text-sm sm:text-base flex items-center gap-2 shadow-lg shadow-gold-500/25 transition transform hover:scale-105 active:scale-95"
+            className="px-4 py-2.5 sm:px-6 sm:py-3.5 rounded-xl bg-gradient-to-r from-gold-500 to-gold-400 hover:from-gold-400 hover:to-gold-300 active:scale-95 text-dark-950 font-black text-xs sm:text-base flex items-center gap-1.5 sm:gap-2 shadow-lg shadow-gold-500/25 transition transform"
           >
-            <Play className="w-5 h-5 fill-dark-950" />
+            <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-dark-950" />
             立即播放
           </Link>
           <Link
             href={`/play/${current.id}`}
-            className="px-6 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-md text-white font-semibold text-sm sm:text-base flex items-center gap-2 border border-white/10 transition"
+            className="px-4 py-2.5 sm:px-6 sm:py-3.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 backdrop-blur-md text-white font-semibold text-xs sm:text-base flex items-center gap-1.5 sm:gap-2 border border-white/10 transition"
           >
-            <Info className="w-5 h-5 text-gray-300" />
+            <Info className="w-4 h-4 sm:w-5 sm:h-5 text-gray-300" />
             详情介绍
           </Link>
         </div>
       </div>
 
       {/* Slide switcher dots */}
-      <div className="absolute bottom-6 right-6 z-10 flex items-center gap-2">
+      <div className="absolute top-4 right-4 sm:top-auto sm:bottom-6 sm:right-6 z-10 flex items-center gap-1.5 sm:gap-2">
         {featured.map((_, idx) => (
           <button
             key={idx}
             onClick={() => setCurrentIndex(idx)}
-            className={`h-2 rounded-full transition-all duration-300 ${
-              idx === currentIndex ? "w-8 bg-gold-400" : "w-2 bg-white/30 hover:bg-white/60"
+            className={`h-1.5 sm:h-2 rounded-full transition-all duration-300 ${
+              idx === currentIndex ? "w-6 sm:w-8 bg-gold-400" : "w-1.5 sm:w-2 bg-white/30 hover:bg-white/60"
             }`}
           />
         ))}

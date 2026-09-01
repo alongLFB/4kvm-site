@@ -167,23 +167,23 @@ export function Navbar() {
 
         {/* Mobile Dropdown Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-white/10 bg-dark-900 px-4 pt-3 pb-6 space-y-3">
+          <div className="md:hidden border-t border-white/10 bg-dark-900/98 backdrop-blur-xl px-4 pt-3 pb-6 space-y-3 animate-in fade-in slide-in-from-top-2">
             <form onSubmit={handleSearch} className="relative">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="输入片名搜索..."
-                className="w-full bg-dark-800 text-sm text-white placeholder-gray-400 px-4 py-2.5 pl-9 rounded-xl border border-white/10 focus:outline-none focus:border-cyan-500"
+                placeholder="搜索片名、演员或导演..."
+                className="w-full bg-dark-800 text-base sm:text-sm text-white placeholder-gray-400 px-4 py-2.5 pl-9 rounded-xl border border-white/10 focus:outline-none focus:border-cyan-500"
               />
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3.5" />
             </form>
 
             <div className="grid grid-cols-2 gap-2 pt-2">
               <Link
                 href="/"
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-3 bg-dark-800 rounded-xl text-sm font-medium text-white flex items-center gap-2"
+                className="p-3 bg-dark-800 active:bg-dark-700 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition"
               >
                 <Home className="w-4 h-4 text-cyan-400" />
                 首页
@@ -191,7 +191,7 @@ export function Navbar() {
               <Link
                 href="/hall"
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-3 bg-cyan-500/15 border border-cyan-500/40 rounded-xl text-sm font-bold text-cyan-400 flex items-center gap-2"
+                className="p-3 bg-cyan-500/15 border border-cyan-500/40 active:bg-cyan-500/25 rounded-xl text-sm font-bold text-cyan-400 flex items-center gap-2 transition"
               >
                 <Users className="w-4 h-4 text-cyan-400" />
                 🎪 放映广场 (一起看)
@@ -199,7 +199,7 @@ export function Navbar() {
               <Link
                 href="/category"
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-3 bg-dark-800 rounded-xl text-sm font-medium text-white flex items-center gap-2"
+                className="p-3 bg-dark-800 active:bg-dark-700 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition"
               >
                 <SlidersHorizontal className="w-4 h-4 text-cyan-400" />
                 全部片库 (多维筛选)
@@ -207,7 +207,7 @@ export function Navbar() {
               <Link
                 href="/category?type=电影"
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-3 bg-dark-800 rounded-xl text-sm font-medium text-white flex items-center gap-2"
+                className="p-3 bg-dark-800 active:bg-dark-700 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition"
               >
                 <Film className="w-4 h-4 text-blue-400" />
                 电影
@@ -215,7 +215,7 @@ export function Navbar() {
               <Link
                 href="/category?type=电视剧"
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-3 bg-dark-800 rounded-xl text-sm font-medium text-white flex items-center gap-2"
+                className="p-3 bg-dark-800 active:bg-dark-700 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition"
               >
                 <Tv className="w-4 h-4 text-emerald-400" />
                 电视剧
@@ -223,7 +223,7 @@ export function Navbar() {
               <Link
                 href="/category?type=动漫"
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-3 bg-dark-800 rounded-xl text-sm font-medium text-white flex items-center gap-2"
+                className="p-3 bg-dark-800 active:bg-dark-700 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition"
               >
                 <Sparkles className="w-4 h-4 text-purple-400" />
                 动漫
@@ -234,11 +234,11 @@ export function Navbar() {
       </nav>
 
       {/* Mobile Sticky Bottom Tab Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-dark-950/95 backdrop-blur-xl border-t border-white/10 px-4 py-2 flex items-center justify-around shadow-2xl">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-dark-950/95 backdrop-blur-xl border-t border-white/10 px-2 py-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex items-center justify-around shadow-2xl">
         <Link
           href="/"
-          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg transition ${
-            isHome ? "text-cyan-400 font-bold" : "text-gray-400 hover:text-white"
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition active:scale-95 ${
+            isHome ? "text-cyan-400 font-bold bg-cyan-500/10" : "text-gray-400 hover:text-white"
           }`}
         >
           <Home className="w-5 h-5" />
@@ -246,16 +246,16 @@ export function Navbar() {
         </Link>
         <Link
           href="/category?type=电影"
-          className="flex flex-col items-center gap-1 py-1 px-2 text-gray-400 hover:text-white rounded-lg transition"
+          className="flex flex-col items-center gap-0.5 py-1 px-3 text-gray-400 hover:text-white rounded-xl transition active:scale-95"
         >
           <Film className="w-5 h-5" />
           <span className="text-[10px]">电影</span>
         </Link>
         <Link
           href="/category"
-          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition active:scale-95 ${
             isCategory
-              ? "text-cyan-400 font-bold bg-cyan-500/10 border border-cyan-500/30"
+              ? "text-cyan-400 font-bold bg-cyan-500/15 border border-cyan-500/30"
               : "text-gray-300 hover:text-cyan-400"
           }`}
         >
@@ -264,7 +264,7 @@ export function Navbar() {
         </Link>
         <Link
           href="/hall"
-          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition active:scale-95 ${
             isHall
               ? "text-cyan-400 font-bold bg-cyan-500/15 border border-cyan-500/40"
               : "text-gray-400 hover:text-white"
@@ -275,8 +275,8 @@ export function Navbar() {
         </Link>
         <Link
           href="/history"
-          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg transition ${
-            isHistory ? "text-cyan-400 font-bold" : "text-gray-400 hover:text-white"
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition active:scale-95 ${
+            isHistory ? "text-cyan-400 font-bold bg-cyan-500/10" : "text-gray-400 hover:text-white"
           }`}
         >
           <History className="w-5 h-5" />
