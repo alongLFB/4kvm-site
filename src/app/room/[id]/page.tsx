@@ -812,15 +812,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             <span className="sm:hidden">换片</span>
           </button>
 
-          {/* Web Fullscreen Sync Toggle */}
-          <button
-            onClick={toggleWebFullscreen}
-            className="p-1.5 sm:p-2 rounded-xl bg-dark-800 hover:bg-dark-700 active:scale-95 text-gray-300 hover:text-white transition border border-white/10"
-            title={isWebFullscreen ? "退出网页全屏" : "同步网页全屏剧场模式"}
-          >
-            {isWebFullscreen ? <Minimize2 className="w-4 h-4 text-cyan-400" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
-
           {/* Host Settings button */}
           {isHost && (
             <button

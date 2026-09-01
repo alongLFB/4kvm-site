@@ -39,12 +39,18 @@ export function CreateRoomModal({
 
   useEffect(() => {
     if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
       const user = getGuestUser();
       setCurrentUser(user);
       setTempName(user.name);
       setTitle(`${vodItem.name} 共赏房`);
       setSourceIndex(initialSourceIndex);
       setEpisodeIndex(initialEpisodeIndex);
+
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
     }
   }, [isOpen, vodItem, initialSourceIndex, initialEpisodeIndex]);
 

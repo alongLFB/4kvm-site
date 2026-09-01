@@ -36,7 +36,7 @@ export default function VideoPlayer({
       volume: 0.8,
       autoplay: true,
       pip: false,
-      autoSize: true,
+      autoSize: false,
       autoMini: false,
       screenshot: true,
       setting: true,

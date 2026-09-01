@@ -41,6 +41,18 @@ export function rowToVodItem(row: any): VodItem {
     sources = [];
   }
 
+  // Strip any raw HTML tags (e.g. <p>, </p>, <br>) and unescape entities from upstream data
+  const rawContent = String(row.content || "");
+  const cleanContent = rawContent
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#39;/g, "'")
+    .trim();
+
   return {
     id: String(row.id || ""),
     name: String(row.name || ""),
@@ -58,7 +70,7 @@ export function rowToVodItem(row: any): VodItem {
     rating: Number(row.rating || 0),
     hits: Number(row.hits || 0),
     tags,
-    content: String(row.content || ""),
+    content: cleanContent,
     sources,
   };
 }

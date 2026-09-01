@@ -76,7 +76,7 @@ export default function RoomVideoPlayer({
       volume: 0.8,
       autoplay: initialIsPlaying,
       pip: false,
-      autoSize: true,
+      autoSize: false,
       autoMini: false,
       screenshot: true,
       setting: true,

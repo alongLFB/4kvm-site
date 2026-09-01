@@ -193,7 +193,7 @@ export default function PlayPage() {
 
             <div className="text-sm text-gray-300 leading-relaxed bg-dark-850 p-4 rounded-xl border border-white/5">
               <p className="text-xs font-bold text-gray-400 mb-1">剧情简介：</p>
-              {item.content}
+              {item.content ? item.content.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim() : "暂无剧情简介"}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-400 pt-2">
