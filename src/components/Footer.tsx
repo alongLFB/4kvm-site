@@ -4,8 +4,8 @@ import { ShieldCheck, Video, Heart } from "lucide-react";
 
 export function Footer() {
   return (
-    <footer className="border-t border-white/10 bg-dark-950 mt-20 text-gray-400 text-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <footer className="border-t border-white/10 bg-dark-950 mt-6 sm:mt-12 text-gray-400 text-sm pb-24 md:pb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gold-500 flex items-center justify-center text-dark-950 font-bold">

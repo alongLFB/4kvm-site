@@ -46,7 +46,7 @@ export default function RootLayout({
       <body className="bg-dark-950 text-gray-100 min-h-screen flex flex-col antialiased selection:bg-cyan-500/30 selection:text-cyan-300">
         <PwaRegister />
         <Navbar />
-        <main className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 md:pb-8">
+        <main className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-4 sm:py-6 pb-6 sm:pb-8">
           {children}
         </main>
         <Footer />

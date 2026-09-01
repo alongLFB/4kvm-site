@@ -32,6 +32,7 @@ function CategoryContent() {
   const [total, setTotal] = useState(0);
   const [pageCount, setPageCount] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [jumpInput, setJumpInput] = useState("");
 
   // Watch Party Quick Modal state
   const [pickedVod, setPickedVod] = useState<VodItem | null>(null);
@@ -277,28 +278,59 @@ function CategoryContent() {
           </div>
         )}
 
-        {/* Pagination Bar */}
+        {/* Pagination Bar with Direct Jump Input */}
         {pageCount > 1 && !loading && (
-          <div className="flex items-center justify-center gap-2 pt-8 pb-4">
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 pt-6 pb-4">
             <button
               onClick={() => changePage(currentPage - 1)}
               disabled={currentPage <= 1}
-              className="px-4 py-2 rounded-xl bg-dark-900 border border-white/10 text-xs font-semibold text-gray-300 hover:text-white hover:bg-dark-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition"
+              className="px-3 sm:px-4 py-2 rounded-xl bg-dark-900 border border-white/10 text-xs font-semibold text-gray-300 hover:text-white hover:bg-dark-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition active:scale-95"
             >
               <ChevronLeft className="w-4 h-4" /> 上一页
             </button>
 
-            <span className="px-4 py-2 text-xs font-bold text-cyan-400 bg-dark-900 rounded-xl border border-cyan-500/20">
+            <span className="px-3 sm:px-4 py-2 text-xs font-bold text-cyan-400 bg-dark-900 rounded-xl border border-cyan-500/20">
               {currentPage} / {pageCount}
             </span>
 
             <button
               onClick={() => changePage(currentPage + 1)}
               disabled={currentPage >= pageCount}
-              className="px-4 py-2 rounded-xl bg-dark-900 border border-white/10 text-xs font-semibold text-gray-300 hover:text-white hover:bg-dark-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition"
+              className="px-3 sm:px-4 py-2 rounded-xl bg-dark-900 border border-white/10 text-xs font-semibold text-gray-300 hover:text-white hover:bg-dark-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition active:scale-95"
             >
               下一页 <ChevronRight className="w-4 h-4" />
             </button>
+
+            {/* Direct Jump Input */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const p = parseInt(jumpInput, 10);
+                if (!isNaN(p) && p >= 1 && p <= pageCount) {
+                  changePage(p);
+                  setJumpInput("");
+                }
+              }}
+              className="flex items-center gap-1.5 bg-dark-900 border border-white/10 px-2.5 py-1 rounded-xl text-xs"
+            >
+              <span className="text-gray-400 text-[11px]">前往</span>
+              <input
+                type="number"
+                min="1"
+                max={pageCount}
+                value={jumpInput}
+                onChange={(e) => setJumpInput(e.target.value)}
+                placeholder={`${currentPage}`}
+                className="w-12 bg-dark-800 text-base sm:text-xs text-center text-white px-1 py-1 rounded-lg border border-white/10 focus:outline-none focus:border-cyan-500"
+              />
+              <span className="text-gray-400 text-[11px]">页</span>
+              <button
+                type="submit"
+                className="px-2 py-1 bg-cyan-500 hover:bg-cyan-400 active:scale-95 text-dark-950 font-bold text-[11px] rounded-lg transition"
+              >
+                跳转
+              </button>
+            </form>
           </div>
         )}
       </div>
