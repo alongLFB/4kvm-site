@@ -137,14 +137,17 @@ export function RoomSettingsModal({ room, isOpen, onClose, onSaved }: RoomSettin
             </div>
           )}
 
-          {/* Control Mode */}
+          {/* Unified Control Mode */}
           <div>
-            <label className="block text-xs font-semibold text-gray-400 mb-2">① 播放进度控制权限</label>
+            <label className="block text-xs font-semibold text-gray-400 mb-2">视频操作权限 (进度控制 / 换集 / 换源 / 换片)</label>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => setControlMode("free")}
-                className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition ${
+                onClick={() => {
+                  setControlMode("free");
+                  setSwitchMode("free");
+                }}
+                className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition active:scale-95 ${
                   controlMode === "free"
                     ? "bg-cyan-500/10 border-cyan-500/50 text-white"
                     : "bg-dark-800 border-white/5 text-gray-400 hover:bg-dark-700"
@@ -152,15 +155,18 @@ export function RoomSettingsModal({ room, isOpen, onClose, onSaved }: RoomSettin
               >
                 <Zap className={`w-4 h-4 mt-0.5 ${controlMode === "free" ? "text-cyan-400" : "text-gray-500"}`} />
                 <div>
-                  <p className="text-xs font-bold text-white">⚡ 全员自由控制</p>
-                  <p className="text-[11px] text-gray-400">全员皆可暂停/快进</p>
+                  <p className="text-xs font-bold text-white">⚡ 全员自由控播</p>
+                  <p className="text-[11px] text-gray-400">所有成员均可自由控制进度/换集换源</p>
                 </div>
               </button>
 
               <button
                 type="button"
-                onClick={() => setControlMode("host")}
-                className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition ${
+                onClick={() => {
+                  setControlMode("host");
+                  setSwitchMode("host");
+                }}
+                className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition active:scale-95 ${
                   controlMode === "host"
                     ? "bg-cyan-500/10 border-cyan-500/50 text-white"
                     : "bg-dark-800 border-white/5 text-gray-400 hover:bg-dark-700"
@@ -168,46 +174,8 @@ export function RoomSettingsModal({ room, isOpen, onClose, onSaved }: RoomSettin
               >
                 <Crown className={`w-4 h-4 mt-0.5 ${controlMode === "host" ? "text-gold-400" : "text-gray-500"}`} />
                 <div>
-                  <p className="text-xs font-bold text-white">👑 仅房主可控</p>
-                  <p className="text-[11px] text-gray-400">仅房主能控制进度</p>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* Switch Mode */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-400 mb-2">② 选集与换源权限</label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setSwitchMode("free")}
-                className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition ${
-                  switchMode === "free"
-                    ? "bg-cyan-500/10 border-cyan-500/50 text-white"
-                    : "bg-dark-800 border-white/5 text-gray-400 hover:bg-dark-700"
-                }`}
-              >
-                <Radio className={`w-4 h-4 mt-0.5 ${switchMode === "free" ? "text-cyan-400" : "text-gray-500"}`} />
-                <div>
-                  <p className="text-xs font-bold text-white">⚡ 全员自由换集换源</p>
-                  <p className="text-[11px] text-gray-400">观众亦可切线路/选集</p>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSwitchMode("host")}
-                className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition ${
-                  switchMode === "host"
-                    ? "bg-cyan-500/10 border-cyan-500/50 text-white"
-                    : "bg-dark-800 border-white/5 text-gray-400 hover:bg-dark-700"
-                }`}
-              >
-                <Lock className={`w-4 h-4 mt-0.5 ${switchMode === "host" ? "text-gold-400" : "text-gray-500"}`} />
-                <div>
-                  <p className="text-xs font-bold text-white">👑 仅房主可换集换源</p>
-                  <p className="text-[11px] text-gray-400">防止他人误切</p>
+                  <p className="text-xs font-bold text-white">👑 仅房主控播</p>
+                  <p className="text-[11px] text-gray-400">仅房主能控制进度/换集换源，观众同步跟随</p>
                 </div>
               </button>
             </div>

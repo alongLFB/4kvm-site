@@ -107,7 +107,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
 
   const isHost = room ? room.hostId === currentUser.id : false;
   const canControl = isHost || (room?.controlMode !== "host");
-  const canSwitch = isHost || (room?.switchMode !== "host");
+  const canSwitch = canControl;
   const otherMembers = members.filter((m) => m.id !== currentUser.id);
 
   // Active Speakers list
@@ -465,7 +465,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   // Switch Line / Source with permission check
   const handleSwitchSource = (sourceIdx: number) => {
     if (!canSwitch) {
-      showPermToast("👑 房主已开启【仅房主可换集换源】特权");
+      showPermToast("👑 房主已开启【仅房主控播】特权");
       return;
     }
     if (!vodItem || !room) return;
@@ -510,7 +510,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   // Switch Episode with permission check
   const handleSwitchEpisode = (idx: number, ep: { name: string; url: string }) => {
     if (!canSwitch) {
-      showPermToast("👑 房主已开启【仅房主可换集换源】特权");
+      showPermToast("👑 房主已开启【仅房主控播】特权");
       return;
     }
     if (!room) return;
@@ -788,7 +788,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
               <span className="text-emerald-400 font-medium shrink-0">{currentSource.sourceName}</span>
               <span className="hidden sm:inline">·</span>
               <span className={`hidden sm:inline ${room.controlMode === "host" ? "text-amber-400 font-bold" : "text-gray-300"}`}>
-                {room.controlMode === "host" ? "👑 仅房主控进度" : "⚡ 全员自由控进度"}
+                {room.controlMode === "host" ? "👑 仅房主控播" : "⚡ 全员自由控播"}
               </span>
             </p>
           </div>
@@ -800,7 +800,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
           <button
             onClick={() => {
               if (!canSwitch) {
-                showPermToast("👑 房主已开启【仅房主可换集换源】特权");
+                showPermToast("👑 房主已开启【仅房主控播】特权");
                 return;
               }
               setChangeVodModalOpen(true);
