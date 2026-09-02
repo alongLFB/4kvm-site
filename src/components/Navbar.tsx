@@ -258,20 +258,16 @@ export function Navbar() {
         <Link
           href="/category"
           className={`flex flex-col items-center gap-0.5 py-1 px-4 rounded-xl transition active:scale-95 ${
-            isCategory
-              ? "text-cyan-400 font-bold bg-cyan-500/15 border border-cyan-500/30"
-              : "text-gray-300 hover:text-cyan-400"
+            isCategory ? "text-cyan-400 font-bold bg-cyan-500/10" : "text-gray-400 hover:text-white"
           }`}
         >
-          <SlidersHorizontal className="w-5 h-5 text-cyan-400" />
-          <span className="text-[10px] text-cyan-400 font-bold">片库</span>
+          <SlidersHorizontal className="w-5 h-5" />
+          <span className="text-[10px]">片库</span>
         </Link>
         <Link
           href="/hall"
           className={`flex flex-col items-center gap-0.5 py-1 px-4 rounded-xl transition active:scale-95 ${
-            isHall
-              ? "text-cyan-400 font-bold bg-cyan-500/15 border border-cyan-500/40"
-              : "text-gray-400 hover:text-white"
+            isHall ? "text-cyan-400 font-bold bg-cyan-500/10" : "text-gray-400 hover:text-white"
           }`}
         >
           <Users className="w-5 h-5" />
