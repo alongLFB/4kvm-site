@@ -15,33 +15,62 @@ db.exec("PRAGMA journal_mode = WAL;");
 db.exec("PRAGMA synchronous = NORMAL;");
 
 const hours = process.env.SYNC_HOURS || "24";
+const SOURCE_NAME = "⚡ iKun 国际专线 (1080P原画秒播)";
+const API_URL = "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/";
 
-// Top High-Bandwidth Overseas & Global CDN MacCMS Sources
-const UPSTREAM_SOURCES = [
-  {
-    name: "⚡ iKun 国际专线 (全球Cloudflare加速/1080P秒播)",
-    apiUrl: "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/",
-  },
-  {
-    name: "🚀 光速专线 (香港/欧美多节点直连)",
-    apiUrl: "https://api.guangsuapi.com/api.php/provide/vod/from/gsm3u8/at/json/",
-  },
-  {
-    name: "🌐 量子专线 (亚太/美西边缘节点)",
-    apiUrl: "https://cj.lziapi.com/api.php/provide/vod/at/json/",
-  },
-  {
-    name: "🌪️ 暴风专线 (全球高速CDN)",
-    apiUrl: "https://bfzyapi.com/api.php/provide/vod/at/json/",
-  }
-];
+const EXCLUDE_TYPE_IDS = new Set([5, 56]);
 
-function mapTypeName(typeName, subTypeName = "") {
-  const combined = (typeName + " " + subTypeName).toLowerCase();
-  if (combined.includes("动漫") || combined.includes("动画")) return "动漫";
-  if (combined.includes("综艺")) return "综艺";
-  if (combined.includes("电影") || combined.includes("片") || combined.includes("动作") || combined.includes("科幻") || combined.includes("喜剧") || combined.includes("爱情") || combined.includes("恐怖") || combined.includes("战争")) return "电影";
-  return "电视剧";
+const CATEGORY_MAP = {
+  1: { parent: "电影", sub: "电影" },
+  6: { parent: "电影", sub: "动作片" },
+  7: { parent: "电影", sub: "喜剧片" },
+  8: { parent: "电影", sub: "爱情片" },
+  9: { parent: "电影", sub: "科幻片" },
+  10: { parent: "电影", sub: "恐怖片" },
+  11: { parent: "电影", sub: "剧情片" },
+  12: { parent: "电影", sub: "战争片" },
+  13: { parent: "电影", sub: "惊悚片" },
+  14: { parent: "电影", sub: "家庭片" },
+  15: { parent: "电影", sub: "古装片" },
+  16: { parent: "电影", sub: "历史片" },
+  17: { parent: "电影", sub: "悬疑片" },
+  18: { parent: "电影", sub: "犯罪片" },
+  19: { parent: "电影", sub: "灾难片" },
+  20: { parent: "电影", sub: "纪录片" },
+  21: { parent: "电影", sub: "短片" },
+  22: { parent: "电影", sub: "动画片" },
+  2: { parent: "电视剧", sub: "电视剧" },
+  23: { parent: "电视剧", sub: "国产剧" },
+  24: { parent: "电视剧", sub: "香港剧" },
+  25: { parent: "电视剧", sub: "韩国剧" },
+  26: { parent: "电视剧", sub: "欧美剧" },
+  27: { parent: "电视剧", sub: "台湾剧" },
+  28: { parent: "电视剧", sub: "日本剧" },
+  29: { parent: "电视剧", sub: "海外剧" },
+  30: { parent: "电视剧", sub: "泰国剧" },
+  45: { parent: "电视剧", sub: "爽文短剧" },
+  3: { parent: "综艺", sub: "综艺" },
+  31: { parent: "综艺", sub: "大陆综艺" },
+  32: { parent: "综艺", sub: "港台综艺" },
+  33: { parent: "综艺", sub: "日韩综艺" },
+  34: { parent: "综艺", sub: "欧美综艺" },
+  4: { parent: "动漫", sub: "动漫" },
+  35: { parent: "动漫", sub: "国产动漫" },
+  36: { parent: "动漫", sub: "欧美动漫" },
+  37: { parent: "动漫", sub: "日本动漫" },
+};
+
+function cleanText(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#39;/g, "'")
+    .trim();
 }
 
 function parseEpisodes(playUrlStr) {
@@ -65,92 +94,122 @@ function parseEpisodes(playUrlStr) {
   return episodes;
 }
 
-async function fetchUpstreamList(source, h = "24", page = 1) {
-  const url = `${source.apiUrl}?ac=videolist&h=${h}&pg=${page}`;
+async function fetchIncrementalList(h = "24", page = 1) {
+  const url = `${API_URL}?ac=detail&h=${h}&pg=${page}`;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
     if (!res.ok) return null;
     return await res.json();
   } catch (err) {
-    console.warn(`Fetch warning from ${source.name} page ${page}:`, err.message);
+    console.warn(`Fetch warning page ${page}:`, err.message);
     return null;
   }
 }
 
 async function runSync() {
-  console.log(`Starting upstream sync for the last ${hours} hours (Overseas & Global CDN)...`);
+  console.log(`Starting iKun upstream incremental sync for the last ${hours} hours...`);
 
-  const insertStmt = db.prepare(`
-    INSERT OR REPLACE INTO vods (
-      id, name, type_id, type_name, sub_type, pic, banner, lang, area, year,
-      remarks, actor, director, rating, hits, tags, content, sources, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  const stmtUpsertVod = db.prepare(`
+    INSERT INTO vods (
+      id, raw_id, name, sub_name, type_id, type_name, sub_type, pic, banner,
+      lang, area, year, remarks, actor, director, rating, hits, tags,
+      content, sources, created_at, updated_at
+    ) VALUES (
+      ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?
+    )
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      sub_name = excluded.sub_name,
+      type_id = excluded.type_id,
+      type_name = excluded.type_name,
+      sub_type = excluded.sub_type,
+      pic = excluded.pic,
+      banner = excluded.banner,
+      lang = excluded.lang,
+      area = excluded.area,
+      year = excluded.year,
+      remarks = excluded.remarks,
+      actor = excluded.actor,
+      director = excluded.director,
+      rating = excluded.rating,
+      hits = excluded.hits,
+      tags = excluded.tags,
+      content = excluded.content,
+      sources = excluded.sources,
+      updated_at = excluded.updated_at
   `);
 
-  const insertFtsStmt = db.prepare(`
-    INSERT INTO vods_fts (id, name, actor, director, tags)
-    VALUES (?, ?, ?, ?, ?)
+  const stmtDeleteFts = db.prepare("DELETE FROM vods_fts WHERE id = ?");
+  const stmtInsertFts = db.prepare(`
+    INSERT INTO vods_fts (id, name, actor, director, sub_type, tags)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
 
   let totalUpserted = 0;
   const now = Date.now();
+  let page = 1;
+  let pageCount = 1;
 
-  for (const source of UPSTREAM_SOURCES) {
-    console.log(`==> Ingesting from ${source.name}...`);
-    let page = 1;
-    let pageCount = 1;
+  while (page <= pageCount && page <= 20) {
+    const data = await fetchIncrementalList(hours, page);
+    if (!data || !Array.isArray(data.list)) break;
 
-    while (page <= pageCount && page <= 5) {
-      const data = await fetchUpstreamList(source, hours, page);
-      if (!data || !Array.isArray(data.list)) break;
+    pageCount = data.pagecount || 1;
+    console.log(`  Processing page ${page}/${pageCount} (${data.list.length} items)...`);
 
-      pageCount = data.pagecount || 1;
-      console.log(`  Processing page ${page}/${pageCount} (${data.list.length} items)...`);
+    db.exec("BEGIN TRANSACTION;");
+    for (const item of data.list) {
+      const typeId = Number(item.type_id || 0);
+      if (EXCLUDE_TYPE_IDS.has(typeId)) continue;
 
-      db.exec("BEGIN TRANSACTION;");
-      for (const item of data.list) {
-        const id = String(item.vod_id || "");
-        const name = String(item.vod_name || "");
-        const typeName = mapTypeName(item.type_name || "", item.vod_sub || "");
-        const subType = String(item.type_name || "");
-        const pic = String(item.vod_pic || "");
-        const banner = pic;
-        const lang = String(item.vod_lang || "国语");
-        const area = String(item.vod_area || "大陆");
-        const year = String(item.vod_year || "2026");
-        const remarks = String(item.vod_remarks || "HD");
-        const actor = String(item.vod_actor || "未知演职人员");
-        const director = String(item.vod_director || "未知导演");
-        const rating = parseFloat(item.vod_score || "0.0") || 0.0;
-        const hits = parseInt(item.vod_hits || "1000", 10) || 1000;
-        const content = String(item.vod_content || "暂无简介");
-        const tags = [typeName, subType, year, "1080P超清"].filter(Boolean);
+      const mapping = CATEGORY_MAP[typeId] || {
+        parent: item.type_id_1 === 1 ? "电影" : item.type_id_1 === 2 ? "电视剧" : item.type_id_1 === 3 ? "综艺" : item.type_id_1 === 4 ? "动漫" : "电视剧",
+        sub: item.type_name || "其他",
+      };
 
-        // Parse episodes
-        const episodes = parseEpisodes(item.vod_play_url || "");
-        const sources = [
-          {
-            sourceName: source.name,
-            episodes,
-          },
-        ];
+      const rawId = Number(item.vod_id);
+      const id = `ikun_${rawId}`;
+      const name = String(item.vod_name || "").trim();
+      const subName = String(item.vod_sub || "").trim();
+      const parentType = mapping.parent;
+      const subType = mapping.sub;
+      const pic = String(item.vod_pic || "").trim();
+      const banner = pic;
+      const lang = String(item.vod_lang || "").trim() || "国语";
+      const area = String(item.vod_area || "").trim() || "大陆";
+      const year = String(item.vod_year || "2026").match(/\d{4}/)?.[0] || "2026";
+      const remarks = String(item.vod_remarks || "").trim();
+      const actor = cleanText(item.vod_actor);
+      const director = cleanText(item.vod_director);
+      const rating = Number(item.vod_score || item.vod_douban_score || 8.5);
+      const hits = Number(item.vod_hits || 100);
+      const content = cleanText(item.vod_content || item.vod_blurb);
 
-        insertStmt.run(
-          id, name, Number(item.type_id || 1), typeName, subType, pic, banner,
-          lang, area, year, remarks, actor, director, rating, hits,
-          JSON.stringify(tags), content, JSON.stringify(sources), now, now
-        );
+      const episodes = parseEpisodes(item.vod_play_url);
+      if (episodes.length === 0) continue;
 
-        insertFtsStmt.run(id, name, actor, director, tags.join(" "));
-        totalUpserted++;
-      }
-      db.exec("COMMIT;");
-      page++;
+      const sources = JSON.stringify([{ sourceName: SOURCE_NAME, episodes }]);
+      const tags = JSON.stringify([parentType, subType, year, area]);
+
+      stmtUpsertVod.run(
+        id, rawId, name, subName, typeId, parentType, subType, pic, banner,
+        lang, area, year, remarks, actor, director, rating, hits, tags,
+        content, sources, now, now
+      );
+
+      stmtDeleteFts.run(id);
+      stmtInsertFts.run(id, name, actor, director, subType, tags);
+      totalUpserted++;
     }
+    db.exec("COMMIT;");
+    page++;
+    await new Promise((r) => setTimeout(r, 350));
   }
 
   const finalTotal = db.prepare("SELECT COUNT(*) as count FROM vods").get()?.count || 0;
-  console.log(`✅ Upstream sync finished! Upserted ${totalUpserted} items. Total library count: ${finalTotal}`);
+  console.log(`✅ iKun sync finished! Upserted ${totalUpserted} items. Total library count: ${finalTotal}`);
 }
 
 runSync().catch(console.error);

@@ -37,8 +37,14 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
 
   // 1. 板块 / 类型过滤
   if (type && type !== "全部") {
-    conditions.push("(type_name = ? OR sub_type = ? OR tags LIKE ?)");
-    queryParams.push(type, type, `%${type}%`);
+    if (type === "短剧") {
+      conditions.push("(sub_type LIKE '%短剧%' OR tags LIKE '%短剧%')");
+    } else if (type === "纪录片") {
+      conditions.push("(sub_type LIKE '%纪录%' OR sub_type LIKE '%记录%' OR tags LIKE '%纪录%' OR tags LIKE '%记录%')");
+    } else {
+      conditions.push("(type_name = ? OR sub_type = ? OR tags LIKE ?)");
+      queryParams.push(type, type, `%${type}%`);
+    }
   }
 
   // 2. 地区过滤
