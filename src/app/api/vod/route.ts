@@ -69,6 +69,7 @@ export async function GET(request: Request) {
     page,
     limit,
     query,
+    excludeGated: !checkPasscode(),
   });
 
   return NextResponse.json({ code: 200, ...result });

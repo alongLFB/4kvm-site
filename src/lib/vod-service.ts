@@ -1,6 +1,7 @@
 import { VodItem } from "./types";
 import { getDatabase, rowToVodItem } from "./db";
 import { queryMatchingIds } from "./search-engine";
+import { GATED_CONFIG } from "@/config/gated-sections";
 
 export interface FilterParams {
   type?: string;     // 一级大类: 全部 | 电影 | 电视剧 | 动漫 | 综艺 | 体育
@@ -14,6 +15,7 @@ export interface FilterParams {
   page?: number;
   limit?: number;
   query?: string;
+  excludeGated?: boolean; // 是否排除受限专区（未解锁时彻底无痕隐形）
 }
 
 export async function fetchLiveVods(params: FilterParams): Promise<{
@@ -34,6 +36,7 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
     page = 1,
     limit = 20,
     query = "",
+    excludeGated = false,
   } = params;
 
   const db = getDatabase();
@@ -131,7 +134,7 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
   // 8. 关键词搜索 (融合内存拼音倒排索引、FTS5 和 LIKE 模糊匹配)
   if (query && query.trim()) {
     const q = query.trim();
-    const matchedIds = queryMatchingIds(q, 300);
+    const matchedIds = queryMatchingIds(q, 300, excludeGated);
     if (matchedIds.length > 0) {
       const placeholders = matchedIds.map(() => "?").join(",");
       conditions.push(
@@ -144,6 +147,20 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
       );
       const ftsQuery = `"${q}"*`;
       queryParams.push(ftsQuery, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+    }
+  }
+
+  // 9. 专区防护：未解锁时，强制排除受控的一级大类和具体 type_id (彻底无痕隐形)
+  if (excludeGated) {
+    if (GATED_CONFIG.lockedTypes.length > 0) {
+      const typePlaceholders = GATED_CONFIG.lockedTypes.map(() => "?").join(",");
+      conditions.push(`type_name NOT IN (${typePlaceholders})`);
+      queryParams.push(...GATED_CONFIG.lockedTypes);
+    }
+    if (GATED_CONFIG.lockedTypeIds.length > 0) {
+      const idPlaceholders = GATED_CONFIG.lockedTypeIds.map(() => "?").join(",");
+      conditions.push(`type_id NOT IN (${idPlaceholders})`);
+      queryParams.push(...GATED_CONFIG.lockedTypeIds);
     }
   }
 
