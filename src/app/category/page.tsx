@@ -4,6 +4,8 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MovieCard } from "@/components/MovieCard";
 import { CreateRoomModal } from "@/components/CreateRoomModal";
+import { PasscodeModal } from "@/components/PasscodeModal";
+import { GATED_CONFIG } from "@/config/gated-sections";
 import { VodItem } from "@/lib/types";
 import {
   Loader2,
@@ -18,6 +20,8 @@ import {
   MapPin,
   Calendar,
   Languages,
+  Lock,
+  Unlock,
 } from "lucide-react";
 
 const FILTER_CONFIG = {
@@ -83,6 +87,17 @@ function CategoryContent() {
   const [pickedVod, setPickedVod] = useState<VodItem | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
+  // 专区口令加锁与解锁状态
+  const [unlockedPin, setUnlockedPin] = useState<string>("");
+  const [passcodeModalOpen, setPasscodeModalOpen] = useState(false);
+  const [pendingType, setPendingType] = useState<string | null>(null);
+
+  // 初始化读取本地解锁 token
+  useEffect(() => {
+    const saved = localStorage.getItem(GATED_CONFIG.storageKey) || "";
+    setUnlockedPin(saved);
+  }, []);
+
   // 计算当前一级分类下的二级子类型列表
   const activeSubTypes = FILTER_CONFIG.subTypes[currentType] || FILTER_CONFIG.subTypes["全部"];
 
@@ -98,10 +113,26 @@ function CategoryContent() {
     if (currentStatus !== "全部") params.set("status", currentStatus);
     params.set("pg", currentPage.toString());
 
-    fetch(`/api/vod?${params.toString()}`)
-      .then((res) => res.json())
+    // 服务端双重校验：若已解锁，在 Header 中安全携带 access pin
+    const headers: Record<string, string> = {};
+    if (unlockedPin) {
+      headers[GATED_CONFIG.headerKey] = unlockedPin;
+    }
+
+    fetch(`/api/vod?${params.toString()}`, { headers })
+      .then((res) => {
+        if (res.status === 403) {
+          // 服务端返回 403 专区受限
+          setVods([]);
+          setTotal(0);
+          setPageCount(1);
+          setPasscodeModalOpen(true);
+          return null;
+        }
+        return res.json();
+      })
       .then((data) => {
-        if (data.code === 200) {
+        if (data && data.code === 200) {
           setVods(data.list || []);
           setTotal(data.total || 0);
           setPageCount(data.pagecount || 1);
@@ -109,7 +140,7 @@ function CategoryContent() {
       })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
-  }, [currentType, currentSubType, currentArea, currentLang, currentYear, currentSort, currentStatus, currentPage]);
+  }, [currentType, currentSubType, currentArea, currentLang, currentYear, currentSort, currentStatus, currentPage, unlockedPin]);
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -128,6 +159,33 @@ function CategoryContent() {
     router.push(`/category?${params.toString()}`);
   };
 
+  const handleTypeClick = (val: string) => {
+    const isLocked = GATED_CONFIG.lockedTypes.includes(val);
+    const hasUnlocked = unlockedPin === GATED_CONFIG.passcode;
+    if (isLocked && !hasUnlocked) {
+      setPendingType(val);
+      setPasscodeModalOpen(true);
+      return;
+    }
+    updateFilter("type", val);
+  };
+
+  const handleUnlockSuccess = (pin: string) => {
+    setUnlockedPin(pin);
+    if (pendingType) {
+      updateFilter("type", pendingType);
+      setPendingType(null);
+    }
+  };
+
+  const handleRelock = () => {
+    localStorage.removeItem(GATED_CONFIG.storageKey);
+    setUnlockedPin("");
+    if (GATED_CONFIG.lockedTypes.includes(currentType)) {
+      updateFilter("type", "全部");
+    }
+  };
+
   const changePage = (page: number) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("pg", page.toString());
@@ -138,6 +196,9 @@ function CategoryContent() {
     router.push("/category");
   };
 
+  const isCurrentTypeGated = GATED_CONFIG.lockedTypes.includes(currentType);
+  const isGatedUnlocked = unlockedPin === GATED_CONFIG.passcode;
+
   return (
     <div className="space-y-8">
       {/* 多维筛选器容器 */}
@@ -147,12 +208,34 @@ function CategoryContent() {
             <Sparkles className="w-4 h-4" />
             影视片库多维智能检索
           </div>
-          <button
-            onClick={resetAllFilters}
-            className="text-xs text-gray-400 hover:text-white flex items-center gap-1.5 transition px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10"
-          >
-            <RotateCcw className="w-3.5 h-3.5" /> 重置筛选
-          </button>
+
+          <div className="flex items-center gap-2">
+            {isGatedUnlocked ? (
+              <button
+                onClick={handleRelock}
+                className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1.5 transition px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20"
+                title="点击重新上锁专区"
+              >
+                <Unlock className="w-3.5 h-3.5" />
+                专区已解锁 (重新锁定)
+              </button>
+            ) : (
+              <button
+                onClick={() => setPasscodeModalOpen(true)}
+                className="text-xs text-gray-400 hover:text-white flex items-center gap-1.5 transition px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10"
+              >
+                <Lock className="w-3.5 h-3.5 text-amber-400" />
+                口令专区
+              </button>
+            )}
+
+            <button
+              onClick={resetAllFilters}
+              className="text-xs text-gray-400 hover:text-white flex items-center gap-1.5 transition px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> 重置筛选
+            </button>
+          </div>
         </div>
 
         {/* 1. 一级主分类 */}
@@ -164,17 +247,25 @@ function CategoryContent() {
           <div className="flex flex-nowrap sm:flex-wrap gap-1.5 flex-1 overflow-x-auto pb-1.5 sm:pb-0 scrollbar-none">
             {FILTER_CONFIG.types.map((item) => {
               const active = currentType === item.value;
+              const isLocked = GATED_CONFIG.lockedTypes.includes(item.value);
+              const hasUnlocked = unlockedPin === GATED_CONFIG.passcode;
               return (
                 <button
                   key={item.value}
-                  onClick={() => updateFilter("type", item.value)}
-                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0 transition text-xs ${
+                  onClick={() => handleTypeClick(item.value)}
+                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0 transition text-xs flex items-center gap-1 ${
                     active
                       ? "bg-cyan-500 text-black font-bold shadow-lg shadow-cyan-500/20 scale-105"
                       : "text-gray-300 hover:text-white hover:bg-white/5"
                   }`}
                 >
-                  {item.label}
+                  <span>{item.label}</span>
+                  {isLocked && !hasUnlocked && (
+                    <Lock className="w-3 h-3 text-amber-400 inline" />
+                  )}
+                  {isLocked && hasUnlocked && (
+                    <Unlock className="w-3 h-3 text-emerald-400 inline" />
+                  )}
                 </button>
               );
             })}
@@ -296,6 +387,11 @@ function CategoryContent() {
           <span>部影视</span>
           <span className="text-gray-600">·</span>
           <span>当前第 <strong className="text-white">{currentPage}</strong> / {pageCount} 页</span>
+          {isCurrentTypeGated && (
+            <span className="ml-2 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] flex items-center gap-1">
+              <Lock className="w-3 h-3" /> 特约专区
+            </span>
+          )}
         </div>
 
         {/* 右侧：排序模式与完结状态 */}
@@ -349,7 +445,25 @@ function CategoryContent() {
         {loading ? (
           <div className="py-32 flex flex-col items-center justify-center gap-3 text-gray-400">
             <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
-            <span className="text-sm">正在高速检索 6.3 万部片库中...</span>
+            <span className="text-sm">正在高速检索片库中...</span>
+          </div>
+        ) : isCurrentTypeGated && !isGatedUnlocked ? (
+          <div className="py-24 text-center space-y-4 bg-dark-900/60 rounded-2xl border border-amber-500/20 p-8">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+              <Lock className="w-7 h-7" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-lg font-bold text-white">该板块已开启专区访问保护</h4>
+              <p className="text-xs text-gray-400 max-w-md mx-auto">
+                {GATED_CONFIG.description}
+              </p>
+            </div>
+            <button
+              onClick={() => setPasscodeModalOpen(true)}
+              className="px-6 py-2.5 bg-cyan-500 hover:bg-cyan-400 active:scale-95 text-black font-bold text-sm rounded-xl transition shadow-lg shadow-cyan-500/20"
+            >
+              输入口令立即解锁
+            </button>
           </div>
         ) : vods.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-6">
@@ -371,7 +485,7 @@ function CategoryContent() {
               onClick={resetAllFilters}
               className="text-xs text-cyan-400 hover:underline inline-flex items-center gap-1"
             >
-              <RotateCcw className="w-3.5 h-3.5" /> 重置所有筛选条件
+              <RotateCcw className="w-3 h-3" /> 重置所有筛选条件
             </button>
           </div>
         )}
@@ -444,6 +558,17 @@ function CategoryContent() {
           }}
         />
       )}
+
+      {/* 专区口令解锁弹窗 */}
+      <PasscodeModal
+        isOpen={passcodeModalOpen}
+        onClose={() => {
+          setPasscodeModalOpen(false);
+          setPendingType(null);
+        }}
+        onSuccess={handleUnlockSuccess}
+        targetCategoryName={pendingType || undefined}
+      />
     </div>
   );
 }
