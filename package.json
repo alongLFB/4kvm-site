@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "db:seed": "node scripts/seed-db.mjs",
-    "db:sync": "node scripts/sync-upstream.mjs"
+    "db:sync": "node scripts/ingest-ikun-full.mjs --sync"
   },
   "dependencies": {
     "artplayer": "^5.4.0",
