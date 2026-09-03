@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { GATED_CONFIG, isTypeGated } from "@/config/gated-sections";
 import { DesktopSearch, MobileSearchModal } from "@/components/Search/GlobalSearch";
+import { OnlineBadge } from "@/components/OnlineBadge";
 
 
 export function Navbar() {
@@ -156,7 +157,8 @@ export function Navbar() {
             </div>
 
             {/* Search bar & Actions */}
-            <div className="hidden md:flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-3">
+              <OnlineBadge />
               <DesktopSearch />
 
               <Link
@@ -209,6 +211,11 @@ export function Navbar() {
               onClick={() => setMobileMenuOpen(false)}
             />
             <div className="relative z-50 md:hidden border-t border-white/10 bg-dark-900/98 backdrop-blur-xl px-4 pt-3 pb-6 space-y-3 animate-in fade-in slide-in-from-top-2 shadow-2xl">
+              <div className="flex items-center justify-between px-1 pb-1">
+                <span className="text-xs font-semibold text-gray-400">实时观影概况</span>
+                <OnlineBadge />
+              </div>
+
               <div
                 onClick={() => {
                   setMobileMenuOpen(false);

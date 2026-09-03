@@ -42,6 +42,7 @@ import { VoiceControlBar } from "@/components/Voice/VoiceControlBar";
 import { Mic, MicOff, VolumeX } from "lucide-react";
 import { FilmPickerModal } from "@/components/FilmPickerModal";
 import { RoomPlayerHandle } from "@/components/Player/RoomVideoPlayer";
+import { OnlineBadge } from "@/components/OnlineBadge";
 
 const RoomVideoPlayer = dynamic(() => import("@/components/Player/RoomVideoPlayer"), {
   ssr: false,
@@ -779,6 +780,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                   <Lock className="w-2.5 h-2.5" /> 私密
                 </span>
               )}
+              <OnlineBadge className="hidden sm:inline-flex" />
             </div>
             <p className="text-[11px] sm:text-xs text-gray-400 flex items-center gap-1.5 mt-0.5 truncate">
               <span className="truncate">《{room.vodName}》</span>

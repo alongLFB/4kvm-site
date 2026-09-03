@@ -10,6 +10,7 @@ import { PasscodeModal } from "@/components/PasscodeModal";
 import { GATED_CONFIG } from "@/config/gated-sections";
 import { Film, Share2, Radio, Users, Loader2, Lock } from "lucide-react";
 import { VodItem, WatchHistoryItem } from "@/lib/types";
+import { useOnlineWatcher } from "@/hooks/useOnlineWatcher";
 
 const VideoPlayer = dynamic(() => import("@/components/Player/ArtPlayer"), {
   ssr: false,
@@ -37,6 +38,13 @@ export default function PlayPage() {
   const [isGatedLocked, setIsGatedLocked] = useState(false);
   const [passcodeModalOpen, setPasscodeModalOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  const onlineStats = useOnlineWatcher({
+    pageType: "play",
+    targetId: id,
+    vodName: item?.name,
+    enabled: !!item && !loading && !isGatedLocked,
+  });
 
   // Playback state restoration when opening/closing modal
   const wasPlayingRef = useRef(false);
@@ -254,6 +262,19 @@ export default function PlayPage() {
                 <p className="text-xs text-gray-400 mt-1">
                   {item.year} · {item.area} · {item.lang} · {item.type_name} · 当前播放：{currentSource.sourceName}
                 </p>
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-xs text-cyan-300 shadow-sm select-none">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                    <span className="font-bold text-white">
+                      🔥 {onlineStats.currentTargetOnline}
+                    </span>
+                    <span className="text-cyan-400/90">人正在看</span>
+                    <span className="text-white/20 mx-0.5">·</span>
+                    <span className="text-gray-400">
+                      全站 <strong className="text-white font-semibold">{onlineStats.totalOnline}</strong> 人在线
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center gap-2.5">

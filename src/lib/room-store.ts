@@ -1,4 +1,5 @@
 import { VodItem } from "./types";
+import { OnlineWatcherStore } from "./online-store";
 
 export interface RoomMember {
   id: string;
@@ -112,6 +113,8 @@ if (!global.__4kvm_cleaner_interval__) {
     const now = Date.now();
     rooms.forEach((room, roomId) => {
       const activeMembers = room.members.filter((m) => now - m.lastActive <= 45000);
+      const offlineMembers = room.members.filter((m) => now - m.lastActive > 45000);
+      offlineMembers.forEach((m) => OnlineWatcherStore.recordLeave(m.id));
       const offlineCount = room.members.length - activeMembers.length;
 
       if (offlineCount > 0) {
@@ -266,6 +269,13 @@ export const RoomStore = {
     };
 
     rooms.set(roomId, room);
+    OnlineWatcherStore.recordHeartbeat({
+      viewerId: host.id,
+      ip: hostMember.fullIp || "127.0.0.1",
+      pageType: "room",
+      targetId: roomId,
+      vodName: vodItem.name,
+    });
     return room;
   },
 
@@ -420,6 +430,7 @@ export const RoomStore = {
 
     room.members = room.members.filter((m) => m.id !== targetUserId);
     room.updatedAt = Date.now();
+    OnlineWatcherStore.recordLeave(targetUserId);
 
     const kickMsg: ChatMessage = {
       id: `msg_${Date.now()}_kick`,
@@ -448,17 +459,25 @@ export const RoomStore = {
       message: `房主【${room.hostName}】已解散本放映厅，感谢大家的陪伴！`,
     });
 
+    room.members.forEach((m) => OnlineWatcherStore.recordLeave(m.id));
     rooms.delete(roomId);
     return { success: true };
   },
 
-  heartbeat(roomId: string, userId: string): boolean {
+  heartbeat(roomId: string, userId: string, ip?: string): boolean {
     const room = rooms.get(roomId);
     if (!room) return false;
 
     const member = room.members.find((m) => m.id === userId);
     if (member) {
       member.lastActive = Date.now();
+      OnlineWatcherStore.recordHeartbeat({
+        viewerId: userId,
+        ip: member.fullIp || ip || "127.0.0.1",
+        pageType: "room",
+        targetId: roomId,
+        vodName: room.vodName,
+      });
       return true;
     }
     return false;
@@ -515,6 +534,13 @@ export const RoomStore = {
 
     room.updatedAt = now;
     room.emptySince = undefined;
+    OnlineWatcherStore.recordHeartbeat({
+      viewerId: user.id,
+      ip: user.fullIp || "127.0.0.1",
+      pageType: "room",
+      targetId: roomId,
+      vodName: room.vodName,
+    });
     broadcastRoomEvent(roomId, { type: "members", members: room.members });
     return { success: true, room };
   },
@@ -532,6 +558,7 @@ export const RoomStore = {
 
     const member = room.members.find((m) => m.id === userId);
     room.members = room.members.filter((m) => m.id !== userId);
+    OnlineWatcherStore.recordLeave(userId);
 
     if (member) {
       const leaveMsg: ChatMessage = {
