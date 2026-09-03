@@ -3,13 +3,17 @@ import Link from "next/link";
 import { HeroBanner } from "@/components/HeroBanner";
 import { MovieCard } from "@/components/MovieCard";
 import { fetchLiveVods } from "@/lib/vod-service";
-import { Film, Tv, Sparkles, Flame, ChevronRight } from "lucide-react";
+import { Film, Tv, Sparkles, Flame, Zap, ChevronRight } from "lucide-react";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function HomePage() {
-  const [featuredData, tvData, movieData, animeData, varietyData] = await Promise.all([
+  const [featuredData, tvData, movieData, shortData, animeData, varietyData] = await Promise.all([
     fetchLiveVods({ type: "全部", page: 1 }),
     fetchLiveVods({ type: "电视剧", page: 1 }),
     fetchLiveVods({ type: "电影", page: 1 }),
+    fetchLiveVods({ type: "短剧", page: 1 }),
     fetchLiveVods({ type: "动漫", page: 1 }),
     fetchLiveVods({ type: "综艺", page: 1 }),
   ]);
@@ -17,6 +21,7 @@ export default async function HomePage() {
   const featured = featuredData.list.slice(0, 5);
   const tvSeries = tvData.list.slice(0, 10);
   const movies = movieData.list.slice(0, 10);
+  const shortDramas = shortData.list.slice(0, 10);
   const anime = animeData.list.slice(0, 10);
   const variety = varietyData.list.slice(0, 10);
 
@@ -33,7 +38,7 @@ export default async function HomePage() {
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">热门热播剧集</h2>
-              <p className="text-xs text-gray-400">非凡资源 · 量子专线 · 实时同步连载</p>
+              <p className="text-xs text-gray-400">iKun 国际专线 · 1080P原画秒播 · 实时同步连载</p>
             </div>
           </div>
           <Link
@@ -77,6 +82,35 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* Short Dramas */}
+      {shortDramas.length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-rose-500/10 text-rose-400">
+                <Zap className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white">🔥 爆火爽文短剧</h2>
+                <p className="text-xs text-gray-400">短平快反转 · 精彩微剧集</p>
+              </div>
+            </div>
+            <Link
+              href="/category?type=短剧"
+              className="text-xs font-semibold text-gray-400 hover:text-gold-400 flex items-center gap-1 transition"
+            >
+              查看更多 <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-6">
+            {shortDramas.map((item) => (
+              <MovieCard key={item.id} item={item} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Anime */}
       <section className="space-y-4">
