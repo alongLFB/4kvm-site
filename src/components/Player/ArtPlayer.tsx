@@ -64,6 +64,19 @@ export default function VideoPlayer({
       },
       customType: {
         m3u8: function (video: HTMLMediaElement, url: string, art: Artplayer) {
+          const updateRes = (w: number, h: number) => {
+            let label = "1080p";
+            if (w >= 3800 || h >= 2100) label = "4K";
+            else if (w >= 2500 || h >= 1400) label = "2K";
+            else if (w >= 1800 || h >= 950) label = "1080p";
+            else if (w >= 1200 || h >= 680) label = "720p";
+            else if (w >= 800 || h >= 460) label = "480p";
+            else if (h > 0) label = `${h}p`;
+
+            const el = art.controls["resolution"];
+            if (el) el.innerText = label;
+          };
+
           if (Hls.isSupported()) {
             if (art.hls) art.hls.destroy();
             const hls = new Hls({
@@ -73,6 +86,16 @@ export default function VideoPlayer({
             });
             hls.loadSource(url);
             hls.attachMedia(video);
+
+            hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+              if (data.levels && data.levels.length > 0) {
+                const lvl = data.levels[0];
+                if (lvl && lvl.width && lvl.height) {
+                  updateRes(lvl.width, lvl.height);
+                }
+              }
+            });
+
             art.hls = hls;
             art.on("destroy", () => hls.destroy());
           } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
@@ -80,18 +103,30 @@ export default function VideoPlayer({
           } else {
             art.notice.show = "当前浏览器不支持播放此格式";
           }
+
+          video.addEventListener("loadedmetadata", () => {
+            if (video.videoWidth && video.videoHeight) {
+              updateRes(video.videoWidth, video.videoHeight);
+            }
+          });
         },
       },
-      quality: [
+      controls: [
         {
-          default: true,
+          name: "resolution",
+          position: "right",
+          index: 10,
           html: "1080p",
-          url: url,
-        },
-        {
-          default: false,
-          html: "720p",
-          url: url,
+          tooltip: "实际画质",
+          style: {
+            fontSize: "12px",
+            fontWeight: "bold",
+            color: "#22d3ee",
+            padding: "0 8px",
+            lineHeight: "22px",
+            display: "flex",
+            alignItems: "center",
+          },
         },
       ],
     });
