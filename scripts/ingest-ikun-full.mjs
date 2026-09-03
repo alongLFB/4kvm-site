@@ -15,7 +15,7 @@ const dbPath = path.join(dbDir, "4kvm.db");
 const progressPath = path.join(dbDir, "ikun_progress.json");
 
 // Exclude sensitive categories: 5 (伦理片), 56 (里番动漫)
-const EXCLUDE_TYPE_IDS = new Set([5, 56]);
+const EXCLUDE_TYPE_IDS = new Set([56]);
 
 export const CATEGORY_MAP = {
   // 1: 电影

@@ -5,6 +5,7 @@ import { GATED_CONFIG } from "@/config/gated-sections";
 
 export interface FilterParams {
   type?: string;     // 一级大类: 全部 | 电影 | 电视剧 | 动漫 | 综艺 | 体育
+  typeId?: number | string; // 具体分类 ID: 45, 51 等
   subType?: string;  // 二级子类: 剧情片 | 动作片 | 爽文短剧 | 国产剧 | 日本动漫 | NBA 等
   area?: string;     // 地区
   lang?: string;     // 语言
@@ -26,6 +27,7 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
 }> {
   const {
     type = "全部",
+    typeId,
     subType = "全部",
     area = "全部",
     lang = "全部",
@@ -42,6 +44,12 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
   const db = getDatabase();
   const conditions: string[] = [];
   const queryParams: any[] = [];
+
+  // 0. 具体分类 ID 过滤 (type_id)
+  if (typeId !== undefined && typeId !== null && typeId !== "全部" && typeId !== "") {
+    conditions.push("type_id = ?");
+    queryParams.push(Number(typeId));
+  }
 
   // 1. 一级大类过滤 (type: 电影 | 电视剧 | 动漫 | 综艺 | 体育)
   if (type && type !== "全部") {

@@ -28,9 +28,10 @@ export async function GET(request: Request) {
   }
 
   const type = searchParams.get("type") || "全部";
+  const typeId = searchParams.get("type_id") || searchParams.get("typeId") || searchParams.get("t") || undefined;
 
   // 服务端双重安全防护：若请求受保护分类，强制验证口令
-  if (isTypeGated(type)) {
+  if (isTypeGated(type) || (typeId && isTypeIdGated(typeId))) {
     if (!checkPasscode()) {
       return NextResponse.json(
         {
@@ -59,6 +60,7 @@ export async function GET(request: Request) {
 
   const result = await fetchLiveVods({
     type,
+    typeId,
     subType,
     area,
     lang,
