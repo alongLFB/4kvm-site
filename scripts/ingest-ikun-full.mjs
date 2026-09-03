@@ -2,9 +2,14 @@ import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import fs from "node:fs";
 
-const API_BASE = "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/";
-const SOURCE_NAME = "⚡ iKun 国际专线 (1080P原画秒播)";
-const DELAY_MS = 350; // Rate limit delay: ~2.8 requests per second to avoid IP ban
+// 自动加载 .env 文件（Node 22 原生支持，本地开发与生产环境均自动生效）
+try {
+  process.loadEnvFile();
+} catch {}
+
+const API_BASE = process.env.IKUN_API_BASE || "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/";
+const SOURCE_NAME = process.env.IKUN_SOURCE_NAME || "⚡ iKun 国际专线 (1080P原画秒播)";
+const DELAY_MS = parseInt(process.env.INGEST_DELAY_MS || "350", 10);
 
 const dbDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dbDir)) {

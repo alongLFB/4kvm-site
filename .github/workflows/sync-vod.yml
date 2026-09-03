@@ -29,5 +29,5 @@ jobs:
             HOURS="${{ github.event.inputs.hours || 24 }}"
             echo "==> Triggering Upstream VOD Sync for last ${HOURS}h in Docker container..."
             
-            docker exec -e SYNC_HOURS="${HOURS}" 4kvm-app node scripts/sync-upstream.mjs
+            docker exec 4kvm-app node scripts/ingest-ikun-full.mjs --hours "${HOURS}"
             echo "==> Upstream VODs Synced Successfully into 4kvm.db!"

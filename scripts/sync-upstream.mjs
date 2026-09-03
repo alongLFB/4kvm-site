@@ -14,11 +14,16 @@ const db = new DatabaseSync(dbPath);
 db.exec("PRAGMA journal_mode = WAL;");
 db.exec("PRAGMA synchronous = NORMAL;");
 
-const hours = process.env.SYNC_HOURS || "24";
-const SOURCE_NAME = "⚡ iKun 国际专线 (1080P原画秒播)";
-const API_URL = "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/";
+// 自动加载 .env 文件（Node 22 原生支持）
+try {
+  process.loadEnvFile();
+} catch {}
 
-const EXCLUDE_TYPE_IDS = new Set([5, 56]);
+const hours = process.env.SYNC_HOURS || "24";
+const SOURCE_NAME = process.env.IKUN_SOURCE_NAME || "⚡ iKun 国际专线 (1080P原画秒播)";
+const API_URL = process.env.IKUN_API_BASE || "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/";
+
+const EXCLUDE_TYPE_IDS = new Set([56]);
 
 const CATEGORY_MAP = {
   1: { parent: "电影", sub: "电影" },

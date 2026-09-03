@@ -2,6 +2,10 @@ import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import fs from "node:fs";
 
+try {
+  process.loadEnvFile();
+} catch {}
+
 const dbDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
@@ -68,7 +72,7 @@ const SOURCES = [
   {
     prefix: "ikun",
     name: "⚡ iKun 国际专线 (1080P原画秒播)",
-    apiUrl: "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/",
+    apiUrl: process.env.IKUN_API_BASE || "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/",
     maxPages: 35
   },
   {
