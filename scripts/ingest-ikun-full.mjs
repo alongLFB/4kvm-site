@@ -17,7 +17,7 @@ const progressPath = path.join(dbDir, "ikun_progress.json");
 // Exclude sensitive categories: 5 (伦理片), 56 (里番动漫)
 const EXCLUDE_TYPE_IDS = new Set([5, 56]);
 
-const CATEGORY_MAP = {
+export const CATEGORY_MAP = {
   // 1: 电影
   1: { parent: "电影", sub: "电影" },
   6: { parent: "电影", sub: "动作片" },
@@ -181,8 +181,11 @@ export function initDatabase(db, dropExisting = false) {
   console.log("✅ Schema initialized with FTS5 trigram indexing!");
 }
 
-async function fetchPageWithRetry(page, maxRetries = 3) {
-  const url = `${API_BASE}?ac=detail&pg=${page}`;
+async function fetchPageWithRetry(page, maxRetries = 3, hours = null, typeId = null) {
+  let url = `${API_BASE}?ac=detail&pg=${page}`;
+  if (hours) url += `&h=${hours}`;
+  if (typeId) url += `&t=${typeId}`;
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const controller = new AbortController();
@@ -199,7 +202,7 @@ async function fetchPageWithRetry(page, maxRetries = 3) {
       const data = await res.json();
       return data;
     } catch (err) {
-      console.warn(`⚠️ [Page ${page}] Attempt ${attempt} failed: ${err.message}`);
+      console.warn(`⚠️ [Page ${page}${typeId ? ` | Type ${typeId}` : ""}] Attempt ${attempt} failed: ${err.message}`);
       if (attempt === maxRetries) {
         throw err;
       }
@@ -212,10 +215,26 @@ async function main() {
   const args = process.argv.slice(2);
   const isReset = args.includes("--reset");
   const isResume = args.includes("--resume");
+  const isIncremental = args.includes("--incremental") || args.includes("--sync");
+  const hoursArgIdx = args.indexOf("--hours");
+  const hours = hoursArgIdx !== -1 ? parseInt(args[hoursArgIdx + 1], 10) : (isIncremental ? 24 : null);
   const maxPagesArgIdx = args.indexOf("--max-pages");
   const maxPagesLimit = maxPagesArgIdx !== -1 ? parseInt(args[maxPagesArgIdx + 1], 10) : Infinity;
 
+  // Single or multiple type filters: --type 45 或 --types 45,51
+  const typeArgIdx = args.indexOf("--type") !== -1 ? args.indexOf("--type") : args.indexOf("--type-id");
+  const typesArgIdx = args.indexOf("--types");
+  let targetTypeIds = null;
+  if (typeArgIdx !== -1) {
+    targetTypeIds = [parseInt(args[typeArgIdx + 1], 10)];
+  } else if (typesArgIdx !== -1) {
+    targetTypeIds = args[typesArgIdx + 1].split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+  }
+
   console.log(`🚀 Starting iKun Ingestion Engine (Rate Limit: ${DELAY_MS}ms per request)`);
+  if (targetTypeIds) {
+    console.log(`🎯 Target Type Filter: [${targetTypeIds.join(", ")}]`);
+  }
   const db = new DatabaseSync(dbPath);
 
   if (isReset) {
@@ -224,28 +243,6 @@ async function main() {
   } else {
     initDatabase(db, false);
   }
-
-  let startPage = 1;
-  let totalIngested = 0;
-
-  if (isResume && fs.existsSync(progressPath)) {
-    try {
-      const progress = JSON.parse(fs.readFileSync(progressPath, "utf-8"));
-      startPage = (progress.lastPage || 0) + 1;
-      totalIngested = progress.totalIngested || 0;
-      console.log(`🔄 Resuming from page ${startPage} (Previously ingested: ${totalIngested})`);
-    } catch (e) {
-      console.warn("Could not read progress file, starting from page 1");
-    }
-  }
-
-  // Fetch page 1 metadata first
-  console.log(`📡 Fetching page ${startPage} to check total volume...`);
-  const firstData = await fetchPageWithRetry(startPage);
-  const totalPages = Math.min(Number(firstData.pagecount || 1), maxPagesLimit);
-  const totalRecords = Number(firstData.total || 0);
-
-  console.log(`📊 Target: ${totalPages} pages (~${totalRecords} items across iKun)`);
 
   const stmtUpsertVod = db.prepare(`
     INSERT INTO vods (
@@ -285,141 +282,207 @@ async function main() {
     VALUES (?, ?, ?, ?, ?, ?)
   `);
 
-  let currentBatch = [];
-  const BATCH_SIZE = 10; // commit every 10 pages (~200 items)
-  const now = Date.now();
+  const stmtCheckExists = db.prepare("SELECT id, remarks FROM vods WHERE id = ?");
 
-  for (let page = startPage; page <= totalPages; page++) {
-    const pageData = page === startPage ? firstData : await fetchPageWithRetry(page);
-    const list = pageData.list || [];
+  let grandTotalIngested = 0;
+  let grandNewlyAdded = 0;
+  let grandNewlyUpdated = 0;
 
-    for (const item of list) {
-      const typeId = Number(item.type_id || 0);
+  async function processCategory(typeId = null) {
+    const typeLabel = typeId
+      ? (CATEGORY_MAP[typeId] ? `${CATEGORY_MAP[typeId].parent} > ${CATEGORY_MAP[typeId].sub} (ID: ${typeId})` : `Type ID ${typeId}`)
+      : "All Categories (全量大盘)";
 
-      // Filter out sensitive types
-      if (EXCLUDE_TYPE_IDS.has(typeId)) {
-        continue;
+    let startPage = 1;
+    let localIngested = 0;
+
+    if (!typeId && !hours && isResume && fs.existsSync(progressPath)) {
+      try {
+        const progress = JSON.parse(fs.readFileSync(progressPath, "utf-8"));
+        startPage = (progress.lastPage || 0) + 1;
+        localIngested = progress.totalIngested || 0;
+        console.log(`🔄 Resuming from page ${startPage} (Previously ingested: ${localIngested})`);
+      } catch (e) {
+        console.warn("Could not read progress file, starting from page 1");
       }
-
-      const mapping = CATEGORY_MAP[typeId] || {
-        parent: item.type_id_1 === 1 ? "电影" : item.type_id_1 === 2 ? "电视剧" : item.type_id_1 === 3 ? "综艺" : item.type_id_1 === 4 ? "动漫" : "电视剧",
-        sub: item.type_name || "未知分类",
-      };
-
-      const rawId = Number(item.vod_id);
-      const id = `ikun_${rawId}`;
-      const name = String(item.vod_name || "").trim();
-      const subName = String(item.vod_sub || "").trim();
-      const parentType = mapping.parent;
-      const subType = mapping.sub;
-      const pic = String(item.vod_pic || "").trim();
-      const banner = pic;
-      const lang = String(item.vod_lang || "").trim() || "国语";
-      const area = String(item.vod_area || "").trim() || "大陆";
-      const year = cleanYear(item.vod_year);
-      const remarks = String(item.vod_remarks || "").trim();
-      const actor = cleanText(item.vod_actor);
-      const director = cleanText(item.vod_director);
-      const rating = Number(item.vod_score || item.vod_douban_score || (8.5 + (rawId % 15) * 0.1).toFixed(1));
-      const hits = Number(item.vod_hits || 100);
-      const content = cleanText(item.vod_content || item.vod_blurb);
-
-      const episodes = parseEpisodes(item.vod_play_url);
-      if (episodes.length === 0) continue;
-
-      const sources = JSON.stringify([
-        {
-          sourceName: SOURCE_NAME,
-          episodes,
-        },
-      ]);
-
-      const tags = JSON.stringify([
-        parentType,
-        subType,
-        year,
-        area,
-        ...(item.vod_tag ? item.vod_tag.split(",").map((t) => t.trim()) : []),
-      ]);
-
-      currentBatch.push({
-        id,
-        rawId,
-        name,
-        subName,
-        typeId,
-        parentType,
-        subType,
-        pic,
-        banner,
-        lang,
-        area,
-        year,
-        remarks,
-        actor,
-        director,
-        rating,
-        hits,
-        tags,
-        content,
-        sources,
-        now,
-      });
     }
 
-    if (page % BATCH_SIZE === 0 || page === totalPages) {
-      db.exec("BEGIN TRANSACTION;");
-      for (const v of currentBatch) {
-        stmtUpsertVod.run(
-          v.id,
-          v.rawId,
-          v.name,
-          v.subName,
-          v.typeId,
-          v.parentType,
-          v.subType,
-          v.pic,
-          v.banner,
-          v.lang,
-          v.area,
-          v.year,
-          v.remarks,
-          v.actor,
-          v.director,
-          v.rating,
-          v.hits,
-          v.tags,
-          v.content,
-          v.sources,
-          v.now,
-          v.now
-        );
-        stmtDeleteFts.run(v.id);
-        stmtInsertFts.run(v.id, v.name, v.actor, v.director, v.subType, v.tags);
+    console.log(`📡 Fetching page ${startPage} for [${typeLabel}]${hours ? ` (h=${hours})` : ""}...`);
+    const firstData = await fetchPageWithRetry(startPage, 3, hours, typeId);
+    const totalPages = Math.min(Number(firstData.pagecount || 1), maxPagesLimit);
+    const totalRecords = Number(firstData.total || 0);
+
+    console.log(`📊 Target for [${typeLabel}]: ${totalPages} pages (~${totalRecords} items)`);
+
+    let currentBatch = [];
+    const BATCH_SIZE = hours ? 1 : 10;
+    const now = Date.now();
+
+    for (let page = startPage; page <= totalPages; page++) {
+      const pageData = page === startPage ? firstData : await fetchPageWithRetry(page, 3, hours, typeId);
+      const list = pageData.list || [];
+
+      for (const item of list) {
+        const itemTypeId = Number(item.type_id || 0);
+
+        if (EXCLUDE_TYPE_IDS.has(itemTypeId)) {
+          continue;
+        }
+
+        const mapping = CATEGORY_MAP[itemTypeId] || {
+          parent: item.type_id_1 === 1 ? "电影" : item.type_id_1 === 2 ? "电视剧" : item.type_id_1 === 3 ? "综艺" : item.type_id_1 === 4 ? "动漫" : "电视剧",
+          sub: item.type_name || "未知分类",
+        };
+
+        const rawId = Number(item.vod_id);
+        const id = `ikun_${rawId}`;
+        const name = String(item.vod_name || "").trim();
+        const subName = String(item.vod_sub || "").trim();
+        const parentType = mapping.parent;
+        const subType = mapping.sub;
+        const pic = String(item.vod_pic || "").trim();
+        const banner = pic;
+        const lang = String(item.vod_lang || "").trim() || "国语";
+        const area = String(item.vod_area || "").trim() || "大陆";
+        const year = cleanYear(item.vod_year);
+        const remarks = String(item.vod_remarks || "").trim();
+        const actor = cleanText(item.vod_actor);
+        const director = cleanText(item.vod_director);
+        const rating = Number(item.vod_score || item.vod_douban_score || (8.5 + (rawId % 15) * 0.1).toFixed(1));
+        const hits = Number(item.vod_hits || 100);
+        const content = cleanText(item.vod_content || item.vod_blurb);
+
+        const episodes = parseEpisodes(item.vod_play_url);
+        if (episodes.length === 0) continue;
+
+        if (hours) {
+          const existing = stmtCheckExists.get(id);
+          if (!existing) {
+            grandNewlyAdded++;
+          } else if (existing.remarks !== remarks) {
+            grandNewlyUpdated++;
+          }
+        }
+
+        const sources = JSON.stringify([
+          {
+            sourceName: SOURCE_NAME,
+            episodes,
+          },
+        ]);
+
+        const tags = JSON.stringify([
+          parentType,
+          subType,
+          year,
+          area,
+          ...(item.vod_tag ? item.vod_tag.split(",").map((t) => t.trim()) : []),
+        ]);
+
+        currentBatch.push({
+          id,
+          rawId,
+          name,
+          subName,
+          typeId: itemTypeId,
+          parentType,
+          subType,
+          pic,
+          banner,
+          lang,
+          area,
+          year,
+          remarks,
+          actor,
+          director,
+          rating,
+          hits,
+          tags,
+          content,
+          sources,
+          now,
+        });
       }
-      db.exec("COMMIT;");
 
-      totalIngested += currentBatch.length;
-      currentBatch = [];
+      if (page % BATCH_SIZE === 0 || page === totalPages) {
+        db.exec("BEGIN TRANSACTION;");
+        for (const v of currentBatch) {
+          stmtUpsertVod.run(
+            v.id,
+            v.rawId,
+            v.name,
+            v.subName,
+            v.typeId,
+            v.parentType,
+            v.subType,
+            v.pic,
+            v.banner,
+            v.lang,
+            v.area,
+            v.year,
+            v.remarks,
+            v.actor,
+            v.director,
+            v.rating,
+            v.hits,
+            v.tags,
+            v.content,
+            v.sources,
+            v.now,
+            v.now
+          );
+          stmtDeleteFts.run(v.id);
+          stmtInsertFts.run(v.id, v.name, v.actor, v.director, v.subType, v.tags);
+        }
+        db.exec("COMMIT;");
 
-      fs.writeFileSync(
-        progressPath,
-        JSON.stringify({ lastPage: page, totalPages, totalIngested, timestamp: Date.now() }, null, 2),
-        "utf-8"
-      );
+        localIngested += currentBatch.length;
+        grandTotalIngested += currentBatch.length;
+        currentBatch = [];
 
-      const percent = ((page / totalPages) * 100).toFixed(1);
-      console.log(`✅ [${percent}%] Page ${page}/${totalPages} saved. Total ingested: ${totalIngested}`);
-    }
+        if (!typeId && !hours) {
+          fs.writeFileSync(
+            progressPath,
+            JSON.stringify({ lastPage: page, totalPages, totalIngested: localIngested, timestamp: Date.now() }, null, 2),
+            "utf-8"
+          );
+        }
 
-    // Smooth delay between pages
-    if (page < totalPages) {
-      await sleep(DELAY_MS);
+        const percent = ((page / totalPages) * 100).toFixed(1);
+        console.log(`✅ [${percent}%] Page ${page}/${totalPages} saved. Ingested: ${localIngested}${hours ? ` (New: ${grandNewlyAdded}, Updated: ${grandNewlyUpdated})` : ""}`);
+      }
+
+      if (page < totalPages) {
+        await sleep(DELAY_MS);
+      }
     }
   }
 
+  if (targetTypeIds && targetTypeIds.length > 0) {
+    for (const tId of targetTypeIds) {
+      if (EXCLUDE_TYPE_IDS.has(tId)) {
+        console.warn(`⚠️ [Type ID: ${tId}] is in the sensitive/excluded list, skipping.`);
+        continue;
+      }
+      await processCategory(tId);
+    }
+  } else {
+    await processCategory(null);
+  }
+
+  // Checkpoint WAL to make database immediately ready for serving or syncing
+  db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+
   const finalCount = db.prepare("SELECT COUNT(*) as count FROM vods").get().count;
-  console.log(`🎉 Ingestion completed! Final database count: ${finalCount} items`);
+  if (hours) {
+    console.log(`\n🎉 Incremental sync completed for the past ${hours} hours!`);
+    console.log(`✨ Newly added items: ${grandNewlyAdded}`);
+    console.log(`🔄 Updated episodes / series: ${grandNewlyUpdated}`);
+    console.log(`📊 Final total database count: ${finalCount} items`);
+  } else {
+    console.log(`\n🎉 Ingestion completed! Total records processed: ${grandTotalIngested}`);
+    console.log(`📊 Final database count: ${finalCount} items`);
+  }
 }
 
 main().catch((err) => {
