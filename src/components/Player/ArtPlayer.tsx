@@ -85,12 +85,12 @@ export default function VideoPlayer({
       quality: [
         {
           default: true,
-          html: "1080P 原画",
+          html: "1080p",
           url: url,
         },
         {
           default: false,
-          html: "720P 高清",
+          html: "720p",
           url: url,
         },
       ],

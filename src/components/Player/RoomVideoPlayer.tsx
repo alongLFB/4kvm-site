@@ -150,6 +150,18 @@ export default function RoomVideoPlayer({
           }
         },
       },
+      quality: [
+        {
+          default: true,
+          html: "1080p",
+          url: url,
+        },
+        {
+          default: false,
+          html: "720p",
+          url: url,
+        },
+      ],
     });
 
     artRef.current = art;
