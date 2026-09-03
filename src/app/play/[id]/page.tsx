@@ -132,7 +132,12 @@ export default function PlayPage() {
         <PasscodeModal
           isOpen={passcodeModalOpen}
           onClose={() => setPasscodeModalOpen(false)}
+          onSuccess={(pin) => {
+            setPasscodeModalOpen(false);
+            loadVodDetail(pin);
+          }}
           onUnlock={(pin) => {
+            setPasscodeModalOpen(false);
             loadVodDetail(pin);
           }}
         />

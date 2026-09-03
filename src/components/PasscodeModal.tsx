@@ -7,7 +7,8 @@ import { GATED_CONFIG } from "@/config/gated-sections";
 interface PasscodeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (pin: string) => void;
+  onSuccess?: (pin: string) => void;
+  onUnlock?: (pin: string) => void;
   targetCategoryName?: string;
 }
 
@@ -15,6 +16,7 @@ export function PasscodeModal({
   isOpen,
   onClose,
   onSuccess,
+  onUnlock,
   targetCategoryName,
 }: PasscodeModalProps) {
   const [pin, setPin] = useState("");
@@ -37,7 +39,8 @@ export function PasscodeModal({
       localStorage.setItem(GATED_CONFIG.storageKey, cleanPin);
       setErrorMsg("");
       setLoading(false);
-      onSuccess(cleanPin);
+      onSuccess?.(cleanPin);
+      onUnlock?.(cleanPin);
       onClose();
     } else {
       setLoading(false);
