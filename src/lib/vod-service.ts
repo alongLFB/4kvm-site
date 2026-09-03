@@ -1,5 +1,6 @@
 import { VodItem } from "./types";
 import { getDatabase, rowToVodItem } from "./db";
+import { queryMatchingIds } from "./search-engine";
 
 export interface FilterParams {
   type?: string;     // 一级大类: 全部 | 电影 | 电视剧 | 动漫 | 综艺 | 体育
@@ -127,12 +128,23 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
     }
   }
 
-  // 8. 关键词搜索 (同时利用 FTS5 和 LIKE 模糊匹配)
+  // 8. 关键词搜索 (融合内存拼音倒排索引、FTS5 和 LIKE 模糊匹配)
   if (query && query.trim()) {
     const q = query.trim();
-    conditions.push("(id IN (SELECT id FROM vods_fts WHERE vods_fts MATCH ?) OR name LIKE ? OR actor LIKE ? OR director LIKE ? OR tags LIKE ?)");
-    const ftsQuery = `"${q}"*`;
-    queryParams.push(ftsQuery, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+    const matchedIds = queryMatchingIds(q, 300);
+    if (matchedIds.length > 0) {
+      const placeholders = matchedIds.map(() => "?").join(",");
+      conditions.push(
+        `(id IN (${placeholders}) OR id IN (SELECT id FROM vods_fts WHERE vods_fts MATCH ?) OR name LIKE ? OR actor LIKE ? OR director LIKE ? OR tags LIKE ?)`
+      );
+      queryParams.push(...matchedIds, `"${q}"*`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+    } else {
+      conditions.push(
+        "(id IN (SELECT id FROM vods_fts WHERE vods_fts MATCH ?) OR name LIKE ? OR actor LIKE ? OR director LIKE ? OR tags LIKE ?)"
+      );
+      const ftsQuery = `"${q}"*`;
+      queryParams.push(ftsQuery, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+    }
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";

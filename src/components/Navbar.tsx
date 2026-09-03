@@ -19,12 +19,26 @@ import {
   Lock,
 } from "lucide-react";
 import { GATED_CONFIG } from "@/config/gated-sections";
+import { DesktopSearch, MobileSearchModal } from "@/components/Search/GlobalSearch";
+
 
 export function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+
+  const handleLogoClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setMobileMenuOpen(false);
+    setMobileSearchOpen(false);
+    if (pathname === "/") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      router.push("/");
+    }
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,8 +65,13 @@ export function Navbar() {
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <div className="flex items-center gap-8">
-              <Link href="/" className="flex items-center gap-2 group">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-cyan-500/20 group-hover:scale-105 transition">
+              <Link
+                href="/"
+                onClick={handleLogoClick}
+                className="flex items-center gap-2 group cursor-pointer active:scale-95 transition select-none"
+                title="返回4KVM影视首页"
+              >
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-cyan-500/20 group-hover:scale-105 group-hover:shadow-cyan-500/40 transition">
                   4K
                 </div>
                 <div className="flex flex-col">
@@ -138,16 +157,7 @@ export function Navbar() {
 
             {/* Search bar & Actions */}
             <div className="hidden md:flex items-center gap-4">
-              <form onSubmit={handleSearch} className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="搜索片名、演员或导演..."
-                  className="w-56 lg:w-72 bg-dark-850/90 text-sm text-white placeholder-gray-400 px-4 py-2 pl-9 rounded-full border border-white/10 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
-                />
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-              </form>
+              <DesktopSearch />
 
               <Link
                 href="/history"
@@ -161,7 +171,15 @@ export function Navbar() {
             </div>
 
             {/* Mobile Header Actions */}
-            <div className="flex md:hidden items-center gap-2">
+            <div className="flex md:hidden items-center gap-1.5">
+              <button
+                onClick={() => setMobileSearchOpen(true)}
+                className="p-2 text-gray-300 hover:text-white rounded-xl bg-white/5 active:bg-white/10 transition flex items-center justify-center"
+                aria-label="搜索影视"
+                title="搜索影视"
+              >
+                <Search className="w-4 h-4 text-cyan-400" />
+              </button>
               <Link
                 href="/hall"
                 className="px-2.5 py-1 text-xs font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 rounded-lg flex items-center gap-1"
@@ -191,16 +209,18 @@ export function Navbar() {
               onClick={() => setMobileMenuOpen(false)}
             />
             <div className="relative z-50 md:hidden border-t border-white/10 bg-dark-900/98 backdrop-blur-xl px-4 pt-3 pb-6 space-y-3 animate-in fade-in slide-in-from-top-2 shadow-2xl">
-              <form onSubmit={handleSearch} className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="搜索片名、演员或导演..."
-                  className="w-full bg-dark-800 text-base sm:text-sm text-white placeholder-gray-400 px-4 py-2.5 pl-9 rounded-xl border border-white/10 focus:outline-none focus:border-cyan-500"
-                />
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3.5" />
-              </form>
+              <div
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setMobileSearchOpen(true);
+                }}
+                className="relative flex items-center cursor-pointer"
+              >
+                <div className="w-full bg-dark-800 text-sm text-gray-400 px-4 py-2.5 pl-9 rounded-xl border border-white/10 flex items-center">
+                  搜索片名、拼音、演员...
+                </div>
+                <Search className="w-4 h-4 text-cyan-400 absolute left-3" />
+              </div>
 
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <Link
@@ -279,6 +299,12 @@ export function Navbar() {
           </>
         )}
       </nav>
+
+      {/* Mobile Fullscreen Search Overlay */}
+      <MobileSearchModal
+        isOpen={mobileSearchOpen}
+        onClose={() => setMobileSearchOpen(false)}
+      />
 
       {/* Mobile Sticky Bottom Tab Bar (Streamlined to 4 core tabs) */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-dark-950/95 backdrop-blur-xl border-t border-white/10 px-3 py-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex items-center justify-around shadow-2xl">
