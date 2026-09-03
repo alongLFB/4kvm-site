@@ -3,10 +3,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_GATED_PIN=${NEXT_PUBLIC_GATED_PIN:-4kvm_alongLFB@2026}
+        - NEXT_PUBLIC_GATED_LOCKED_TYPES=${NEXT_PUBLIC_GATED_LOCKED_TYPES:-伦理片}
+        - NEXT_PUBLIC_GATED_LOCKED_TYPE_IDS=${NEXT_PUBLIC_GATED_LOCKED_TYPE_IDS:-5}
     container_name: 4kvm-app
     restart: unless-stopped
     ports:
       - "127.0.0.1:3028:3028"  # 仅限宿主机本地（Nginx）访问
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - PORT=3028
