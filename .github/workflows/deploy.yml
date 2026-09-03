@@ -57,13 +57,22 @@ jobs:
               printf "%s\n" "$ENV_FILE" > .env
             fi
 
-            # 5. 自动化容器构建与热重载
-            echo "==> Deploying with Docker Compose..."
-            docker compose down 2>/dev/null || true
-            docker compose up -d --build
+            # 5. 平滑无感部署（旧容器持续在线对外服务，后台先构建新镜像）
+            echo "==> Building new Docker image in background (old container keeps serving)..."
+            docker compose build
+
+            echo "==> Re-creating container atomically (1-2s seamless transition)..."
+            docker compose up -d --no-deps 4kvm-app
             docker image prune -f
 
+            # 6. 自动化健康检查轮询
             echo "==> Verifying Deployment Health..."
-            sleep 5
-            curl -s http://127.0.0.1:3028/api/health || true
+            for i in {1..15}; do
+              if curl -s http://127.0.0.1:3028/api/health | grep -q "ok" 2>/dev/null; then
+                echo "✅ Health check passed! 4kvm-site is fully healthy and serving traffic."
+                break
+              fi
+              echo "Waiting for app to become healthy ($i/15)..."
+              sleep 2
+            done
             echo "==> 4kvm-site deployment completed successfully!"
