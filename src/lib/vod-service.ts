@@ -94,21 +94,16 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
     }
   }
 
-  // 5. 年份过滤
+  // 5. 年份过滤 (精准 4 位纯数字年份 / 2010年代 / 2000年代 / 更早)
   if (year && year !== "全部") {
-    if (year === "今年") {
-      conditions.push("year = '2026'");
-    } else if (year === "去年") {
-      conditions.push("year = '2025'");
-    } else if (year === "10年代" || year === "2010年代") {
+    if (/^\d{4}$/.test(year)) {
+      conditions.push("year = ?");
+      queryParams.push(year);
+    } else if (year === "2010年代" || year === "10年代") {
       conditions.push("(year >= '2010' AND year <= '2019')");
-    } else if (year === "00年代" || year === "2000年代") {
+    } else if (year === "2000年代" || year === "00年代") {
       conditions.push("(year >= '2000' AND year <= '2009')");
-    } else if (year === "90年代" || year === "1990年代") {
-      conditions.push("(year >= '1990' AND year <= '1999')");
-    } else if (year === "80年代" || year === "1980年代") {
-      conditions.push("(year >= '1980' AND year <= '1989')");
-    } else if (year === "更早" || year === "怀旧") {
+    } else if (year === "更早") {
       conditions.push("(year < '2000' AND year != '')");
     } else {
       conditions.push("year = ?");
