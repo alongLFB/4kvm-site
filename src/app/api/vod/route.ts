@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchLiveVods, fetchLiveVodDetail } from "@/lib/vod-service";
-import { GATED_CONFIG, isItemGated, isTypeGated } from "@/config/gated-sections";
+import { GATED_CONFIG, isItemGated, isTypeGated, isTypeIdGated } from "@/config/gated-sections";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
