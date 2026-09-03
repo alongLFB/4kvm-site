@@ -169,6 +169,8 @@
 │   ├── sw.js                     # PWA Service Worker 缓存脚本
 │   └── icons/                    # 各尺寸高清应用图标
 ├── scripts/
+│   ├── ingest-ikun-full.mjs      # 核心片库采集与增量同步引擎 (增量/断点/分类)
+│   ├── INGEST_GUIDE.md           # 采集引擎完整使用手册与分类 ID 对照表
 │   ├── rebuild-clean-db.mjs      # 全量纯净片库一键重建脚本
 │   ├── seed-db.mjs               # 数据库校验与测试脚本
 │   └── sync-upstream.mjs         # 海外高速专线增量自动同步采集脚本
