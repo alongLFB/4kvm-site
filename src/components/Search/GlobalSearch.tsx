@@ -18,6 +18,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import Image from "next/image";
+import { GATED_CONFIG } from "@/config/gated-sections";
 
 interface SuggestionItem {
   id: string;
@@ -148,7 +149,11 @@ export function DesktopSearch() {
 
     setLoading(true);
     const timer = setTimeout(() => {
-      fetch(`/api/vod/suggest?q=${encodeURIComponent(q)}&limit=6`)
+      const pin = typeof window !== "undefined" ? localStorage.getItem(GATED_CONFIG.storageKey) || "" : "";
+      const headers: Record<string, string> = {};
+      if (pin) headers[GATED_CONFIG.headerKey] = pin;
+
+      fetch(`/api/vod/suggest?q=${encodeURIComponent(q)}&limit=6`, { headers })
         .then((res) => res.json())
         .then((data) => {
           setSuggestions(data.list || []);
@@ -420,7 +425,11 @@ export function MobileSearchModal({
 
     setLoading(true);
     const timer = setTimeout(() => {
-      fetch(`/api/vod/suggest?q=${encodeURIComponent(q)}&limit=8`)
+      const pin = typeof window !== "undefined" ? localStorage.getItem(GATED_CONFIG.storageKey) || "" : "";
+      const headers: Record<string, string> = {};
+      if (pin) headers[GATED_CONFIG.headerKey] = pin;
+
+      fetch(`/api/vod/suggest?q=${encodeURIComponent(q)}&limit=8`, { headers })
         .then((res) => res.json())
         .then((data) => {
           setSuggestions(data.list || []);

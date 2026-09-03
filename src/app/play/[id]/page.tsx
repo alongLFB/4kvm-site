@@ -2,10 +2,13 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { MovieCard } from "@/components/MovieCard";
 import { CreateRoomModal } from "@/components/CreateRoomModal";
-import { Film, Share2, Radio, Users, Loader2 } from "lucide-react";
+import { PasscodeModal } from "@/components/PasscodeModal";
+import { GATED_CONFIG } from "@/config/gated-sections";
+import { Film, Share2, Radio, Users, Loader2, Lock } from "lucide-react";
 import { VodItem, WatchHistoryItem } from "@/lib/types";
 
 const VideoPlayer = dynamic(() => import("@/components/Player/ArtPlayer"), {
@@ -31,27 +34,63 @@ export default function PlayPage() {
   const [currentEpIndex, setCurrentEpIndex] = useState(0);
   const [copied, setCopied] = useState(false);
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
+  const [isGatedLocked, setIsGatedLocked] = useState(false);
+  const [passcodeModalOpen, setPasscodeModalOpen] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   // Playback state restoration when opening/closing modal
   const wasPlayingRef = useRef(false);
   const playerRef = useRef<any>(null);
 
-  useEffect(() => {
+  const loadVodDetail = (pinOverride?: string) => {
     if (!id) return;
     setLoading(true);
+    setErrorMsg("");
 
-    fetch(`/api/vod?action=detail&id=${id}`)
-      .then((res) => res.json())
+    const savedPin =
+      pinOverride !== undefined
+        ? pinOverride
+        : typeof window !== "undefined"
+        ? localStorage.getItem(GATED_CONFIG.storageKey) || ""
+        : "";
+
+    const headers: Record<string, string> = {};
+    if (savedPin) {
+      headers[GATED_CONFIG.headerKey] = savedPin;
+    }
+
+    fetch(`/api/vod?action=detail&id=${id}`, { headers })
+      .then(async (res) => {
+        if (res.status === 403) {
+          setIsGatedLocked(true);
+          setPasscodeModalOpen(true);
+          setLoading(false);
+          return null;
+        }
+        return res.json();
+      })
       .then((data) => {
-        if (data.data) {
+        if (!data) return;
+        if (data.code === 200 && data.data) {
           setItem(data.data);
+          setIsGatedLocked(false);
+        } else if (data.code === 403) {
+          setIsGatedLocked(true);
+          setPasscodeModalOpen(true);
+        } else {
+          setErrorMsg(data.msg || "该影视不存在或已被下线");
         }
         setLoading(false);
       })
       .catch((err) => {
         console.error(err);
+        setErrorMsg("网络异常，无法加载视频详情");
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadVodDetail();
 
     fetch(`/api/vod?type=电影&pg=1`)
       .then((res) => res.json())
@@ -62,6 +101,55 @@ export default function PlayPage() {
       })
       .catch(console.error);
   }, [id]);
+
+  if (isGatedLocked) {
+    return (
+      <>
+        <div className="py-32 flex flex-col items-center justify-center gap-4 text-center px-4">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shadow-xl shadow-amber-500/5">
+            <Lock className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-white">此内容属于【特约专区】受限板块</h2>
+          <p className="text-sm text-gray-400 max-w-md">
+            当前视频已开启专区访问保护，请输入访问口令后解锁观看。
+          </p>
+          <div className="flex items-center gap-3 mt-3">
+            <button
+              onClick={() => setPasscodeModalOpen(true)}
+              className="px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-sm shadow-lg shadow-cyan-500/20 transition cursor-pointer"
+            >
+              输入口令解锁
+            </button>
+            <Link
+              href="/"
+              className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-sm font-medium transition"
+            >
+              返回首页
+            </Link>
+          </div>
+        </div>
+
+        <PasscodeModal
+          isOpen={passcodeModalOpen}
+          onClose={() => setPasscodeModalOpen(false)}
+          onUnlock={(pin) => {
+            loadVodDetail(pin);
+          }}
+        />
+      </>
+    );
+  }
+
+  if (errorMsg) {
+    return (
+      <div className="py-36 flex flex-col items-center justify-center gap-3 text-gray-400 text-center px-4">
+        <p className="text-base text-gray-300">{errorMsg}</p>
+        <Link href="/" className="text-sm text-cyan-400 hover:underline">
+          返回主页探索更多影视
+        </Link>
+      </div>
+    );
+  }
 
   if (loading || !item) {
     return (

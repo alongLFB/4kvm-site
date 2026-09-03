@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { MovieCard } from "@/components/MovieCard";
 import { Search, Loader2 } from "lucide-react";
+import { GATED_CONFIG } from "@/config/gated-sections";
 import { VodItem } from "@/lib/types";
 
 function SearchContent() {
@@ -22,7 +23,14 @@ function SearchContent() {
     let isMounted = true;
     setLoading(true);
 
-    fetch(`/api/vod?wd=${encodeURIComponent(q.trim())}`)
+    const pin =
+      typeof window !== "undefined"
+        ? localStorage.getItem(GATED_CONFIG.storageKey) || ""
+        : "";
+    const headers: Record<string, string> = {};
+    if (pin) headers[GATED_CONFIG.headerKey] = pin;
+
+    fetch(`/api/vod?wd=${encodeURIComponent(q.trim())}`, { headers })
       .then((res) => res.json())
       .then((data) => {
         if (!isMounted) return;
