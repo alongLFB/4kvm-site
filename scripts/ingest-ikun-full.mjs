@@ -20,6 +20,7 @@ const EXCLUDE_TYPE_IDS = new Set([56]);
 export const CATEGORY_MAP = {
   // 1: 电影
   1: { parent: "电影", sub: "电影" },
+  5: { parent: "伦理片", sub: "伦理片" },
   6: { parent: "电影", sub: "动作片" },
   7: { parent: "电影", sub: "喜剧片" },
   8: { parent: "电影", sub: "爱情片" },

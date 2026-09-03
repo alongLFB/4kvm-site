@@ -23,12 +23,12 @@ export const GATED_CONFIG = {
   passcode: process.env.NEXT_PUBLIC_GATED_PIN || "666888",
 
   // 粗粒度：需要加锁的一级主分类名称（环境变量 NEXT_PUBLIC_GATED_LOCKED_TYPES，英文逗号分隔，例如 "体育,综艺"）
-  lockedTypes: parseStringList(process.env.NEXT_PUBLIC_GATED_LOCKED_TYPES, ["体育"]),
+  lockedTypes: parseStringList(process.env.NEXT_PUBLIC_GATED_LOCKED_TYPES, [""]),
 
   // 细粒度：按具体 type_id 细粒度加锁（环境变量 NEXT_PUBLIC_GATED_LOCKED_TYPE_IDS，英文逗号分隔）
   lockedTypeIds: parseNumberList(
     process.env.NEXT_PUBLIC_GATED_LOCKED_TYPE_IDS,
-    [40, 41, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55]
+    []
   ),
 
   // 客户端持久化存储与请求头安全 Key

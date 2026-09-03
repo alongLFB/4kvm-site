@@ -33,7 +33,7 @@ const FILTER_CONFIG = {
     { label: "✨ 动漫", value: "动漫" },
     { label: "🎤 综艺", value: "综艺" },
     { label: "⚽ 体育", value: "体育" },
-    { label: "🎬 伦理", value: "伦理" },
+    { label: "🎬 伦理片", value: "伦理片" },
   ],
   // 二级动态子类型（按一级分类精准联动）
   subTypes: {
@@ -43,7 +43,7 @@ const FILTER_CONFIG = {
     动漫: ["全部", "日本动漫", "国产动漫", "欧美动漫"],
     综艺: ["全部", "大陆综艺", "日韩综艺", "欧美综艺", "港台综艺"],
     体育: ["全部", "NBA", "足球", "CBA", "英超", "西甲", "意甲", "德甲", "法甲", "LPL"],
-    伦理: ["全部", "经典伦理", "国产伦理", "日韩伦理", "欧美伦理"],
+    伦理片: ["全部"],
   } as Record<string, string[]>,
   // 地区维度
   areas: ["全部", "中国大陆", "欧美/好莱坞", "中国香港", "中国台湾", "日本", "韩国", "泰国", "其它"],
@@ -255,11 +255,10 @@ function CategoryContent() {
                 <button
                   key={item.value}
                   onClick={() => handleTypeClick(item.value)}
-                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0 transition text-xs flex items-center gap-1 ${
-                    active
-                      ? "bg-cyan-500 text-black font-bold shadow-lg shadow-cyan-500/20 scale-105"
-                      : "text-gray-300 hover:text-white hover:bg-white/5"
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0 transition text-xs flex items-center gap-1 ${active
+                    ? "bg-cyan-500 text-black font-bold shadow-lg shadow-cyan-500/20 scale-105"
+                    : "text-gray-300 hover:text-white hover:bg-white/5"
+                    }`}
                 >
                   <span>{item.label}</span>
                   {isLocked && !hasUnlocked && (
@@ -288,11 +287,10 @@ function CategoryContent() {
                 <button
                   key={sub}
                   onClick={() => updateFilter("sub_type", cleanSub)}
-                  className={`px-2.5 py-1.5 rounded-md whitespace-nowrap shrink-0 transition text-xs ${
-                    active
-                      ? "bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/40"
-                      : "text-gray-400 hover:text-gray-200 hover:bg-white/5"
-                  }`}
+                  className={`px-2.5 py-1.5 rounded-md whitespace-nowrap shrink-0 transition text-xs ${active
+                    ? "bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/40"
+                    : "text-gray-400 hover:text-gray-200 hover:bg-white/5"
+                    }`}
                 >
                   {sub}
                 </button>
@@ -314,11 +312,10 @@ function CategoryContent() {
                 <button
                   key={item}
                   onClick={() => updateFilter("area", item)}
-                  className={`px-2.5 py-1.5 rounded-md whitespace-nowrap shrink-0 transition text-xs ${
-                    active
-                      ? "bg-cyan-500 text-black font-bold shadow-md shadow-cyan-500/20"
-                      : "text-gray-300 hover:text-white hover:bg-white/5"
-                  }`}
+                  className={`px-2.5 py-1.5 rounded-md whitespace-nowrap shrink-0 transition text-xs ${active
+                    ? "bg-cyan-500 text-black font-bold shadow-md shadow-cyan-500/20"
+                    : "text-gray-300 hover:text-white hover:bg-white/5"
+                    }`}
                 >
                   {item}
                 </button>
@@ -340,11 +337,10 @@ function CategoryContent() {
                 <button
                   key={item}
                   onClick={() => updateFilter("year", item)}
-                  className={`px-2.5 py-1.5 rounded-md whitespace-nowrap shrink-0 transition text-xs ${
-                    active
-                      ? "bg-cyan-500 text-black font-bold shadow-md shadow-cyan-500/20"
-                      : "text-gray-300 hover:text-white hover:bg-white/5"
-                  }`}
+                  className={`px-2.5 py-1.5 rounded-md whitespace-nowrap shrink-0 transition text-xs ${active
+                    ? "bg-cyan-500 text-black font-bold shadow-md shadow-cyan-500/20"
+                    : "text-gray-300 hover:text-white hover:bg-white/5"
+                    }`}
                 >
                   {item}
                 </button>
@@ -366,11 +362,10 @@ function CategoryContent() {
                 <button
                   key={item}
                   onClick={() => updateFilter("lang", item)}
-                  className={`px-2.5 py-1.5 rounded-md whitespace-nowrap shrink-0 transition text-xs ${
-                    active
-                      ? "bg-cyan-500 text-black font-bold shadow-md shadow-cyan-500/20"
-                      : "text-gray-300 hover:text-white hover:bg-white/5"
-                  }`}
+                  className={`px-2.5 py-1.5 rounded-md whitespace-nowrap shrink-0 transition text-xs ${active
+                    ? "bg-cyan-500 text-black font-bold shadow-md shadow-cyan-500/20"
+                    : "text-gray-300 hover:text-white hover:bg-white/5"
+                    }`}
                 >
                   {item}
                 </button>
@@ -407,11 +402,10 @@ function CategoryContent() {
                 <button
                   key={s.value}
                   onClick={() => updateFilter("sort", s.value)}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition ${
-                    active
-                      ? "bg-cyan-500 text-black font-bold shadow"
-                      : "text-gray-400 hover:text-white"
-                  }`}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition ${active
+                    ? "bg-cyan-500 text-black font-bold shadow"
+                    : "text-gray-400 hover:text-white"
+                    }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
                   {s.label}
@@ -428,11 +422,10 @@ function CategoryContent() {
                 <button
                   key={st}
                   onClick={() => updateFilter("status", st)}
-                  className={`px-2 py-1 rounded-md transition ${
-                    active
-                      ? "text-cyan-400 bg-cyan-500/10 font-bold border border-cyan-500/20"
-                      : "text-gray-400 hover:text-gray-200"
-                  }`}
+                  className={`px-2 py-1 rounded-md transition ${active
+                    ? "text-cyan-400 bg-cyan-500/10 font-bold border border-cyan-500/20"
+                    : "text-gray-400 hover:text-gray-200"
+                    }`}
                 >
                   {st}
                 </button>
