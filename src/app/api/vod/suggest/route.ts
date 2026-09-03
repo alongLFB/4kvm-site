@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { querySuggestions } from "@/lib/search-engine";
-import { GATED_CONFIG } from "@/config/gated-sections";
+import { GATED_CONFIG, isItemGated } from "@/config/gated-sections";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
   // 若未解锁受控专区，过滤掉受控专区的内容
   if (!isUnlocked) {
-    list = list.filter((item) => !GATED_CONFIG.lockedTypes.includes(item.type_name));
+    list = list.filter((item) => !isItemGated(item));
   }
 
   return NextResponse.json({

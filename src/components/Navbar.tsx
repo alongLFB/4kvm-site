@@ -18,7 +18,7 @@ import {
   Trophy,
   Lock,
 } from "lucide-react";
-import { GATED_CONFIG } from "@/config/gated-sections";
+import { GATED_CONFIG, isTypeGated } from "@/config/gated-sections";
 import { DesktopSearch, MobileSearchModal } from "@/components/Search/GlobalSearch";
 
 
@@ -126,7 +126,7 @@ export function Navbar() {
                 >
                   <Trophy className="w-4 h-4 text-rose-400" />
                   体育
-                  {GATED_CONFIG.lockedTypes.includes("体育") && (
+                  {isTypeGated("体育") && (
                     <Lock className="w-3 h-3 text-amber-400" />
                   )}
                 </Link>
@@ -288,7 +288,7 @@ export function Navbar() {
                     <Trophy className="w-4 h-4 text-rose-400" />
                     体育
                   </div>
-                  {GATED_CONFIG.lockedTypes.includes("体育") && (
+                  {isTypeGated("体育") && (
                     <span className="flex items-center gap-1 text-[11px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                       <Lock className="w-2.5 h-2.5" /> 口令
                     </span>

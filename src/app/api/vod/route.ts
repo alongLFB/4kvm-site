@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchLiveVods, fetchLiveVodDetail } from "@/lib/vod-service";
-import { GATED_CONFIG } from "@/config/gated-sections";
+import { GATED_CONFIG, isItemGated, isTypeGated } from "@/config/gated-sections";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
 
   if (action === "detail" && id) {
     const item = await fetchLiveVodDetail(id);
-    if (item && GATED_CONFIG.lockedTypes.includes(item.type_name)) {
+    if (item && isItemGated(item)) {
       if (!checkPasscode()) {
         return NextResponse.json(
           { code: 403, msg: "该内容属于专享保护板块，请提供访问口令" },
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   const type = searchParams.get("type") || "全部";
 
   // 服务端双重安全防护：若请求受保护分类，强制验证口令
-  if (GATED_CONFIG.lockedTypes.includes(type)) {
+  if (isTypeGated(type)) {
     if (!checkPasscode()) {
       return NextResponse.json(
         {

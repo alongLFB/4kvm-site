@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { MovieCard } from "@/components/MovieCard";
 import { CreateRoomModal } from "@/components/CreateRoomModal";
 import { PasscodeModal } from "@/components/PasscodeModal";
-import { GATED_CONFIG } from "@/config/gated-sections";
+import { GATED_CONFIG, isTypeGated } from "@/config/gated-sections";
 import { VodItem } from "@/lib/types";
 import {
   Loader2,
@@ -160,7 +160,7 @@ function CategoryContent() {
   };
 
   const handleTypeClick = (val: string) => {
-    const isLocked = GATED_CONFIG.lockedTypes.includes(val);
+    const isLocked = isTypeGated(val);
     const hasUnlocked = unlockedPin === GATED_CONFIG.passcode;
     if (isLocked && !hasUnlocked) {
       setPendingType(val);
@@ -181,7 +181,7 @@ function CategoryContent() {
   const handleRelock = () => {
     localStorage.removeItem(GATED_CONFIG.storageKey);
     setUnlockedPin("");
-    if (GATED_CONFIG.lockedTypes.includes(currentType)) {
+    if (isTypeGated(currentType)) {
       updateFilter("type", "全部");
     }
   };
@@ -196,7 +196,7 @@ function CategoryContent() {
     router.push("/category");
   };
 
-  const isCurrentTypeGated = GATED_CONFIG.lockedTypes.includes(currentType);
+  const isCurrentTypeGated = isTypeGated(currentType);
   const isGatedUnlocked = unlockedPin === GATED_CONFIG.passcode;
 
   return (
@@ -247,7 +247,7 @@ function CategoryContent() {
           <div className="flex flex-nowrap sm:flex-wrap gap-1.5 flex-1 overflow-x-auto pb-1.5 sm:pb-0 scrollbar-none">
             {FILTER_CONFIG.types.map((item) => {
               const active = currentType === item.value;
-              const isLocked = GATED_CONFIG.lockedTypes.includes(item.value);
+              const isLocked = isTypeGated(item.value);
               const hasUnlocked = unlockedPin === GATED_CONFIG.passcode;
               return (
                 <button
