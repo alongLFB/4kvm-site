@@ -189,7 +189,7 @@ export function DesktopSearch() {
   };
 
   return (
-    <div ref={containerRef} className="relative w-72 lg:w-96">
+    <div ref={containerRef} className="relative w-40 md:w-48 lg:w-56 xl:w-72 2xl:w-80 transition-all duration-300 focus-within:w-56 lg:focus-within:w-72 xl:focus-within:w-80">
       {/* 搜索输入条 */}
       <form onSubmit={handleSubmit} className="relative flex items-center">
         <input
@@ -201,8 +201,8 @@ export function DesktopSearch() {
             setQuery(e.target.value);
             setIsOpen(true);
           }}
-          placeholder="搜索片名、拼音、演员 (支持全拼/首字母)..."
-          className="w-full bg-dark-900/90 text-sm text-white placeholder-gray-400/80 px-4 py-2 pl-9 pr-16 rounded-xl border border-white/10 hover:border-white/20 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 shadow-inner transition duration-200"
+          placeholder="搜索片名、拼音、演员..."
+          className="w-full bg-dark-900/90 text-sm text-white placeholder-gray-400/80 px-4 py-2 pl-9 pr-14 rounded-xl border border-white/10 hover:border-white/20 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 shadow-inner transition duration-200"
         />
         <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5 pointer-events-none" />
 

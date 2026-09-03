@@ -62,14 +62,14 @@ export function Navbar() {
     <>
       {/* Top Main Navbar with iOS PWA Safe Area support */}
       <nav className="sticky top-0 z-50 bg-dark-950/90 backdrop-blur-md border-b border-white/10 pt-[env(safe-area-inset-top,0px)]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+        <div className="max-w-[1440px] mx-auto px-3 sm:px-5 lg:px-8">
+          <div className="flex items-center justify-between h-16 gap-2 lg:gap-4">
             {/* Logo */}
-            <div className="flex items-center gap-8">
+            <div className="flex items-center gap-3 lg:gap-5 xl:gap-7 min-w-0">
               <Link
                 href="/"
                 onClick={handleLogoClick}
-                className="flex items-center gap-2 group cursor-pointer active:scale-95 transition select-none"
+                className="flex items-center gap-2 group cursor-pointer active:scale-95 transition select-none shrink-0"
                 title="返回4KVM影视首页"
               >
                 <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-cyan-500/20 group-hover:scale-105 group-hover:shadow-cyan-500/40 transition">
@@ -83,49 +83,49 @@ export function Navbar() {
               </Link>
 
               {/* Desktop Navigation */}
-              <div className="hidden md:flex items-center space-x-1">
+              <div className="hidden md:flex items-center space-x-0.5 lg:space-x-1 shrink-0">
                 <Link
                   href="/"
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${
+                  className={`px-2 lg:px-2.5 xl:px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition flex items-center gap-1 lg:gap-1.5 whitespace-nowrap shrink-0 ${
                     isHome ? "text-cyan-400 bg-white/5 font-bold" : "text-gray-300 hover:text-white hover:bg-white/5"
                   }`}
                 >
-                  <Home className="w-4 h-4 text-cyan-400" />
+                  <Home className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-cyan-400" />
                   首页
                 </Link>
                 <Link
                   href="/category?type=电影"
-                  className="px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition flex items-center gap-1.5"
+                  className="px-2 lg:px-2.5 xl:px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition flex items-center gap-1 lg:gap-1.5 whitespace-nowrap shrink-0"
                 >
-                  <Film className="w-4 h-4 text-blue-400" />
+                  <Film className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-blue-400" />
                   电影
                 </Link>
                 <Link
                   href="/category?type=电视剧"
-                  className="px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition flex items-center gap-1.5"
+                  className="px-2 lg:px-2.5 xl:px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition flex items-center gap-1 lg:gap-1.5 whitespace-nowrap shrink-0"
                 >
-                  <Tv className="w-4 h-4 text-emerald-400" />
+                  <Tv className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-emerald-400" />
                   电视剧
                 </Link>
                 <Link
                   href="/category?type=动漫"
-                  className="px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition flex items-center gap-1.5"
+                  className="px-2 lg:px-2.5 xl:px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition flex items-center gap-1 lg:gap-1.5 whitespace-nowrap shrink-0"
                 >
-                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  <Sparkles className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-purple-400" />
                   动漫
                 </Link>
                 <Link
                   href="/category?type=综艺"
-                  className="px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition flex items-center gap-1.5"
+                  className="px-2 lg:px-2.5 xl:px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition flex items-center gap-1 lg:gap-1.5 whitespace-nowrap shrink-0"
                 >
-                  <Flame className="w-4 h-4 text-amber-400" />
+                  <Flame className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-amber-400" />
                   综艺
                 </Link>
                 <Link
                   href="/category?type=体育"
-                  className="px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition flex items-center gap-1.5"
+                  className="px-2 lg:px-2.5 xl:px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition flex items-center gap-1 lg:gap-1.5 whitespace-nowrap shrink-0"
                 >
-                  <Trophy className="w-4 h-4 text-rose-400" />
+                  <Trophy className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-rose-400" />
                   体育
                   {isTypeGated("体育") && (
                     <Lock className="w-3 h-3 text-amber-400" />
@@ -133,42 +133,43 @@ export function Navbar() {
                 </Link>
                 <Link
                   href="/category"
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${
+                  className={`px-2 lg:px-2.5 xl:px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition flex items-center gap-1 lg:gap-1.5 whitespace-nowrap shrink-0 ${
                     isCategory
                       ? "text-cyan-400 bg-cyan-500/10 font-bold border border-cyan-500/20"
                       : "text-gray-300 hover:text-cyan-400 hover:bg-white/5"
                   }`}
                 >
-                  <SlidersHorizontal className="w-4 h-4 text-cyan-400" />
+                  <SlidersHorizontal className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-cyan-400" />
                   全部片库
                 </Link>
                 <Link
                   href="/hall"
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${
+                  className={`px-2 lg:px-2.5 xl:px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition flex items-center gap-1 lg:gap-1.5 whitespace-nowrap shrink-0 ${
                     isHall
                       ? "text-cyan-400 bg-cyan-500/15 font-bold border border-cyan-500/30 shadow-sm"
                       : "text-gray-300 hover:text-cyan-400 hover:bg-white/5"
                   }`}
                 >
-                  <Users className="w-4 h-4 text-cyan-400" />
-                  🎪 放映广场 (一起看)
+                  <Users className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-cyan-400" />
+                  <span>🎪 放映广场</span>
+                  <span className="hidden xl:inline text-[11px] text-cyan-400/80">(一起看)</span>
                 </Link>
               </div>
             </div>
 
             {/* Search bar & Actions */}
-            <div className="hidden md:flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-2 lg:gap-3 shrink-0">
               <OnlineBadge />
               <DesktopSearch />
 
               <Link
                 href="/history"
-                className={`p-2 rounded-full transition ${
+                className={`p-2 rounded-full transition shrink-0 ${
                   isHistory ? "text-cyan-400 bg-white/10" : "text-gray-300 hover:text-cyan-400 hover:bg-white/5"
                 }`}
                 title="观看历史"
               >
-                <History className="w-5 h-5" />
+                <History className="w-4 h-4 lg:w-5 lg:h-5" />
               </Link>
             </div>
 
