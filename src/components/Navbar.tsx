@@ -15,6 +15,7 @@ import {
   Sparkles,
   Home,
   SlidersHorizontal,
+  Trophy,
 } from "lucide-react";
 
 export function Navbar() {
@@ -97,6 +98,13 @@ export function Navbar() {
                 >
                   <Flame className="w-4 h-4 text-amber-400" />
                   综艺
+                </Link>
+                <Link
+                  href="/category?type=体育"
+                  className="px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition flex items-center gap-1.5"
+                >
+                  <Trophy className="w-4 h-4 text-rose-400" />
+                  体育
                 </Link>
                 <Link
                   href="/category"
@@ -237,6 +245,22 @@ export function Navbar() {
                 >
                   <Sparkles className="w-4 h-4 text-purple-400" />
                   动漫
+                </Link>
+                <Link
+                  href="/category?type=综艺"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-3 bg-dark-800 active:bg-dark-700 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition"
+                >
+                  <Flame className="w-4 h-4 text-amber-400" />
+                  综艺
+                </Link>
+                <Link
+                  href="/category?type=体育"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-3 bg-dark-800 active:bg-dark-700 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition"
+                >
+                  <Trophy className="w-4 h-4 text-rose-400" />
+                  体育
                 </Link>
               </div>
             </div>

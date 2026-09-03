@@ -12,22 +12,26 @@ export async function GET(request: Request) {
   }
 
   const type = searchParams.get("type") || "全部";
+  const subType = searchParams.get("sub_type") || searchParams.get("subType") || "全部";
   const area = searchParams.get("area") || "全部";
   const lang = searchParams.get("lang") || "全部";
   const year = searchParams.get("year") || "全部";
   const quality = searchParams.get("quality") || "全部";
   const status = searchParams.get("status") || "全部";
+  const sort = searchParams.get("sort") || "hot";
   const page = parseInt(searchParams.get("pg") || "1", 10);
   const limit = parseInt(searchParams.get("limit") || "20", 10);
   const query = searchParams.get("keyword") || searchParams.get("wd") || searchParams.get("q") || "";
 
   const result = await fetchLiveVods({
     type,
+    subType,
     area,
     lang,
     year,
     quality,
     status,
+    sort,
     page,
     limit,
     query,

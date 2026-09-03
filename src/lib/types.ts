@@ -12,7 +12,7 @@ export interface VodItem {
   id: string;
   name: string;
   type_id: number;
-  type_name: "电影" | "电视剧" | "动漫" | "综艺";
+  type_name: "电影" | "电视剧" | "动漫" | "综艺" | "体育" | string;
   sub_type?: string;
   pic: string;
   banner?: string;

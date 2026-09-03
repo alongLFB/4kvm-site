@@ -2,12 +2,14 @@ import { VodItem } from "./types";
 import { getDatabase, rowToVodItem } from "./db";
 
 export interface FilterParams {
-  type?: string;
-  area?: string;
-  lang?: string;
-  year?: string;
-  quality?: string;
-  status?: string;
+  type?: string;     // 一级大类: 全部 | 电影 | 电视剧 | 动漫 | 综艺 | 体育
+  subType?: string;  // 二级子类: 剧情片 | 动作片 | 爽文短剧 | 国产剧 | 日本动漫 | NBA 等
+  area?: string;     // 地区
+  lang?: string;     // 语言
+  year?: string;     // 年份: 2026, 2025, 2024, 2010年代 等
+  quality?: string;  // 画质
+  status?: string;   // 状态: 全集/完结 | 连载中
+  sort?: string;     // 排序: "hot" (最高人气) | "latest" (最新上线) | "rating" (最高评分)
   page?: number;
   limit?: number;
   query?: string;
@@ -21,11 +23,13 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
 }> {
   const {
     type = "全部",
+    subType = "全部",
     area = "全部",
     lang = "全部",
     year = "全部",
     quality = "全部",
     status = "全部",
+    sort = "hot",
     page = 1,
     limit = 20,
     query = "",
@@ -35,35 +39,48 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
   const conditions: string[] = [];
   const queryParams: any[] = [];
 
-  // 1. 板块 / 类型过滤
+  // 1. 一级大类过滤 (type: 电影 | 电视剧 | 动漫 | 综艺 | 体育)
   if (type && type !== "全部") {
     if (type === "短剧") {
+      // 兼容旧版直达入口
       conditions.push("(sub_type LIKE '%短剧%' OR tags LIKE '%短剧%')");
     } else if (type === "纪录片") {
-      conditions.push("(sub_type LIKE '%纪录%' OR sub_type LIKE '%记录%' OR tags LIKE '%纪录%' OR tags LIKE '%记录%')");
+      conditions.push("(sub_type LIKE '%纪录%' OR tags LIKE '%纪录%')");
     } else {
-      conditions.push("(type_name = ? OR sub_type = ? OR tags LIKE ?)");
-      queryParams.push(type, type, `%${type}%`);
+      conditions.push("type_name = ?");
+      queryParams.push(type);
     }
   }
 
-  // 2. 地区过滤
+  // 2. 二级子类过滤 (subType: 动作片 | 爽文短剧 | 国产剧 | 日本动漫 | NBA 等)
+  if (subType && subType !== "全部") {
+    // 剥离可能的 emoji (如 "🔥 爽文短剧" -> "爽文短剧")
+    const cleanSub = subType.replace(/^[^\w\u4e00-\u9fa5]+/, "").trim();
+    conditions.push("(sub_type LIKE ? OR tags LIKE ?)");
+    queryParams.push(`%${cleanSub}%`, `%${cleanSub}%`);
+  }
+
+  // 3. 地区过滤
   if (area && area !== "全部") {
-    if (area === "大陆") {
-      conditions.push("(area LIKE '%大陆%' OR area LIKE '%内地%' OR area LIKE '%中国%')");
-    } else if (area === "欧美") {
-      conditions.push("(area LIKE '%欧美%' OR area LIKE '%美国%' OR area LIKE '%英国%' OR area LIKE '%加拿大%' OR area LIKE '%法国%' OR area LIKE '%德国%')");
+    if (area === "大陆" || area === "中国大陆") {
+      conditions.push("(area LIKE '%大陆%' OR area LIKE '%内地%')");
+    } else if (area === "香港" || area === "中国香港") {
+      conditions.push("area LIKE '%香港%'");
+    } else if (area === "台湾" || area === "中国台湾") {
+      conditions.push("area LIKE '%台湾%'");
+    } else if (area === "欧美" || area === "欧美/好莱坞" || area === "好莱坞") {
+      conditions.push("(area LIKE '%欧美%' OR area LIKE '%美国%' OR area LIKE '%英国%' OR area LIKE '%法国%' OR area LIKE '%德国%' OR area LIKE '%意大利%' OR area LIKE '%加拿大%' OR area LIKE '%西班牙%')");
     } else if (area === "其它") {
-      conditions.push("(area NOT LIKE '%大陆%' AND area NOT LIKE '%内地%' AND area NOT LIKE '%香港%' AND area NOT LIKE '%台湾%' AND area NOT LIKE '%日本%' AND area NOT LIKE '%韩国%' AND area NOT LIKE '%美国%' AND area NOT LIKE '%英国%' AND area NOT LIKE '%欧美%' AND area NOT LIKE '%泰国%')");
+      conditions.push("(area NOT LIKE '%大陆%' AND area NOT LIKE '%香港%' AND area NOT LIKE '%台湾%' AND area NOT LIKE '%美国%' AND area NOT LIKE '%英国%' AND area NOT LIKE '%日本%' AND area NOT LIKE '%韩国%' AND area NOT LIKE '%泰国%')");
     } else {
       conditions.push("area LIKE ?");
       queryParams.push(`%${area}%`);
     }
   }
 
-  // 3. 语言过滤
+  // 4. 语言过滤
   if (lang && lang !== "全部") {
-    if (lang === "国语") {
+    if (lang === "国语" || lang === "普通话" || lang === "国语/普通话") {
       conditions.push("(lang LIKE '%国语%' OR lang LIKE '%普通话%' OR lang LIKE '%汉语%')");
     } else if (lang === "其它") {
       conditions.push("(lang NOT LIKE '%国语%' AND lang NOT LIKE '%普通话%' AND lang NOT LIKE '%汉语%' AND lang NOT LIKE '%粤语%' AND lang NOT LIKE '%英语%' AND lang NOT LIKE '%韩语%' AND lang NOT LIKE '%日语%' AND lang NOT LIKE '%泰语%')");
@@ -73,7 +90,7 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
     }
   }
 
-  // 4. 年份过滤
+  // 5. 年份过滤
   if (year && year !== "全部") {
     if (year === "今年") {
       conditions.push("year = '2026'");
@@ -83,25 +100,25 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
       conditions.push("(year >= '2010' AND year <= '2019')");
     } else if (year === "00年代" || year === "2000年代") {
       conditions.push("(year >= '2000' AND year <= '2009')");
-    } else if (year === "90年代") {
+    } else if (year === "90年代" || year === "1990年代") {
       conditions.push("(year >= '1990' AND year <= '1999')");
-    } else if (year === "80年代") {
+    } else if (year === "80年代" || year === "1980年代") {
       conditions.push("(year >= '1980' AND year <= '1989')");
     } else if (year === "更早" || year === "怀旧") {
-      conditions.push("year < '1980'");
+      conditions.push("(year < '2000' AND year != '')");
     } else {
-      conditions.push("year LIKE ?");
-      queryParams.push(`%${year}%`);
+      conditions.push("year = ?");
+      queryParams.push(year);
     }
   }
 
-  // 5. 画质过滤
+  // 6. 画质过滤
   if (quality && quality !== "全部") {
     conditions.push("(remarks LIKE ? OR tags LIKE ?)");
     queryParams.push(`%${quality}%`, `%${quality}%`);
   }
 
-  // 6. 状态过滤
+  // 7. 状态过滤
   if (status && status !== "全部") {
     if (status === "全集" || status === "完结") {
       conditions.push("(type_name = '电影' OR remarks LIKE '%全%' OR remarks LIKE '%完结%' OR remarks LIKE '%HD%' OR remarks LIKE '%BD%')");
@@ -110,11 +127,10 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
     }
   }
 
-  // 7. 关键词搜索 (同时利用 FTS5 和 LIKE 模糊匹配)
+  // 8. 关键词搜索 (同时利用 FTS5 和 LIKE 模糊匹配)
   if (query && query.trim()) {
     const q = query.trim();
     conditions.push("(id IN (SELECT id FROM vods_fts WHERE vods_fts MATCH ?) OR name LIKE ? OR actor LIKE ? OR director LIKE ? OR tags LIKE ?)");
-    // Format query for FTS5 prefix match
     const ftsQuery = `"${q}"*`;
     queryParams.push(ftsQuery, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
   }
@@ -127,12 +143,21 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
   const countResult = (countStmt.get(...queryParams) as any) || { total: 0 };
   const total = Number(countResult.total || 0);
 
-  // 2. Query Paginated List
+  // 2. Query Paginated List with dynamic Sort
   const pagecount = Math.max(1, Math.ceil(total / limit));
   const validPage = Math.min(Math.max(1, page), pagecount);
   const offset = (validPage - 1) * limit;
 
-  const listSql = `SELECT * FROM vods ${whereClause} ORDER BY hits DESC, rating DESC LIMIT ? OFFSET ?`;
+  let orderBy = "ORDER BY hits DESC, rating DESC";
+  if (sort === "latest") {
+    orderBy = "ORDER BY year DESC, updated_at DESC, hits DESC";
+  } else if (sort === "rating") {
+    orderBy = "ORDER BY rating DESC, hits DESC";
+  } else if (sort === "hot") {
+    orderBy = "ORDER BY hits DESC, rating DESC";
+  }
+
+  const listSql = `SELECT * FROM vods ${whereClause} ${orderBy} LIMIT ? OFFSET ?`;
   const listStmt = db.prepare(listSql);
   const rows = listStmt.all(...queryParams, limit, offset) as any[];
 
