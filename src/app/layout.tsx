@@ -3,6 +3,7 @@ import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { PwaRegister } from "@/components/PwaRegister";
+import { FloatingActions } from "@/components/FloatingActions";
 
 export const viewport: Viewport = {
   themeColor: "#050811",
@@ -49,6 +50,7 @@ export default function RootLayout({
         <main className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-4 sm:py-6 pb-6 sm:pb-8">
           {children}
         </main>
+        <FloatingActions />
         <Footer />
       </body>
     </html>
