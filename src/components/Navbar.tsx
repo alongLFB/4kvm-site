@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Search,
   Film,
@@ -22,10 +22,10 @@ import { GATED_CONFIG, isTypeGated } from "@/config/gated-sections";
 import { DesktopSearch, MobileSearchModal } from "@/components/Search/GlobalSearch";
 import { OnlineBadge } from "@/components/OnlineBadge";
 
-
-export function Navbar() {
+function NavbarContent() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -50,13 +50,24 @@ export function Navbar() {
   };
 
   const isHome = pathname === "/";
-  const isCategory = pathname === "/category";
-  const isHall = pathname === "/hall";
+  const isHall = pathname === "/hall" || pathname.startsWith("/room");
   const isHistory = pathname === "/history";
+
+  // Precision Category matching based on query parameter
+  const isCategoryPath = pathname === "/category";
+  const isCategory = isCategoryPath;
+  const currentCategoryType = isCategoryPath ? (searchParams.get("type") || "全部") : null;
+
+  const isMovie = isCategoryPath && currentCategoryType === "电影";
+  const isTv = isCategoryPath && currentCategoryType === "电视剧";
+  const isAnime = isCategoryPath && currentCategoryType === "动漫";
+  const isVariety = isCategoryPath && currentCategoryType === "综艺";
+  const isSports = isCategoryPath && currentCategoryType === "体育";
+  const isAllCategory = isCategoryPath && (currentCategoryType === "全部" || !searchParams.get("type"));
 
   useEffect(() => {
     setMobileMenuOpen(false);
-  }, [pathname]);
+  }, [pathname, searchParams]);
 
   return (
     <>
@@ -96,31 +107,41 @@ export function Navbar() {
                 </Link>
                 <Link
                   href="/category?type=电影"
-                  className="px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition whitespace-nowrap shrink-0"
+                  className={`px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium transition whitespace-nowrap shrink-0 ${
+                    isMovie ? "text-cyan-400 bg-white/10 font-bold shadow-xs" : "text-gray-300 hover:text-white hover:bg-white/5"
+                  }`}
                 >
                   电影
                 </Link>
                 <Link
                   href="/category?type=电视剧"
-                  className="px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition whitespace-nowrap shrink-0"
+                  className={`px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium transition whitespace-nowrap shrink-0 ${
+                    isTv ? "text-cyan-400 bg-white/10 font-bold shadow-xs" : "text-gray-300 hover:text-white hover:bg-white/5"
+                  }`}
                 >
                   电视剧
                 </Link>
                 <Link
                   href="/category?type=动漫"
-                  className="hidden lg:flex px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition whitespace-nowrap shrink-0"
+                  className={`hidden lg:flex px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium transition whitespace-nowrap shrink-0 ${
+                    isAnime ? "text-cyan-400 bg-white/10 font-bold shadow-xs" : "text-gray-300 hover:text-white hover:bg-white/5"
+                  }`}
                 >
                   动漫
                 </Link>
                 <Link
                   href="/category?type=综艺"
-                  className="hidden xl:flex px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition whitespace-nowrap shrink-0"
+                  className={`hidden xl:flex px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium transition whitespace-nowrap shrink-0 ${
+                    isVariety ? "text-cyan-400 bg-white/10 font-bold shadow-xs" : "text-gray-300 hover:text-white hover:bg-white/5"
+                  }`}
                 >
                   综艺
                 </Link>
                 <Link
                   href="/category?type=体育"
-                  className="hidden 2xl:flex px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition items-center gap-1 whitespace-nowrap shrink-0"
+                  className={`hidden 2xl:flex px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium transition items-center gap-1 whitespace-nowrap shrink-0 ${
+                    isSports ? "text-cyan-400 bg-white/10 font-bold shadow-xs" : "text-gray-300 hover:text-white hover:bg-white/5"
+                  }`}
                 >
                   体育
                   {isTypeGated("体育") && (
@@ -130,9 +151,9 @@ export function Navbar() {
                 <Link
                   href="/category"
                   className={`px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium transition whitespace-nowrap shrink-0 ${
-                    isCategory
-                      ? "text-cyan-400 bg-cyan-500/10 font-bold border border-cyan-500/20"
-                      : "text-gray-300 hover:text-cyan-400 hover:bg-white/5"
+                    isAllCategory
+                      ? "text-cyan-400 bg-white/10 font-bold shadow-xs"
+                      : "text-gray-300 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   全部片库
@@ -228,7 +249,11 @@ export function Navbar() {
                 <Link
                   href="/"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="p-3 bg-dark-800 active:bg-dark-700 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition"
+                  className={`p-3 rounded-xl text-sm font-medium flex items-center gap-2 transition ${
+                    isHome
+                      ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 font-bold"
+                      : "bg-dark-800 active:bg-dark-700 text-white"
+                  }`}
                 >
                   <Home className="w-4 h-4 text-cyan-400" />
                   首页
@@ -236,23 +261,35 @@ export function Navbar() {
                 <Link
                   href="/hall"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="p-3 bg-cyan-500/15 border border-cyan-500/40 active:bg-cyan-500/25 rounded-xl text-sm font-bold text-cyan-400 flex items-center gap-2 transition"
+                  className={`p-3 rounded-xl text-sm font-bold flex items-center gap-2 transition ${
+                    isHall
+                      ? "bg-cyan-500/20 border border-cyan-500/40 text-cyan-400"
+                      : "bg-dark-800 active:bg-dark-700 text-white"
+                  }`}
                 >
                   <Users className="w-4 h-4 text-cyan-400" />
-                  🎪 放映广场 (一起看)
+                  🎪 放映广场
                 </Link>
                 <Link
                   href="/category"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="p-3 bg-dark-800 active:bg-dark-700 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition"
+                  className={`p-3 rounded-xl text-sm font-medium flex items-center gap-2 transition ${
+                    isAllCategory
+                      ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 font-bold"
+                      : "bg-dark-800 active:bg-dark-700 text-white"
+                  }`}
                 >
                   <SlidersHorizontal className="w-4 h-4 text-cyan-400" />
-                  全部片库 (多维筛选)
+                  全部片库
                 </Link>
                 <Link
                   href="/category?type=电影"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="p-3 bg-dark-800 active:bg-dark-700 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition"
+                  className={`p-3 rounded-xl text-sm font-medium flex items-center gap-2 transition ${
+                    isMovie
+                      ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 font-bold"
+                      : "bg-dark-800 active:bg-dark-700 text-white"
+                  }`}
                 >
                   <Film className="w-4 h-4 text-blue-400" />
                   电影
@@ -260,7 +297,11 @@ export function Navbar() {
                 <Link
                   href="/category?type=电视剧"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="p-3 bg-dark-800 active:bg-dark-700 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition"
+                  className={`p-3 rounded-xl text-sm font-medium flex items-center gap-2 transition ${
+                    isTv
+                      ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 font-bold"
+                      : "bg-dark-800 active:bg-dark-700 text-white"
+                  }`}
                 >
                   <Tv className="w-4 h-4 text-emerald-400" />
                   电视剧
@@ -268,7 +309,11 @@ export function Navbar() {
                 <Link
                   href="/category?type=动漫"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="p-3 bg-dark-800 active:bg-dark-700 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition"
+                  className={`p-3 rounded-xl text-sm font-medium flex items-center gap-2 transition ${
+                    isAnime
+                      ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 font-bold"
+                      : "bg-dark-800 active:bg-dark-700 text-white"
+                  }`}
                 >
                   <Sparkles className="w-4 h-4 text-purple-400" />
                   动漫
@@ -276,7 +321,11 @@ export function Navbar() {
                 <Link
                   href="/category?type=综艺"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="p-3 bg-dark-800 active:bg-dark-700 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition"
+                  className={`p-3 rounded-xl text-sm font-medium flex items-center gap-2 transition ${
+                    isVariety
+                      ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 font-bold"
+                      : "bg-dark-800 active:bg-dark-700 text-white"
+                  }`}
                 >
                   <Flame className="w-4 h-4 text-amber-400" />
                   综艺
@@ -284,7 +333,11 @@ export function Navbar() {
                 <Link
                   href="/category?type=体育"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="p-3 bg-dark-800 active:bg-dark-700 rounded-xl text-sm font-medium text-white flex items-center justify-between transition"
+                  className={`p-3 rounded-xl text-sm font-medium flex items-center justify-between transition ${
+                    isSports
+                      ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 font-bold"
+                      : "bg-dark-800 active:bg-dark-700 text-white"
+                  }`}
                 >
                   <div className="flex items-center gap-2">
                     <Trophy className="w-4 h-4 text-rose-400" />
@@ -348,5 +401,13 @@ export function Navbar() {
         </Link>
       </div>
     </>
+  );
+}
+
+export function Navbar() {
+  return (
+    <Suspense fallback={<nav className="sticky top-0 z-50 bg-dark-950/90 backdrop-blur-md border-b border-white/10 h-16 pt-[env(safe-area-inset-top,0px)]" />}>
+      <NavbarContent />
+    </Suspense>
   );
 }
