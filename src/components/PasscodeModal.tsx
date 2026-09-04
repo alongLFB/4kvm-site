@@ -79,8 +79,11 @@ export function PasscodeModal({
           <div className="space-y-1.5">
             <div className="relative">
               <input
+                id="passcode-pin"
+                name="pin"
                 type="password"
                 value={pin}
+                autoComplete="current-password"
                 onChange={(e) => {
                   setPin(e.target.value);
                   if (errorMsg) setErrorMsg("");

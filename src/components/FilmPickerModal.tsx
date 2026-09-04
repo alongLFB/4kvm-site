@@ -153,8 +153,11 @@ export function FilmPickerModal({
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
+              id="film-picker-search"
+              name="filmQuery"
               type="text"
               value={searchQuery}
+              autoComplete="off"
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="搜索片名、演员、导演..."
               className="w-full bg-dark-800 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-base sm:text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition"

@@ -194,8 +194,11 @@ export function DesktopSearch() {
       <form onSubmit={handleSubmit} className="relative flex items-center">
         <input
           ref={inputRef}
+          id="desktop-search-input"
+          name="q"
           type="text"
           value={query}
+          autoComplete="off"
           onFocus={() => setIsOpen(true)}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -480,8 +483,11 @@ export function MobileSearchModal({
         <form onSubmit={handleSubmit} className="flex-1 relative flex items-center">
           <input
             ref={inputRef}
+            id="mobile-search-input"
+            name="q"
             type="text"
             value={query}
+            autoComplete="off"
             onChange={(e) => setQuery(e.target.value)}
             placeholder="搜片名/拼音/演员 (如春或chun)..."
             className="w-full bg-dark-900 text-sm text-white placeholder-gray-400 px-3.5 py-2.5 pl-9 pr-8 rounded-xl border border-white/10 focus:outline-none focus:border-cyan-500"
