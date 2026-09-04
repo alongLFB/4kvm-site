@@ -242,7 +242,7 @@ function CategoryContent() {
 
         {/* 1. 一级主分类 */}
         <div className="flex items-center sm:items-start gap-2 sm:gap-3 text-xs leading-none">
-          <span className="w-16 sm:w-20 shrink-0 font-bold text-gray-400 py-1.5 flex items-center gap-1">
+          <span className="w-[76px] sm:w-20 shrink-0 whitespace-nowrap font-bold text-gray-400 py-1.5 flex items-center gap-1">
             <Layers className="w-3.5 h-3.5 text-cyan-400" />
             一级板块
           </span>
@@ -275,7 +275,7 @@ function CategoryContent() {
 
         {/* 2. 二级子分类 (根据一级大类动态联动) */}
         <div className="flex items-center sm:items-start gap-2 sm:gap-3 text-xs leading-none pt-2 border-t border-white/5">
-          <span className="w-16 sm:w-20 shrink-0 font-bold text-gray-400 py-1.5 flex items-center gap-1">
+          <span className="w-[76px] sm:w-20 shrink-0 whitespace-nowrap font-bold text-gray-400 py-1.5 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
             细分子类
           </span>
@@ -301,7 +301,7 @@ function CategoryContent() {
 
         {/* 3. 地区 */}
         <div className="flex items-center sm:items-start gap-2 sm:gap-3 text-xs leading-none pt-2 border-t border-white/5">
-          <span className="w-16 sm:w-20 shrink-0 font-bold text-gray-400 py-1.5 flex items-center gap-1">
+          <span className="w-[76px] sm:w-20 shrink-0 whitespace-nowrap font-bold text-gray-400 py-1.5 flex items-center gap-1">
             <MapPin className="w-3.5 h-3.5 text-blue-400" />
             地区分布
           </span>
@@ -326,7 +326,7 @@ function CategoryContent() {
 
         {/* 4. 年份 */}
         <div className="flex items-center sm:items-start gap-2 sm:gap-3 text-xs leading-none pt-2 border-t border-white/5">
-          <span className="w-16 sm:w-20 shrink-0 font-bold text-gray-400 py-1.5 flex items-center gap-1">
+          <span className="w-[76px] sm:w-20 shrink-0 whitespace-nowrap font-bold text-gray-400 py-1.5 flex items-center gap-1">
             <Calendar className="w-3.5 h-3.5 text-amber-400" />
             上映年份
           </span>
@@ -351,7 +351,7 @@ function CategoryContent() {
 
         {/* 5. 语言 */}
         <div className="flex items-center sm:items-start gap-2 sm:gap-3 text-xs leading-none pt-2 border-t border-white/5">
-          <span className="w-16 sm:w-20 shrink-0 font-bold text-gray-400 py-1.5 flex items-center gap-1">
+          <span className="w-[76px] sm:w-20 shrink-0 whitespace-nowrap font-bold text-gray-400 py-1.5 flex items-center gap-1">
             <Languages className="w-3.5 h-3.5 text-emerald-400" />
             语言声道
           </span>

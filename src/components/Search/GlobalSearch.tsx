@@ -189,7 +189,7 @@ export function DesktopSearch() {
   };
 
   return (
-    <div ref={containerRef} className="relative w-40 md:w-48 lg:w-56 xl:w-72 2xl:w-80 transition-all duration-300 focus-within:w-56 lg:focus-within:w-72 xl:focus-within:w-80">
+    <div ref={containerRef} className="relative w-32 sm:w-36 md:w-40 lg:w-44 xl:w-52 2xl:w-64 transition-all duration-300 focus-within:w-48 lg:focus-within:w-56 xl:focus-within:w-64">
       {/* 搜索输入条 */}
       <form onSubmit={handleSubmit} className="relative flex items-center">
         <input
