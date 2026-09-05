@@ -55,11 +55,17 @@ jobs:
             # 记录本次拉取前的 commit hash
             OLD_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "")
 
+            # 暂存服务器上已生成的追更日志，防止被 git reset 覆盖
+            [ -f scripts/UPDATE_LOG.md ] && cp scripts/UPDATE_LOG.md /tmp/UPDATE_LOG.md.bak 2>/dev/null || true
+
             for i in {1..3}; do
               timeout 30s git fetch origin master && break || { echo "Fetch retry ($i/3)..."; sleep 2; }
             done
             git reset --hard origin/master
             NEW_HEAD=$(git rev-parse HEAD)
+
+            # 恢复服务器最新日志（避免丢失服务器定时追更生成的最新记录）
+            [ -f /tmp/UPDATE_LOG.md.bak ] && cp /tmp/UPDATE_LOG.md.bak scripts/UPDATE_LOG.md 2>/dev/null || true
 
             # 3. 确保数据目录与脚本目录权限
             mkdir -p data

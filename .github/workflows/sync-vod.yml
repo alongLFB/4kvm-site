@@ -11,10 +11,17 @@ on:
         required: false
         default: '24'
 
+permissions:
+  contents: write
+
 jobs:
   sync:
+    name: Sync VODs & Commit Update Log
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       - name: SSH and Run Upstream Sync
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -26,8 +33,44 @@ jobs:
             set -euo pipefail
             cd ~/github/4kvm-site
             
+            # 1. 确保容器具有向挂载的 scripts 目录写入 UPDATE_LOG.md 的权限
+            chmod -R 777 scripts 2>/dev/null || true
+
             HOURS="${{ github.event.inputs.hours || 24 }}"
             echo "==> Triggering Upstream VOD Sync for last ${HOURS}h in Docker container..."
             
             docker exec 4kvm-app node scripts/ingest-ikun-full.mjs --hours "${HOURS}"
             echo "==> Upstream VODs Synced Successfully into 4kvm.db!"
+
+      - name: Fetch UPDATE_LOG.md from Remote Server
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT || 22 }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SERVER_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p $SERVER_PORT -H $SERVER_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
+          scp -P $SERVER_PORT -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST:~/github/4kvm-site/scripts/UPDATE_LOG.md" ./scripts/UPDATE_LOG.md
+          echo "==> Successfully fetched latest UPDATE_LOG.md from remote server."
+          
+          echo "=================================================="
+          echo "📝 最新追更日志预览 (前 35 行):"
+          echo "=================================================="
+          head -n 35 ./scripts/UPDATE_LOG.md || true
+          echo "=================================================="
+
+      - name: Auto Commit & Push UPDATE_LOG.md to GitHub
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/UPDATE_LOG.md
+          if git diff --staged --quiet; then
+            echo "==> No changes detected in UPDATE_LOG.md. Skipping commit."
+          else
+            git commit -m "docs(vod): auto update daily ingestion log [skip ci]"
+            git push origin master
+            echo "==> 🎉 Successfully committed and pushed latest UPDATE_LOG.md to GitHub!"
+          fi
