@@ -40,6 +40,29 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
+/* Lock background scrolling and scrollbar when in landscape mode */
+html.landscape-locked,
+body.landscape-locked {
+  overflow: hidden !important;
+  touch-action: none !important;
+  overscroll-behavior: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  height: 100dvh !important;
+  position: fixed !important;
+  inset: 0 !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+html.landscape-locked::-webkit-scrollbar,
+body.landscape-locked::-webkit-scrollbar,
+.mobile-landscape-active::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 /* Mobile Fullscreen Landscape CSS Mode */
 .mobile-landscape-active {
   position: fixed !important;
@@ -59,6 +82,9 @@ body {
   aspect-ratio: auto !important;
   background-color: #000 !important;
   overflow: hidden !important;
+  touch-action: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .mobile-landscape-active.in-real-landscape {
@@ -72,12 +98,42 @@ body {
 .mobile-landscape-active .art-video-player {
   width: 100% !important;
   height: 100% !important;
+  background-color: #000 !important;
 }
 
-.mobile-landscape-active .art-bottom {
-  padding-left: max(16px, env(safe-area-inset-left)) !important;
-  padding-right: max(16px, env(safe-area-inset-right)) !important;
-  padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+/* Safe Area Insets for iOS Notch / Dynamic Island & Home Indicator */
+/* Rotated Landscape (iPhone in portrait, rotated 90deg clockwise):
+   Physical top (Notch/Island) -> Video Left
+   Physical bottom (Home indicator) -> Video Right
+   Physical left -> Video Bottom
+   Physical right -> Video Top
+*/
+.mobile-landscape-active:not(.in-real-landscape) .art-bottom {
+  padding-left: max(28px, env(safe-area-inset-top, 28px)) !important;
+  padding-right: max(28px, env(safe-area-inset-bottom, 28px)) !important;
+  padding-bottom: max(14px, env(safe-area-inset-left, 14px)) !important;
+}
+
+.mobile-landscape-active:not(.in-real-landscape) .art-video {
+  padding-left: max(20px, env(safe-area-inset-top, 20px)) !important;
+  padding-right: max(20px, env(safe-area-inset-bottom, 20px)) !important;
+}
+
+/* Real Landscape (iPhone physically turned horizontal by user):
+   Physical left (Notch/Island) -> Left
+   Physical right -> Right
+   Physical bottom (Home indicator) -> Bottom
+   Physical top -> Top
+*/
+.mobile-landscape-active.in-real-landscape .art-bottom {
+  padding-left: max(24px, env(safe-area-inset-left, 24px)) !important;
+  padding-right: max(24px, env(safe-area-inset-right, 24px)) !important;
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
+}
+
+.mobile-landscape-active.in-real-landscape .art-video {
+  padding-left: max(16px, env(safe-area-inset-left, 16px)) !important;
+  padding-right: max(16px, env(safe-area-inset-right, 16px)) !important;
 }
 
 /* Video Player Proportions & Perfect Centering */
