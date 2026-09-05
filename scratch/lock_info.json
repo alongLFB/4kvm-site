@@ -1,0 +1,32 @@
+[
+  {
+    "tagName": "DIV",
+    "className": "art-state",
+    "outerHTML": "<div class=\"art-state\"><i class=\"art-icon art-icon-state\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"80\" height=\"80\" viewBox=\"0 0 24 24\">\n<path d=",
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "left": 0
+    }
+  },
+  {
+    "tagName": "I",
+    "className": "art-icon art-icon-state",
+    "outerHTML": "<i class=\"art-icon art-icon-state\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"80\" height=\"80\" viewBox=\"0 0 24 24\">\n<path d=\"M9.5 9.325v5.35q0 .575",
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "left": 0
+    }
+  }
+]

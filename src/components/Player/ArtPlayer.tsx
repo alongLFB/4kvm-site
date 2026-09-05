@@ -212,7 +212,12 @@ export default function VideoPlayer({
       if (e.touches.length !== 1) return;
       const target = e.target as HTMLElement;
 
-      // 若点击在控制条、按钮、进度条等控件上，不触发手势调节
+      // 若播放器处于锁定状态，禁止触发任何手势调节
+      if ((instanceRef.current as any)?.isLock) {
+        return;
+      }
+
+      // 若点击在控制条、锁定按钮、进度条等控件上，不触发手势调节
       if (
         target.closest(".art-bottom") ||
         target.closest(".art-controls") ||
@@ -220,6 +225,8 @@ export default function VideoPlayer({
         target.closest(".art-settings") ||
         target.closest(".art-contextmenus") ||
         target.closest(".art-landscape-header") ||
+        target.closest(".art-layer-lock") ||
+        target.closest(".art-layer") ||
         target.closest("button")
       ) {
         return;
