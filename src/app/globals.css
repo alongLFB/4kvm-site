@@ -46,19 +46,38 @@ body {
   top: 0 !important;
   left: 0 !important;
   width: 100vh !important;
+  width: 100dvh !important;
   height: 100vw !important;
+  height: 100dvw !important;
   max-width: none !important;
   max-height: none !important;
   transform: rotate(90deg) translateY(-100%) !important;
   transform-origin: top left !important;
-  z-index: 999999 !important;
+  z-index: 9999999 !important;
   border-radius: 0 !important;
   border: none !important;
+  aspect-ratio: auto !important;
+  background-color: #000 !important;
+  overflow: hidden !important;
+}
+
+.mobile-landscape-active.in-real-landscape {
+  width: 100vw !important;
+  width: 100dvw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  transform: none !important;
 }
 
 .mobile-landscape-active .art-video-player {
   width: 100% !important;
   height: 100% !important;
+}
+
+.mobile-landscape-active .art-bottom {
+  padding-left: max(16px, env(safe-area-inset-left)) !important;
+  padding-right: max(16px, env(safe-area-inset-right)) !important;
+  padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
 }
 
 /* Video Player Proportions & Perfect Centering */
