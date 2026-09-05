@@ -5,6 +5,12 @@ on:
     branches:
       - master
   workflow_dispatch:
+    inputs:
+      force_build:
+        description: '强制重新构建 Docker 镜像 (即使未检测到源码改动)'
+        required: false
+        type: boolean
+        default: true
 
 concurrency:
   group: deploy-${{ github.ref }}
@@ -19,13 +25,14 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           ENV_FILE: ${{ secrets.ENV_FILE }}
+          FORCE_BUILD: ${{ github.event.inputs.force_build || 'false' }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || 22 }}
           command_timeout: 30m
-          envs: ENV_FILE
+          envs: ENV_FILE,FORCE_BUILD
           script: |
             set -euo pipefail
             # 1. 锁定 GitHub 官方欧美骨干 IP（防止甲骨文 DNS 解析到不可达的亚太节点）
@@ -44,35 +51,68 @@ jobs:
               done
             fi
             cd 4kvm-site
+
+            # 记录本次拉取前的 commit hash
+            OLD_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "")
+
             for i in {1..3}; do
               timeout 30s git fetch origin master && break || { echo "Fetch retry ($i/3)..."; sleep 2; }
             done
             git reset --hard origin/master
+            NEW_HEAD=$(git rev-parse HEAD)
 
-            # 3. 确保数据目录存在
+            # 3. 确保数据目录与脚本目录权限
             mkdir -p data
+            chmod -R 777 scripts 2>/dev/null || true
 
             # 4. 同步环境变量（若 GitHub Secrets 已配置 ENV_FILE）
             if [ -n "${ENV_FILE:-}" ]; then
               printf "%s\n" "$ENV_FILE" > .env
             fi
 
-            # 5. 平滑无感部署（旧容器持续在线对外服务，后台先构建新镜像）
-            echo "==> Building new Docker image in background (old container keeps serving)..."
-            docker compose build
+            # 5. 智能判断是否需要重新构建 Docker 镜像 (按需构建)
+            SHOULD_BUILD=false
+            if [ "${FORCE_BUILD:-false}" = "true" ]; then
+              echo "==> [Trigger] 手动触发部署且指定了强制构建 (force_build=true)"
+              SHOULD_BUILD=true
+            elif [ -z "$OLD_HEAD" ]; then
+              echo "==> [Trigger] 首次部署，触发完整构建"
+              SHOULD_BUILD=true
+            elif [ "$OLD_HEAD" = "$NEW_HEAD" ]; then
+              echo "==> [Trigger] 代码无新提交，当前版本已是最新 ($NEW_HEAD)"
+            else
+              CHANGED_FILES=$(git diff --name-only "$OLD_HEAD" "$NEW_HEAD" 2>/dev/null || echo "")
+              echo "==> 本次提交变更的文件列表 ($OLD_HEAD..$NEW_HEAD):"
+              echo "$CHANGED_FILES"
 
-            echo "==> Re-creating container atomically (1-2s seamless transition)..."
-            docker compose up -d --no-deps 4kvm-app
-            docker image prune -f
-
-            # 6. 自动化健康检查轮询
-            echo "==> Verifying Deployment Health..."
-            for i in {1..15}; do
-              if curl -s http://127.0.0.1:3028/api/health | grep -q "ok" 2>/dev/null; then
-                echo "✅ Health check passed! 4kvm-site is fully healthy and serving traffic."
-                break
+              # 仅当改动涉及前端源码、静态资源、依赖项或容器配置文件时才重新构建
+              if echo "$CHANGED_FILES" | grep -qE '^(src/|public/|package\.json|package-lock\.json|Dockerfile|compose\.yaml|next\.config|tsconfig|tailwind|postcss)'; then
+                echo "==> [Check] 检测到核心源码或容器配置变更，需要重新构建 Docker 镜像！"
+                SHOULD_BUILD=true
               fi
-              echo "Waiting for app to become healthy ($i/15)..."
-              sleep 2
-            done
-            echo "==> 4kvm-site deployment completed successfully!"
+            fi
+
+            # 6. 执行按需构建或秒级跳过
+            if [ "$SHOULD_BUILD" = "true" ]; then
+              echo "==> Building new Docker image in background (old container keeps serving)..."
+              docker compose build
+
+              echo "==> Re-creating container atomically (1-2s seamless transition)..."
+              docker compose up -d --no-deps 4kvm-app
+              docker image prune -f
+
+              # 自动化健康检查轮询
+              echo "==> Verifying Deployment Health..."
+              for i in {1..15}; do
+                if curl -s http://127.0.0.1:3028/api/health | grep -q "ok" 2>/dev/null; then
+                  echo "✅ Health check passed! 4kvm-site is fully healthy and serving traffic."
+                  break
+                fi
+                echo "Waiting for app to become healthy ($i/15)..."
+                sleep 2
+              done
+              echo "==> 4kvm-site deployment completed successfully!"
+            else
+              echo "==> ⚡ 本次仅改动了 scripts 脚本、文档或辅助配置，无需重建镜像！"
+              echo "==> 远端代码已秒级同步至最新版本 ($NEW_HEAD)，旧容器保持零中断运行！"
+            fi

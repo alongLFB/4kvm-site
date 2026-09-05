@@ -20,6 +20,7 @@ services:
       - NODE_OPTIONS=--dns-result-order=ipv4first
     volumes:
       - ./data:/app/data
+      - ./scripts:/app/scripts
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3028/api/health || exit 1"]
       interval: 30s
