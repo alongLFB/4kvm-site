@@ -8,15 +8,16 @@ scripts/ingest-ikun-full.mjs 是 4KVM 系统的核心片库入库与同步引擎
 
 ### 1. 增量追更（最常用，日常定时同步）
 同步过去 24 小时内更新的所有影视剧集（自动插入新片、更新已有剧集的最新集数）：
-`ash
+```bash
 node scripts/ingest-ikun-full.mjs --incremental
 # 或者使用别名：
 node scripts/ingest-ikun-full.mjs --sync
-`
+```
+> 📝 **自动生成更新日志**：每次运行增量追更后，系统会自动在 [`scripts/UPDATE_LOG.md`](./UPDATE_LOG.md) 中以 Markdown 表格记录本次同步的**新增入库影片**与**剧集连载追更清单**（最新更新始终显示在最顶部）。若临时不需要写入日志，可追加 `--no-log` 参数。
 
 ### 2. 自定义小时范围增量
 只同步过去 6 小时内最新更新的影片：
-`ash
+` ash
 node scripts/ingest-ikun-full.mjs --hours 6
 `
 
@@ -47,9 +48,22 @@ node scripts/ingest-ikun-full.mjs --type 45 --max-pages 2
 
 ### 6. 全量清空重建数据库（高危慎用）
 清空现有全部数据表，重建 FTS5 全文索引，并从第 1 页开始重新全量采集：
-`ash
+```bash
 node scripts/ingest-ikun-full.mjs --reset
-`
+```
+
+### 7. 单剧更新检查与单片同步 (check-update.mjs)
+快速检查某部指定影视（支持按上游 Raw ID 或直接按片名）在本地与上游是否有新集数更新，并可一键单片同步入库：
+```bash
+# 按 Raw ID 检查（如斗破苍穹年番: 15952）
+node scripts/check-update.mjs 15952
+
+# 按 片名 直接检查
+node scripts/check-update.mjs 斗破苍穹年番
+
+# 若查到有新集数，一键同步该片入库更新
+node scripts/check-update.mjs 15952 --sync
+```
 
 ---
 
@@ -69,8 +83,8 @@ ode scripts/ingest-ikun-full.mjs --type 45 |
 ode scripts/ingest-ikun-full.mjs --types 41,51,52 |
 | --max-pages <N> | Number | 限制抓取的最大页数（用于调试验证） | 
 ode scripts/ingest-ikun-full.mjs --max-pages 5 |
-| --reset | Flag | 清空现有数据表与断点缓存，重新初始化数据库 | 
-ode scripts/ingest-ikun-full.mjs --reset |
+| `--reset` | Flag | 清空现有数据表与断点缓存，重新初始化数据库 | `node scripts/ingest-ikun-full.mjs --reset` |
+| `--no-log` | Flag | 增量同步时不写入 `scripts/UPDATE_LOG.md` 日志文件 | `node scripts/ingest-ikun-full.mjs --incremental --no-log` |
 
 ---
 

@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 
 // 自动加载 .env 文件（Node 22 原生支持，本地开发与生产环境均自动生效）
 try {
@@ -128,6 +129,94 @@ function cleanYear(yearStr) {
   return match ? match[0] : "2026";
 }
 
+function escapeMd(text) {
+  return String(text || "")
+    .replace(/\|/g, "\\|")
+    .replace(/\r?\n/g, " ")
+    .trim();
+}
+
+function formatLocalDateTime(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const y = date.getFullYear();
+  const m = pad(date.getMonth() + 1);
+  const d = pad(date.getDate());
+  const hh = pad(date.getHours());
+  const mm = pad(date.getMinutes());
+  const ss = pad(date.getSeconds());
+  return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+}
+
+export function writeUpdateLog({ hours = null, syncType = null, totalScanned = 0, newlyAddedList = [], newlyUpdatedList = [], finalCount = 0 }) {
+  const scriptsDir = path.join(process.cwd(), "scripts");
+  if (!fs.existsSync(scriptsDir)) {
+    fs.mkdirSync(scriptsDir, { recursive: true });
+  }
+  const logPath = path.join(scriptsDir, "UPDATE_LOG.md");
+
+  const nowStr = formatLocalDateTime();
+  const subTitle = syncType || (hours ? `增量追更: 过去 ${hours} 小时` : "定向/单剧同步");
+  const title = `## 📅 同步时间：${nowStr} (${subTitle})`;
+
+  const statSummary = [
+    `- **本次入库统计**：新增入库 **${newlyAddedList.length}** 部，剧集追更 **${newlyUpdatedList.length}** 部，扫描处理 **${totalScanned}** 条`,
+    `- **片库最新总量**：**${finalCount}** 部`,
+  ].join("\n");
+
+  let addedSection = "";
+  if (newlyAddedList.length > 0) {
+    addedSection = [
+      `### 🆕 新增入库影片 (${newlyAddedList.length} 部)`,
+      "",
+      "| 序号 | 影片名称 | 分类 | 年份/地区 | 最新状态 | 上游ID |",
+      "| :---: | :--- | :--- | :--- | :--- | :--- |",
+      ...newlyAddedList.map((item, idx) =>
+        `| ${idx + 1} | **${escapeMd(item.name)}** | ${escapeMd(item.parentType)} > ${escapeMd(item.subType)} | ${escapeMd(item.year)} / ${escapeMd(item.area)} | ${escapeMd(item.remarks)} | \`${item.rawId}\` |`
+      ),
+    ].join("\n");
+  } else {
+    addedSection = "### 🆕 新增入库影片\n\n*本次增量未发现新入库的影视作品。*";
+  }
+
+  let updatedSection = "";
+  if (newlyUpdatedList.length > 0) {
+    updatedSection = [
+      `### 🔄 剧集连载追更 (${newlyUpdatedList.length} 部)`,
+      "",
+      "| 序号 | 影片名称 | 分类 | 更新前状态 | 最新状态 | 上游ID |",
+      "| :---: | :--- | :--- | :--- | :--- | :--- |",
+      ...newlyUpdatedList.map((item, idx) =>
+        `| ${idx + 1} | **${escapeMd(item.name)}** | ${escapeMd(item.parentType)} > ${escapeMd(item.subType)} | \`${escapeMd(item.oldRemarks)}\` | **${escapeMd(item.newRemarks)}** | \`${item.rawId}\` |`
+      ),
+    ].join("\n");
+  } else {
+    updatedSection = "### 🔄 剧集连载追更\n\n*本次增量未发现剧集连载更新。*";
+  }
+
+  const newEntry = `${title}\n\n${statSummary}\n\n${addedSection}\n\n${updatedSection}\n\n---`;
+
+  const HEADER = `# 4KVM 片库同步与追更日志 (Update Log)\n\n> 本日志由 \`scripts/ingest-ikun-full.mjs --incremental\`（或 \`--hours\`）自动生成与追加维护。\n> 详细记录每次同步入库的新增影视与剧集连载更新情况，**最新记录始终置于最顶部**。\n\n---`;
+
+  let finalContent = "";
+  if (!fs.existsSync(logPath)) {
+    finalContent = `${HEADER}\n\n${newEntry}\n`;
+  } else {
+    const existing = fs.readFileSync(logPath, "utf-8");
+    const dividerRegex = /\n---\r?\n/;
+    const match = existing.match(dividerRegex);
+    if (match && match.index !== undefined) {
+      const splitPos = match.index + match[0].length;
+      const headerPart = existing.slice(0, splitPos);
+      const restPart = existing.slice(splitPos);
+      finalContent = `${headerPart}\n${newEntry}\n\n${restPart.trimStart()}`;
+    } else {
+      finalContent = `${HEADER}\n\n${newEntry}\n\n${existing}`;
+    }
+  }
+
+  fs.writeFileSync(logPath, finalContent, "utf-8");
+}
+
 export function initDatabase(db, dropExisting = false) {
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA synchronous = NORMAL;");
@@ -226,6 +315,7 @@ async function main() {
   const hours = hoursArgIdx !== -1 ? parseInt(args[hoursArgIdx + 1], 10) : (isIncremental ? 24 : null);
   const maxPagesArgIdx = args.indexOf("--max-pages");
   const maxPagesLimit = maxPagesArgIdx !== -1 ? parseInt(args[maxPagesArgIdx + 1], 10) : Infinity;
+  const disableLog = args.includes("--no-log");
 
   // Single or multiple type filters: --type 45 或 --types 45,51
   const typeArgIdx = args.indexOf("--type") !== -1 ? args.indexOf("--type") : args.indexOf("--type-id");
@@ -293,6 +383,9 @@ async function main() {
   let grandTotalIngested = 0;
   let grandNewlyAdded = 0;
   let grandNewlyUpdated = 0;
+  const newlyAddedList = [];
+  const newlyUpdatedList = [];
+  const seenVodIds = new Set();
 
   async function processCategory(typeId = null) {
     const typeLabel = typeId
@@ -362,11 +455,33 @@ async function main() {
         if (episodes.length === 0) continue;
 
         if (hours) {
-          const existing = stmtCheckExists.get(id);
-          if (!existing) {
-            grandNewlyAdded++;
-          } else if (existing.remarks !== remarks) {
-            grandNewlyUpdated++;
+          if (!seenVodIds.has(id)) {
+            seenVodIds.add(id);
+            const existing = stmtCheckExists.get(id);
+            if (!existing) {
+              grandNewlyAdded++;
+              newlyAddedList.push({
+                rawId,
+                name,
+                parentType,
+                subType,
+                area,
+                year,
+                remarks: remarks || "已完结/上映",
+              });
+            } else if (existing.remarks !== remarks) {
+              grandNewlyUpdated++;
+              newlyUpdatedList.push({
+                rawId,
+                name,
+                parentType,
+                subType,
+                area,
+                year,
+                oldRemarks: existing.remarks || "无",
+                newRemarks: remarks || "已更新",
+              });
+            }
           }
         }
 
@@ -485,13 +600,27 @@ async function main() {
     console.log(`✨ Newly added items: ${grandNewlyAdded}`);
     console.log(`🔄 Updated episodes / series: ${grandNewlyUpdated}`);
     console.log(`📊 Final total database count: ${finalCount} items`);
+
+    if (!disableLog) {
+      writeUpdateLog({
+        hours,
+        totalScanned: grandTotalIngested,
+        newlyAddedList,
+        newlyUpdatedList,
+        finalCount,
+      });
+      console.log(`📝 Update log saved to: scripts/UPDATE_LOG.md`);
+    }
   } else {
     console.log(`\n🎉 Ingestion completed! Total records processed: ${grandTotalIngested}`);
     console.log(`📊 Final database count: ${finalCount} items`);
   }
 }
 
-main().catch((err) => {
-  console.error("❌ Fatal error during ingestion:", err);
-  process.exit(1);
-});
+const isDirectRun = Boolean(process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]));
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error("❌ Fatal error during ingestion:", err);
+    process.exit(1);
+  });
+}
