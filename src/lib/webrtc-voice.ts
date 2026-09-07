@@ -7,6 +7,15 @@ const ICE_CONFIG: RTCConfiguration = {
   ],
 };
 
+const isSafariBrowser = () => {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  const isIOS =
+    /iPad|iPhone|iPod/i.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  return isIOS || /^((?!chrome|android).)*safari/i.test(ua);
+};
+
 export class WebRTCVoiceManager {
   private roomId: string;
   private currentUserId: string;
@@ -17,7 +26,6 @@ export class WebRTCVoiceManager {
   private pendingCandidates: Map<string, RTCIceCandidateInit[]> = new Map();
   private audioContext: AudioContext | null = null;
   private localAnalyser: AnalyserNode | null = null;
-  private remoteAnalysers: Map<string, AnalyserNode> = new Map();
   private analyserInterval: NodeJS.Timeout | null = null;
   private lastLocalSpeaking: boolean = false;
   private speakingDebounceTimeout: NodeJS.Timeout | null = null;
@@ -38,10 +46,13 @@ export class WebRTCVoiceManager {
       const unlockAudio = () => {
         this.resumeAudio();
       };
+      // Safari / iOS requires touch/click gesture to unlock audio pipeline
       window.addEventListener("click", unlockAudio, { passive: true });
-      window.addEventListener("touchstart", unlockAudio, { passive: true });
+      window.addEventListener("touchend", unlockAudio, { passive: true });
+      window.addEventListener("pointerdown", unlockAudio, { passive: true });
+      window.addEventListener("keydown", unlockAudio, { passive: true });
 
-      // Start audio analyzer loop immediately so remote streams are analyzed
+      // Start audio analyzer loop for real-time speaking detection
       this.ensureAudioContext();
       this.startAnalyserLoop();
     }
@@ -78,6 +89,9 @@ export class WebRTCVoiceManager {
     try {
       const ctx = this.ensureAudioContext();
       if (!ctx) return;
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
@@ -121,20 +135,28 @@ export class WebRTCVoiceManager {
     }
   }
 
-  // 1. Initialize local microphone with multi-tier fallback and dynamic renegotiation
+  // 1. Initialize local microphone with Safari-adaptive constraints and seamless track routing
   public async initLocalAudio(): Promise<boolean> {
     if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       this.onError?.("您的浏览器环境不支持 WebRTC 音频采集");
       return false;
     }
 
+    const isSafari = isSafariBrowser();
+
     try {
+      // On Safari / iOS, autoGainControl can throw OverconstrainedError, so we adapt constraints
       this.localStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: isSafari
+          ? {
+              echoCancellation: true,
+              noiseSuppression: true,
+            }
+          : {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            },
         video: false,
       });
     } catch (errTier1: any) {
@@ -159,31 +181,27 @@ export class WebRTCVoiceManager {
     }
 
     if (this.localStream) {
-      this.localStream.getAudioTracks().forEach((track) => {
-        track.enabled = !this.isMuted;
-      });
+      const audioTrack = this.localStream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !this.isMuted;
+      }
 
       this.setupLocalAudioAnalyser();
 
-      // Dynamic Renegotiation: Attach new audio tracks to ALL existing PeerConnections
-      this.peerConnections.forEach((pc, targetUserId) => {
+      // Seamless Track Replacement without SDP renegotiation!
+      // This completely avoids Safari's SDP Glare / InvalidStateError crash
+      this.peerConnections.forEach((pc) => {
         const senders = pc.getSenders();
-        this.localStream!.getTracks().forEach((track) => {
-          const existing = senders.find((s) => s.track?.kind === track.kind);
-          if (existing) {
-            existing.replaceTrack(track);
-          } else {
-            pc.addTrack(track, this.localStream!);
-          }
-        });
-
-        // Trigger renegotiation offer
-        pc.createOffer({ offerToReceiveAudio: true })
-          .then((offer) => pc.setLocalDescription(offer))
-          .then(() => {
-            this.sendSignal(targetUserId, { sdp: pc.localDescription });
-          })
-          .catch((e) => console.warn("Renegotiation offer error:", e));
+        const audioSender = senders.find((s) => s.track?.kind === "audio" || !s.track);
+        if (audioSender && audioTrack) {
+          audioSender.replaceTrack(audioTrack).catch((err) => {
+            console.warn("replaceTrack error:", err);
+          });
+        } else if (audioTrack) {
+          try {
+            pc.addTrack(audioTrack, this.localStream!);
+          } catch (e) {}
+        }
       });
 
       return true;
@@ -192,17 +210,31 @@ export class WebRTCVoiceManager {
     return false;
   }
 
-  // 2. Setup Local Audio Analyser
+  // 2. Setup Local Audio Analyser with WebKit silent ground connection
   private setupLocalAudioAnalyser() {
     const ctx = this.ensureAudioContext();
     if (!ctx || !this.localStream) return;
 
     try {
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
       const source = ctx.createMediaStreamSource(this.localStream);
       this.localAnalyser = ctx.createAnalyser();
       this.localAnalyser.fftSize = 256;
       source.connect(this.localAnalyser);
-    } catch (e) {}
+
+      // Vital for Safari WebKit:
+      // AnalyserNodes not connected to AudioDestinationNode are paused/ignored by WebKit engine,
+      // resulting in all 0s in frequency data!
+      // Connecting through a zero-gain (silent) node activates WebKit frequency processing without feedback.
+      const silentGain = ctx.createGain();
+      silentGain.gain.setValueAtTime(0, ctx.currentTime);
+      this.localAnalyser.connect(silentGain);
+      silentGain.connect(ctx.destination);
+    } catch (e) {
+      console.warn("setupLocalAudioAnalyser error:", e);
+    }
   }
 
   // 3. Start universal Audio Analyser Loop and broadcast speaking transitions
@@ -215,7 +247,7 @@ export class WebRTCVoiceManager {
         const data = new Uint8Array(this.localAnalyser.frequencyBinCount);
         this.localAnalyser.getByteFrequencyData(data);
         const avg = data.reduce((acc, val) => acc + val, 0) / data.length;
-        const isSpeaking = avg > 10;
+        const isSpeaking = avg > 8;
         const level = Math.min(100, Math.round(avg * 2.2));
 
         this.onSpeakingChange?.(this.currentUserId, isSpeaking, avg);
@@ -234,19 +266,6 @@ export class WebRTCVoiceManager {
           this.broadcastSpeakingState(false);
         }
       }
-
-      // Check remote speaking via AnalyserNodes
-      this.remoteAnalysers.forEach((analyser, userId) => {
-        if (!this.isDeafened) {
-          const data = new Uint8Array(analyser.frequencyBinCount);
-          analyser.getByteFrequencyData(data);
-          const avg = data.reduce((acc, val) => acc + val, 0) / data.length;
-          const isSpeaking = avg > 10;
-          this.onSpeakingChange?.(userId, isSpeaking, avg);
-        } else {
-          this.onSpeakingChange?.(userId, false, 0);
-        }
-      });
     }, 100);
   }
 
@@ -285,8 +304,18 @@ export class WebRTCVoiceManager {
     }
 
     if (this.localStream) {
-      this.localStream.getAudioTracks().forEach((track) => {
-        track.enabled = !this.isMuted;
+      const audioTrack = this.localStream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !this.isMuted;
+      }
+
+      // Ensure senders are transmitting the track without renegotiation
+      this.peerConnections.forEach((pc) => {
+        const senders = pc.getSenders();
+        const audioSender = senders.find((s) => s.track?.kind === "audio" || !s.track);
+        if (audioSender && audioTrack && audioSender.track !== audioTrack) {
+          audioSender.replaceTrack(audioTrack).catch(() => {});
+        }
       });
     }
 
@@ -321,7 +350,7 @@ export class WebRTCVoiceManager {
     return this.isDeafened;
   }
 
-  // 6. Create PeerConnection for a specific remote peer with GainNode Boost
+  // 6. Create PeerConnection with pre-warmed audio transceiver
   private getOrCreatePeer(targetUserId: string, isInitiator: boolean): RTCPeerConnection {
     if (this.peerConnections.has(targetUserId)) {
       return this.peerConnections.get(targetUserId)!;
@@ -330,17 +359,24 @@ export class WebRTCVoiceManager {
     const pc = new RTCPeerConnection(ICE_CONFIG);
     this.peerConnections.set(targetUserId, pc);
 
-    // Add local audio track if exists
+    // Add local audio track if exists, otherwise pre-warm transceiver
     if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, this.localStream!);
-      });
+      const audioTrack = this.localStream.getAudioTracks()[0];
+      if (audioTrack) {
+        pc.addTrack(audioTrack, this.localStream);
+      } else {
+        pc.addTransceiver("audio", { direction: "sendrecv" });
+      }
+    } else {
+      // Pre-warm audio transceiver so bidirectional audio m-line is negotiated upfront!
+      // This is the secret to 0-renegotiation mic activation on Safari
+      pc.addTransceiver("audio", { direction: "sendrecv" });
     }
 
-    // Handle remote track
+    // Handle remote track with Safari empty-streams bug workaround
     pc.ontrack = (event) => {
-      const [remoteStream] = event.streams;
-      if (!remoteStream) return;
+      // Workaround for Safari: event.streams is often empty [] in WebKit!
+      let remoteStream = (event.streams && event.streams[0]) || new MediaStream([event.track]);
 
       let audio = this.remoteAudios.get(targetUserId);
       if (!audio) {
@@ -348,34 +384,30 @@ export class WebRTCVoiceManager {
         audio.id = `remote_audio_${targetUserId}`;
         audio.autoplay = true;
         audio.setAttribute("playsinline", "true");
-        audio.style.display = "none";
+        audio.setAttribute("webkit-playsinline", "true");
+        // Avoid display: none so iOS Safari doesn't throttle or mute background audio
+        audio.style.position = "fixed";
+        audio.style.top = "-9999px";
+        audio.style.left = "-9999px";
+        audio.style.width = "1px";
+        audio.style.height = "1px";
+        audio.style.opacity = "0";
+        audio.style.pointerEvents = "none";
         document.body.appendChild(audio);
         this.remoteAudios.set(targetUserId, audio);
       }
+
       audio.srcObject = remoteStream;
       audio.muted = this.isDeafened;
 
       const userVol = this.userVolumes.get(targetUserId) ?? 100;
       audio.volume = Math.min(1.0, userVol / 100);
 
-      audio.play().catch(() => {});
-
-      // Setup Web Audio GainNode & Analyser
-      const ctx = this.ensureAudioContext();
-      if (ctx) {
-        try {
-          const source = ctx.createMediaStreamSource(remoteStream);
-          const gainNode = ctx.createGain();
-          gainNode.gain.setValueAtTime(userVol / 100, ctx.currentTime);
-          this.remoteGains.set(targetUserId, gainNode);
-
-          const analyser = ctx.createAnalyser();
-          analyser.fftSize = 256;
-          source.connect(gainNode);
-          gainNode.connect(analyser);
-
-          this.remoteAnalysers.set(targetUserId, analyser);
-        } catch (e) {}
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn(`[Voice] Remote audio playback waiting for user touch/click for user ${targetUserId}:`, err);
+        });
       }
     };
 
@@ -386,9 +418,9 @@ export class WebRTCVoiceManager {
       }
     };
 
-    // If initiator, create and send Offer
+    // If initiator, create and send initial Offer
     if (isInitiator) {
-      pc.createOffer({ offerToReceiveAudio: true })
+      pc.createOffer()
         .then((offer) => pc.setLocalDescription(offer))
         .then(() => {
           this.sendSignal(targetUserId, { sdp: pc.localDescription });
@@ -409,7 +441,7 @@ export class WebRTCVoiceManager {
     });
   }
 
-  // 8. Handle incoming WebRTC signaling from SSE with ICE queueing
+  // 8. Handle incoming WebRTC signaling from SSE with ICE queueing & glare prevention
   public async handleSignal(fromUserId: string, signal: any) {
     if (fromUserId === this.currentUserId) return;
 
@@ -417,16 +449,31 @@ export class WebRTCVoiceManager {
 
     if (signal.sdp) {
       try {
-        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+        const remoteDesc = new RTCSessionDescription(signal.sdp);
+
+        // Handle polite peer collision prevention in Safari
+        if (remoteDesc.type === "offer" && pc.signalingState !== "stable") {
+          const isPolite = this.currentUserId < fromUserId;
+          if (!isPolite) {
+            console.warn(`[WebRTC] Glare collision detected on impolite peer with ${fromUserId}, ignoring duplicate offer`);
+            return;
+          }
+          await Promise.all([
+            pc.setLocalDescription({ type: "rollback" } as any).catch(() => {}),
+            pc.setRemoteDescription(remoteDesc),
+          ]);
+        } else {
+          await pc.setRemoteDescription(remoteDesc);
+        }
 
         // Flush pending ICE candidates
         const queued = this.pendingCandidates.get(fromUserId) || [];
         for (const cand of queued) {
-          await pc.addIceCandidate(new RTCIceCandidate(cand));
+          await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
         }
         this.pendingCandidates.delete(fromUserId);
 
-        if (signal.sdp.type === "offer") {
+        if (remoteDesc.type === "offer") {
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           this.sendSignal(fromUserId, { sdp: pc.localDescription });
@@ -437,7 +484,7 @@ export class WebRTCVoiceManager {
     } else if (signal.candidate) {
       try {
         if (pc.remoteDescription && pc.remoteDescription.type) {
-          await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+          await pc.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(() => {});
         } else {
           const queued = this.pendingCandidates.get(fromUserId) || [];
           queued.push(signal.candidate);

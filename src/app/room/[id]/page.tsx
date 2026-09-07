@@ -599,6 +599,9 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   };
 
   const handleToggleMic = async () => {
+    if (voiceManagerRef.current) {
+      voiceManagerRef.current.resumeAudio();
+    }
     if (room?.isMutedAll && !isHost && isMicMuted) {
       showPermToast("👑 房主已开启【全员静音】，暂不可开麦");
       return;
