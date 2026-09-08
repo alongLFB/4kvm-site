@@ -33,13 +33,34 @@ jobs:
             set -euo pipefail
             cd ~/github/4kvm-site
             
-            # 1. 确保容器具有向挂载的 scripts 目录写入 UPDATE_LOG.md 的权限
-            chmod -R 777 scripts 2>/dev/null || true
+            # 1. 确保数据目录与脚本目录存在且具有可写权限
+            mkdir -p data scripts
+            chmod -R 777 data scripts 2>/dev/null || true
+            [ -f .env ] || touch .env
+            [ -f scripts/UPDATE_LOG.md ] || touch scripts/UPDATE_LOG.md
 
             HOURS="${{ github.event.inputs.hours || 24 }}"
             echo "==> Triggering Upstream VOD Sync for last ${HOURS}h in Docker container..."
-            
-            docker exec 4kvm-app node scripts/ingest-ikun-full.mjs --hours "${HOURS}"
+
+            # 2. 检查并确保 4kvm-app 处于运行状态（若未启动则自动拉起）
+            if [ -z "$(docker compose ps -q 4kvm-app 2>/dev/null || true)" ] && ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^4kvm-app$"; then
+              echo "==> [Notice] 4kvm-app 容器未处于运行状态，正在启动..."
+              docker compose up -d 4kvm-app || true
+              sleep 3
+            fi
+
+            # 3. 执行同步逻辑（优先使用 docker compose exec，其次 docker exec，最后使用 docker compose run 兜底）
+            if [ -n "$(docker compose ps -q 4kvm-app 2>/dev/null || true)" ]; then
+              echo "==> 使用 docker compose exec 在运行中的 4kvm-app 容器内执行同步..."
+              docker compose exec -T 4kvm-app node scripts/ingest-ikun-full.mjs --hours "${HOURS}"
+            elif docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^4kvm-app$"; then
+              echo "==> 使用 docker exec 在 4kvm-app 容器内执行同步..."
+              docker exec 4kvm-app node scripts/ingest-ikun-full.mjs --hours "${HOURS}"
+            else
+              echo "==> [Fallback] 容器未在后台运行，正在使用一次性容器执行增量同步..."
+              docker compose run --rm -T 4kvm-app node scripts/ingest-ikun-full.mjs --hours "${HOURS}"
+            fi
+
             echo "==> Upstream VODs Synced Successfully into 4kvm.db!"
 
       - name: Fetch UPDATE_LOG.md from Remote Server
