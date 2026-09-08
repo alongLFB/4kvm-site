@@ -74,7 +74,12 @@ jobs:
             # 4. 同步环境变量（若 GitHub Secrets 已配置 ENV_FILE）
             if [ -n "${ENV_FILE:-}" ]; then
               printf "%s\n" "$ENV_FILE" > .env
-              # 自动修正历史遗留域名笔误
+            fi
+            # 自动修复 .env 中的格式问题与历史域名笔误
+            if [ -f .env ]; then
+              sed -i 's/^[[:space:]]*\.env\.example/# .env.example/g' .env 2>/dev/null || true
+              sed -i 's/^[[:space:]]*cp \.env\.example/# cp .env.example/g' .env 2>/dev/null || true
+              sed -i -E 's/^([[:space:]]*[^#[:space:]][^=]*)$/# [Fixed] \1/' .env 2>/dev/null || true
               sed -i 's/api\.ikunzyapi\.com/ikunzyapi.com/g' .env 2>/dev/null || true
             fi
 

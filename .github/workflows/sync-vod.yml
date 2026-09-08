@@ -42,7 +42,12 @@ jobs:
             mkdir -p data scripts
             chmod -R 777 data scripts 2>/dev/null || true
             [ -f .env ] || touch .env
-            # 自动纠正 .env 中可能存在的历史错误子域名 api.ikunzyapi.com -> ikunzyapi.com
+            # 自动修复 .env 中的格式问题：
+            # 1) 将既非注释、也非空行、且不含 '=' 的异常折行或文本自动转为注释，防止 Docker Compose 解析报错
+            sed -i 's/^[[:space:]]*\.env\.example/# .env.example/g' .env 2>/dev/null || true
+            sed -i 's/^[[:space:]]*cp \.env\.example/# cp .env.example/g' .env 2>/dev/null || true
+            sed -i -E 's/^([[:space:]]*[^#[:space:]][^=]*)$/# [Fixed] \1/' .env 2>/dev/null || true
+            # 2) 自动纠正可能遗留的历史错误子域名 api.ikunzyapi.com -> ikunzyapi.com
             sed -i 's/api\.ikunzyapi\.com/ikunzyapi.com/g' .env 2>/dev/null || true
             [ -f scripts/UPDATE_LOG.md ] || touch scripts/UPDATE_LOG.md
 
