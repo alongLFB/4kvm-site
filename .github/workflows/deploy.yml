@@ -103,8 +103,25 @@ jobs:
               echo "==> Building new Docker image in background (old container keeps serving)..."
               docker compose build
 
+              echo "==> Waiting 3s to allow old container to fully exit..."
+              sleep 3
+
               echo "==> Re-creating container atomically (1-2s seamless transition)..."
-              docker compose up -d --no-deps 4kvm-app
+              UP_SUCCESS=false
+              for i in {1..3}; do
+                if docker compose up -d --no-deps 4kvm-app; then
+                  UP_SUCCESS=true
+                  break
+                fi
+                echo "Docker compose up retry ($i/3)..."
+                sleep 2
+              done
+
+              if [ "$UP_SUCCESS" != "true" ]; then
+                echo "❌ Failed to start container after 3 attempts."
+                exit 1
+              fi
+
               docker image prune -f
 
               # 自动化健康检查轮询
