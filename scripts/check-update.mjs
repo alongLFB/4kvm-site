@@ -8,7 +8,11 @@ try {
   process.loadEnvFile();
 } catch {}
 
-const API_BASE = process.env.IKUN_API_BASE || "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/";
+let rawApiBase = process.env.IKUN_API_BASE || "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/";
+if (rawApiBase.includes("api.ikunzyapi.com")) {
+  rawApiBase = rawApiBase.replace("api.ikunzyapi.com", "ikunzyapi.com");
+}
+const API_BASE = rawApiBase;
 const SOURCE_NAME = process.env.IKUN_SOURCE_NAME || "⚡ iKun 国际专线 (1080P原画秒播)";
 
 const dbPath = path.join(process.cwd(), "data", "4kvm.db");

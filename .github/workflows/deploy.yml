@@ -74,6 +74,8 @@ jobs:
             # 4. 同步环境变量（若 GitHub Secrets 已配置 ENV_FILE）
             if [ -n "${ENV_FILE:-}" ]; then
               printf "%s\n" "$ENV_FILE" > .env
+              # 自动修正历史遗留域名笔误
+              sed -i 's/api\.ikunzyapi\.com/ikunzyapi.com/g' .env 2>/dev/null || true
             fi
 
             # 5. 智能判断是否需要重新构建 Docker 镜像 (按需构建)

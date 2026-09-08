@@ -67,12 +67,17 @@ db.exec(`
 
 console.log("✅ Fresh SQLite database and FTS5 index ready!");
 
+const cleanIkunApi = (url) => {
+  const base = url || "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/";
+  return base.replace("api.ikunzyapi.com", "ikunzyapi.com");
+};
+
 // Top Verified Overseas & Global Fast Sources
 const SOURCES = [
   {
     prefix: "ikun",
     name: "⚡ iKun 国际专线 (1080P原画秒播)",
-    apiUrl: process.env.IKUN_API_BASE || "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/",
+    apiUrl: cleanIkunApi(process.env.IKUN_API_BASE),
     maxPages: 35
   },
   {

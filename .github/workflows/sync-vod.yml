@@ -33,10 +33,17 @@ jobs:
             set -euo pipefail
             cd ~/github/4kvm-site
             
+            # 暂存追更日志，同步拉取最新 scripts 目录代码
+            [ -f scripts/UPDATE_LOG.md ] && cp scripts/UPDATE_LOG.md /tmp/UPDATE_LOG.md.bak 2>/dev/null || true
+            git fetch origin master 2>/dev/null && git checkout origin/master -- scripts/ 2>/dev/null || true
+            [ -f /tmp/UPDATE_LOG.md.bak ] && cp /tmp/UPDATE_LOG.md.bak scripts/UPDATE_LOG.md 2>/dev/null || true
+
             # 1. 确保数据目录与脚本目录存在且具有可写权限
             mkdir -p data scripts
             chmod -R 777 data scripts 2>/dev/null || true
             [ -f .env ] || touch .env
+            # 自动纠正 .env 中可能存在的历史错误子域名 api.ikunzyapi.com -> ikunzyapi.com
+            sed -i 's/api\.ikunzyapi\.com/ikunzyapi.com/g' .env 2>/dev/null || true
             [ -f scripts/UPDATE_LOG.md ] || touch scripts/UPDATE_LOG.md
 
             HOURS="${{ github.event.inputs.hours || 24 }}"
@@ -49,16 +56,18 @@ jobs:
               sleep 3
             fi
 
+            IKUN_URL="https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/"
+
             # 3. 执行同步逻辑（优先使用 docker compose exec，其次 docker exec，最后使用 docker compose run 兜底）
             if [ -n "$(docker compose ps -q 4kvm-app 2>/dev/null || true)" ]; then
               echo "==> 使用 docker compose exec 在运行中的 4kvm-app 容器内执行同步..."
-              docker compose exec -T 4kvm-app node scripts/ingest-ikun-full.mjs --hours "${HOURS}"
+              docker compose exec -T -e IKUN_API_BASE="$IKUN_URL" 4kvm-app node scripts/ingest-ikun-full.mjs --hours "${HOURS}"
             elif docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^4kvm-app$"; then
               echo "==> 使用 docker exec 在 4kvm-app 容器内执行同步..."
-              docker exec 4kvm-app node scripts/ingest-ikun-full.mjs --hours "${HOURS}"
+              docker exec -e IKUN_API_BASE="$IKUN_URL" 4kvm-app node scripts/ingest-ikun-full.mjs --hours "${HOURS}"
             else
               echo "==> [Fallback] 容器未在后台运行，正在使用一次性容器执行增量同步..."
-              docker compose run --rm -T 4kvm-app node scripts/ingest-ikun-full.mjs --hours "${HOURS}"
+              docker compose run --rm -T -e IKUN_API_BASE="$IKUN_URL" 4kvm-app node scripts/ingest-ikun-full.mjs --hours "${HOURS}"
             fi
 
             echo "==> Upstream VODs Synced Successfully into 4kvm.db!"
