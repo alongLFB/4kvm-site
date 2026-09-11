@@ -82,6 +82,7 @@ export default function PlayPage() {
         if (data.code === 200 && data.data) {
           setItem(data.data);
           setIsGatedLocked(false);
+          setPasscodeModalOpen(false);
         } else if (data.code === 403) {
           setIsGatedLocked(true);
           setPasscodeModalOpen(true);

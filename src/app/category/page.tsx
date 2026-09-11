@@ -91,19 +91,24 @@ function CategoryContent() {
 
   // 专区口令加锁与解锁状态
   const [unlockedPin, setUnlockedPin] = useState<string>("");
+  const [isInitialized, setIsInitialized] = useState(false);
   const [passcodeModalOpen, setPasscodeModalOpen] = useState(false);
   const [pendingType, setPendingType] = useState<string | null>(null);
 
   // 初始化读取本地解锁 token
   useEffect(() => {
-    const saved = localStorage.getItem(GATED_CONFIG.storageKey) || "";
+    const saved = typeof window !== "undefined" ? localStorage.getItem(GATED_CONFIG.storageKey) || "" : "";
     setUnlockedPin(saved);
+    setIsInitialized(true);
   }, []);
 
   // 计算当前一级分类下的二级子类型列表
   const activeSubTypes = FILTER_CONFIG.subTypes[currentType] || FILTER_CONFIG.subTypes["全部"];
 
   useEffect(() => {
+    // 确保已从本地缓存完成 token 初始化后再发请求，彻底杜绝刷新时的时序竞态
+    if (!isInitialized) return;
+
     setLoading(true);
     const params = new URLSearchParams();
     if (currentType !== "全部") params.set("type", currentType);
@@ -115,10 +120,29 @@ function CategoryContent() {
     if (currentStatus !== "全部") params.set("status", currentStatus);
     params.set("pg", currentPage.toString());
 
+    // 双重提取 pin：优先使用 state，若为空直接读取 localStorage
+    const activePin =
+      unlockedPin ||
+      (typeof window !== "undefined"
+        ? localStorage.getItem(GATED_CONFIG.storageKey) || ""
+        : "");
+
+    // 若当前为受限专区且确实尚未解锁，拦截并弹出解锁窗口，避免无意义的 403 往返
+    const isLocked = isTypeGated(currentType);
+    const hasUnlocked = activePin === GATED_CONFIG.passcode;
+    if (isLocked && !hasUnlocked) {
+      setVods([]);
+      setTotal(0);
+      setPageCount(1);
+      setLoading(false);
+      setPasscodeModalOpen(true);
+      return;
+    }
+
     // 服务端双重校验：若已解锁，在 Header 中安全携带 access pin
     const headers: Record<string, string> = {};
-    if (unlockedPin) {
-      headers[GATED_CONFIG.headerKey] = unlockedPin;
+    if (activePin) {
+      headers[GATED_CONFIG.headerKey] = activePin;
     }
 
     fetch(`/api/vod?${params.toString()}`, { headers })
@@ -138,11 +162,24 @@ function CategoryContent() {
           setVods(data.list || []);
           setTotal(data.total || 0);
           setPageCount(data.pagecount || 1);
+          // 成功加载数据后，确保关闭可能被意外触发的口令弹窗
+          setPasscodeModalOpen(false);
         }
       })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
-  }, [currentType, currentSubType, currentArea, currentLang, currentYear, currentSort, currentStatus, currentPage, unlockedPin]);
+  }, [
+    isInitialized,
+    currentType,
+    currentSubType,
+    currentArea,
+    currentLang,
+    currentYear,
+    currentSort,
+    currentStatus,
+    currentPage,
+    unlockedPin,
+  ]);
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -163,7 +200,12 @@ function CategoryContent() {
 
   const handleTypeClick = (val: string) => {
     const isLocked = isTypeGated(val);
-    const hasUnlocked = unlockedPin === GATED_CONFIG.passcode;
+    const activePin =
+      unlockedPin ||
+      (typeof window !== "undefined"
+        ? localStorage.getItem(GATED_CONFIG.storageKey) || ""
+        : "");
+    const hasUnlocked = activePin === GATED_CONFIG.passcode;
     if (isLocked && !hasUnlocked) {
       setPendingType(val);
       setPasscodeModalOpen(true);
@@ -174,6 +216,7 @@ function CategoryContent() {
 
   const handleUnlockSuccess = (pin: string) => {
     setUnlockedPin(pin);
+    setPasscodeModalOpen(false);
     if (pendingType) {
       updateFilter("type", pendingType);
       setPendingType(null);
