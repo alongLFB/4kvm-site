@@ -85,10 +85,21 @@ jobs:
           SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SERVER_SSH_KEY" > ~/.ssh/id_rsa
+          # 规范写入私钥并剔除可能的 Windows \r 换行符
+          printf "%s\n" "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -p $SERVER_PORT -H $SERVER_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
-          scp -P $SERVER_PORT -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST:~/github/4kvm-site/scripts/UPDATE_LOG.md" ./scripts/UPDATE_LOG.md
+
+          # 使用 ssh 直接流式拉取远程日志文件，避免 scp/sftp 握手阻塞、~ 路径扩展失效及无终端环境卡死
+          ssh -i ~/.ssh/id_rsa \
+            -p "$SERVER_PORT" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=20 \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o PubkeyAcceptedAlgorithms=+ssh-rsa \
+            -o HostKeyAlgorithms=+ssh-rsa \
+            "$SERVER_USER@$SERVER_HOST" "cat ~/github/4kvm-site/scripts/UPDATE_LOG.md" > ./scripts/UPDATE_LOG.md
+
           echo "==> Successfully fetched latest UPDATE_LOG.md from remote server."
           
           echo "=================================================="
