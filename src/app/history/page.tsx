@@ -59,7 +59,7 @@ export default function HistoryPage() {
           {history.map((h, idx) => (
             <Link
               key={idx}
-              href={`/play/${h.vodId}`}
+              href={`/play/${h.vodId}?src=${h.sourceIndex || 0}&ep=${h.episodeIndex || 0}&t=${h.currentTime || 0}`}
               className="p-4 rounded-xl bg-dark-850 border border-white/5 hover:border-gold-500/40 transition flex gap-3 group"
             >
               <img
@@ -76,9 +76,13 @@ export default function HistoryPage() {
                     {h.episodeName}
                   </p>
                 </div>
-                <p className="text-[11px] text-gray-500">
-                  播放至: {formatSeconds(h.currentTime)}
-                </p>
+                <div className="flex items-center justify-between text-[11px] text-gray-500">
+                  <span>播放至: {formatSeconds(h.currentTime)}</span>
+                  <span className="text-cyan-400 opacity-0 group-hover:opacity-100 transition flex items-center gap-1 font-medium">
+                    <Play className="w-3 h-3 fill-cyan-400" />
+                    继续观看
+                  </span>
+                </div>
               </div>
             </Link>
           ))}

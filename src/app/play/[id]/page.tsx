@@ -8,7 +8,7 @@ import { MovieCard } from "@/components/MovieCard";
 import { CreateRoomModal } from "@/components/CreateRoomModal";
 import { PasscodeModal } from "@/components/PasscodeModal";
 import { GATED_CONFIG } from "@/config/gated-sections";
-import { Film, Share2, Radio, Users, Loader2, Lock } from "lucide-react";
+import { Film, Share2, Radio, Users, Loader2, Lock, ChevronDown, ArrowUpDown } from "lucide-react";
 import { VodItem, WatchHistoryItem } from "@/lib/types";
 import { useOnlineWatcher } from "@/hooks/useOnlineWatcher";
 
@@ -24,6 +24,36 @@ const VideoPlayer = dynamic(() => import("@/components/Player/ArtPlayer"), {
   ),
 });
 
+function renderPersonLinks(rawText?: string) {
+  if (!rawText || !rawText.trim() || rawText.trim() === "未知") {
+    return <span className="text-gray-400">未知</span>;
+  }
+  const names = rawText
+    .split(/[,/、|;\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (names.length === 0) {
+    return <span className="text-gray-400">{rawText}</span>;
+  }
+
+  return (
+    <span className="inline-flex flex-wrap gap-x-1.5 gap-y-0.5">
+      {names.map((name, i) => (
+        <React.Fragment key={i}>
+          <Link
+            href={`/search?q=${encodeURIComponent(name)}`}
+            className="text-gray-300 hover:text-cyan-400 hover:underline transition underline-offset-2"
+          >
+            {name}
+          </Link>
+          {i < names.length - 1 && <span className="text-gray-600">/</span>}
+        </React.Fragment>
+      ))}
+    </span>
+  );
+}
+
 export default function PlayPage() {
   const params = useParams();
   const id = params?.id as string;
@@ -38,6 +68,13 @@ export default function PlayPage() {
   const [isGatedLocked, setIsGatedLocked] = useState(false);
   const [passcodeModalOpen, setPasscodeModalOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  // 新增：自动续播初始进度与提示、选集正反序、剧情简介折叠状态
+  const [initialTime, setInitialTime] = useState<number>(0);
+  const [historyPrompt, setHistoryPrompt] = useState<{ epName: string; timeText: string } | null>(null);
+  const hasRestoredHistoryRef = useRef(false);
+  const [isEpReversed, setIsEpReversed] = useState(false);
+  const [isContentExpanded, setIsContentExpanded] = useState(false);
 
   const onlineStats = useOnlineWatcher({
     pageType: "play",
@@ -80,9 +117,61 @@ export default function PlayPage() {
       .then((data) => {
         if (!data) return;
         if (data.code === 200 && data.data) {
-          setItem(data.data);
+          const vod = data.data;
+          setItem(vod);
           setIsGatedLocked(false);
           setPasscodeModalOpen(false);
+
+          // 自动跳转到历史记录/URL参数中对应的集数与播放进度
+          if (!hasRestoredHistoryRef.current && vod.sources && vod.sources.length > 0) {
+            hasRestoredHistoryRef.current = true;
+            let targetSrc = -1;
+            let targetEp = -1;
+            let targetTime = 0;
+
+            if (typeof window !== "undefined") {
+              const urlParams = new URLSearchParams(window.location.search);
+              const spSrc = urlParams.get("src");
+              const spEp = urlParams.get("ep");
+              const spT = urlParams.get("t");
+              if (spEp !== null) {
+                targetEp = parseInt(spEp, 10);
+                targetSrc = spSrc !== null ? parseInt(spSrc, 10) : 0;
+                targetTime = spT !== null ? parseInt(spT, 10) : 0;
+              } else {
+                try {
+                  const histStr = localStorage.getItem("watch_history") || "[]";
+                  const histList: WatchHistoryItem[] = JSON.parse(histStr);
+                  const found = histList.find((h) => h.vodId === vod.id);
+                  if (found) {
+                    targetSrc = found.sourceIndex ?? 0;
+                    targetEp = found.episodeIndex ?? 0;
+                    targetTime = found.currentTime ?? 0;
+                  }
+                } catch (e) {}
+              }
+            }
+
+            if (targetEp >= 0) {
+              const safeSrc = targetSrc >= 0 && targetSrc < vod.sources.length ? targetSrc : 0;
+              const source = vod.sources[safeSrc];
+              if (source && targetEp < source.episodes.length) {
+                setCurrentSourceIndex(safeSrc);
+                setCurrentEpIndex(targetEp);
+                if (targetTime > 2) {
+                  setInitialTime(targetTime);
+                  const mins = Math.floor(targetTime / 60);
+                  const secs = targetTime % 60;
+                  const timeText = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+                  setHistoryPrompt({
+                    epName: source.episodes[targetEp]?.name || `第${targetEp + 1}集`,
+                    timeText,
+                  });
+                  setTimeout(() => setHistoryPrompt(null), 6000);
+                }
+              }
+            }
+          }
         } else if (data.code === 403) {
           setIsGatedLocked(true);
           setPasscodeModalOpen(true);
@@ -236,10 +325,41 @@ export default function PlayPage() {
     <div className="space-y-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-4">
+          {historyPrompt && (
+            <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-xs text-cyan-300 shadow-md">
+              <span className="flex items-center gap-2">
+                <span>⏱️</span>
+                <span>已为您自动定位至上次观看的【{historyPrompt.epName}】({historyPrompt.timeText})</span>
+              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHistoryPrompt(null);
+                    if (playerRef.current) {
+                      playerRef.current.currentTime = 0;
+                    }
+                  }}
+                  className="hover:text-white underline underline-offset-2 cursor-pointer font-medium"
+                >
+                  从头播放
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHistoryPrompt(null)}
+                  className="text-gray-400 hover:text-white cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+
           <VideoPlayer
             url={currentEpisode.url}
             title={`${item.name} - ${currentEpisode.name}`}
             poster={item.banner || item.pic}
+            initialTime={initialTime}
             getInstance={(art) => {
               playerRef.current = art;
             }}
@@ -306,14 +426,48 @@ export default function PlayPage() {
               ))}
             </div>
 
-            <div className="text-sm text-gray-300 leading-relaxed bg-dark-850 p-4 rounded-xl border border-white/5">
-              <p className="text-xs font-bold text-gray-400 mb-1">剧情简介：</p>
-              {item.content ? item.content.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim() : "暂无剧情简介"}
-            </div>
+            {/* 剧情简介：自适应展开全部与折叠 */}
+            {(() => {
+              const cleanContent = item.content
+                ? item.content.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim()
+                : "暂无剧情简介";
+              const isLongContent = cleanContent.length > 130;
+              return (
+                <div className="text-sm text-gray-300 leading-relaxed bg-dark-850 p-4 rounded-xl border border-white/5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-gray-400">剧情简介：</p>
+                    {isLongContent && (
+                      <button
+                        type="button"
+                        onClick={() => setIsContentExpanded((prev) => !prev)}
+                        className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition cursor-pointer select-none"
+                      >
+                        <span>{isContentExpanded ? "收起简介" : "展开全部介绍"}</span>
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                            isContentExpanded ? "rotate-180" : ""
+                          }`}
+                        />
+                      </button>
+                    )}
+                  </div>
+                  <p className={`transition-all duration-200 ${!isContentExpanded && isLongContent ? "line-clamp-3" : ""}`}>
+                    {cleanContent}
+                  </p>
+                </div>
+              );
+            })()}
 
+            {/* 导演与主演：点击直接跳转至人名作品搜索 */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-400 pt-2">
-              <p><span className="text-gray-500">导演：</span>{item.director || "未知"}</p>
-              <p><span className="text-gray-500">主演：</span>{item.actor || "未知"}</p>
+              <div className="flex items-start gap-1">
+                <span className="text-gray-500 shrink-0">导演：</span>
+                {renderPersonLinks(item.director)}
+              </div>
+              <div className="flex items-start gap-1">
+                <span className="text-gray-500 shrink-0">主演：</span>
+                {renderPersonLinks(item.actor)}
+              </div>
             </div>
           </div>
         </div>
@@ -356,13 +510,29 @@ export default function PlayPage() {
                 <Film className="w-4 h-4 text-cyan-400" />
                 选集列表
               </h2>
-              <span className="text-xs text-gray-400">
-                共 {currentSource.episodes.length} 集
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">
+                  共 {currentSource.episodes.length} 集
+                </span>
+                {currentSource.episodes.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEpReversed((prev) => !prev)}
+                    className="px-2 py-0.5 rounded-lg bg-white/5 hover:bg-cyan-500/20 text-xs text-gray-300 hover:text-cyan-400 flex items-center gap-1 transition border border-white/5 cursor-pointer"
+                    title={isEpReversed ? "当前倒序，点击切换为正序" : "当前正序，点击切换为倒序"}
+                  >
+                    <ArrowUpDown className="w-3 h-3 text-cyan-400" />
+                    <span>{isEpReversed ? "倒序" : "正序"}</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-3 gap-2.5 max-h-[360px] overflow-y-auto pr-1">
-              {currentSource.episodes.map((ep, idx) => {
+              {(isEpReversed
+                ? currentSource.episodes.map((ep, idx) => ({ ep, idx })).reverse()
+                : currentSource.episodes.map((ep, idx) => ({ ep, idx }))
+              ).map(({ ep, idx }) => {
                 const isActive = idx === currentEpIndex;
                 return (
                   <button
