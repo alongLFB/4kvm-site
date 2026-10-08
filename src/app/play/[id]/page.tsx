@@ -266,9 +266,16 @@ export default function PlayPage() {
   const currentSource = item.sources[currentSourceIndex] || item.sources[0] || { sourceName: "默认线路", episodes: [] };
   const currentEpisode = currentSource.episodes[currentEpIndex] || currentSource.episodes[0] || { name: "正片", url: "" };
 
-  const handleTimeUpdate = (currentTime: number, duration: number) => {
-    if (typeof window === "undefined" || currentTime <= 2) return;
+  const saveWatchHistory = (
+    srcIdx: number,
+    epIdx: number,
+    currentTime = 0,
+    duration = 0
+  ) => {
+    if (typeof window === "undefined" || !item) return;
     try {
+      const src = item.sources[srcIdx] || item.sources[0];
+      const ep = src?.episodes[epIdx] || src?.episodes[0];
       const historyStr = localStorage.getItem("watch_history") || "[]";
       let list: WatchHistoryItem[] = JSON.parse(historyStr);
       list = list.filter((h) => h.vodId !== item.id);
@@ -276,9 +283,9 @@ export default function PlayPage() {
         vodId: item.id,
         vodName: item.name,
         vodPic: item.pic,
-        sourceIndex: currentSourceIndex,
-        episodeIndex: currentEpIndex,
-        episodeName: currentEpisode.name,
+        sourceIndex: srcIdx,
+        episodeIndex: epIdx,
+        episodeName: ep?.name || `第${epIdx + 1}集`,
         currentTime: Math.floor(currentTime),
         duration: Math.floor(duration),
         timestamp: Date.now(),
@@ -289,9 +296,64 @@ export default function PlayPage() {
     }
   };
 
+  const handleEpisodeChange = (newEpIndex: number) => {
+    if (newEpIndex === currentEpIndex) return;
+    setInitialTime(0);
+    setHistoryPrompt(null);
+    setCurrentEpIndex(newEpIndex);
+    saveWatchHistory(currentSourceIndex, newEpIndex, 0, 0);
+
+    if (typeof window !== "undefined") {
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.set("ep", String(newEpIndex));
+      newUrl.searchParams.set("src", String(currentSourceIndex));
+      newUrl.searchParams.delete("t");
+      window.history.replaceState(null, "", newUrl.toString());
+    }
+  };
+
+  const handleSourceChange = (newSrcIndex: number) => {
+    if (newSrcIndex === currentSourceIndex) return;
+    setInitialTime(0);
+    setHistoryPrompt(null);
+    setCurrentSourceIndex(newSrcIndex);
+
+    const targetSrc = item?.sources[newSrcIndex];
+    let nextEpIndex = currentEpIndex;
+    if (targetSrc && currentEpIndex >= targetSrc.episodes.length) {
+      nextEpIndex = 0;
+      setCurrentEpIndex(0);
+    }
+
+    saveWatchHistory(newSrcIndex, nextEpIndex, 0, 0);
+
+    if (typeof window !== "undefined") {
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.set("ep", String(nextEpIndex));
+      newUrl.searchParams.set("src", String(newSrcIndex));
+      newUrl.searchParams.delete("t");
+      window.history.replaceState(null, "", newUrl.toString());
+    }
+  };
+
+  const handleTimeUpdate = (currentTime: number, duration: number) => {
+    if (typeof window === "undefined" || currentTime <= 2) return;
+    saveWatchHistory(currentSourceIndex, currentEpIndex, currentTime, duration);
+  };
+
   const handleShare = () => {
     if (typeof window !== "undefined") {
-      navigator.clipboard.writeText(window.location.href);
+      const shareUrl = new URL(window.location.href);
+      shareUrl.searchParams.set("ep", String(currentEpIndex));
+      shareUrl.searchParams.set("src", String(currentSourceIndex));
+      const player = playerRef.current || (window as any).__4kvm_player__;
+      const curTime = player ? Math.floor(player.currentTime || 0) : 0;
+      if (curTime > 5) {
+        shareUrl.searchParams.set("t", String(curTime));
+      } else {
+        shareUrl.searchParams.delete("t");
+      }
+      navigator.clipboard.writeText(shareUrl.toString());
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -336,8 +398,15 @@ export default function PlayPage() {
                   type="button"
                   onClick={() => {
                     setHistoryPrompt(null);
+                    setInitialTime(0);
                     if (playerRef.current) {
                       playerRef.current.currentTime = 0;
+                    }
+                    saveWatchHistory(currentSourceIndex, currentEpIndex, 0, 0);
+                    if (typeof window !== "undefined") {
+                      const newUrl = new URL(window.location.href);
+                      newUrl.searchParams.delete("t");
+                      window.history.replaceState(null, "", newUrl.toString());
                     }
                   }}
                   className="hover:text-white underline underline-offset-2 cursor-pointer font-medium"
@@ -365,7 +434,7 @@ export default function PlayPage() {
             }}
             onEnded={() => {
               if (currentEpIndex < currentSource.episodes.length - 1) {
-                setCurrentEpIndex(currentEpIndex + 1);
+                handleEpisodeChange(currentEpIndex + 1);
               }
             }}
             onTimeUpdate={handleTimeUpdate}
@@ -485,12 +554,7 @@ export default function PlayPage() {
                   return (
                     <button
                       key={idx}
-                      onClick={() => {
-                        setCurrentSourceIndex(idx);
-                        if (currentEpIndex >= src.episodes.length) {
-                          setCurrentEpIndex(0);
-                        }
-                      }}
+                      onClick={() => handleSourceChange(idx)}
                       className={`w-full py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
                         isCurrent
                           ? "bg-cyan-500/15 border border-cyan-500/40 text-cyan-400 shadow-sm"
@@ -537,7 +601,7 @@ export default function PlayPage() {
                 return (
                   <button
                     key={idx}
-                    onClick={() => setCurrentEpIndex(idx)}
+                    onClick={() => handleEpisodeChange(idx)}
                     className={`py-2.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center text-center ${
                       isActive
                         ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-dark-950 shadow-lg shadow-cyan-500/20 scale-[1.02]"
