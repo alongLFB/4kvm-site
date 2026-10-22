@@ -8,9 +8,10 @@ import { MovieCard } from "@/components/MovieCard";
 import { CreateRoomModal } from "@/components/CreateRoomModal";
 import { PasscodeModal } from "@/components/PasscodeModal";
 import { GATED_CONFIG } from "@/config/gated-sections";
-import { Film, Share2, Radio, Users, Loader2, Lock, ChevronDown, ArrowUpDown } from "lucide-react";
+import { Film, Share2, Radio, Users, Loader2, Lock, ChevronDown, ArrowUpDown, Download } from "lucide-react";
 import { VodItem, WatchHistoryItem } from "@/lib/types";
 import { useOnlineWatcher } from "@/hooks/useOnlineWatcher";
+import { DownloadModal } from "@/components/DownloadModal";
 
 const VideoPlayer = dynamic(() => import("@/components/Player/ArtPlayer"), {
   ssr: false,
@@ -65,6 +66,7 @@ export default function PlayPage() {
   const [currentEpIndex, setCurrentEpIndex] = useState(0);
   const [copied, setCopied] = useState(false);
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [isGatedLocked, setIsGatedLocked] = useState(false);
   const [passcodeModalOpen, setPasscodeModalOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -468,6 +470,17 @@ export default function PlayPage() {
               </div>
 
               <div className="flex items-center gap-2.5">
+                {/* Download Button */}
+                <button
+                  type="button"
+                  onClick={() => setDownloadModalOpen(true)}
+                  className="px-3.5 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 transition border border-cyan-500/30 hover:border-cyan-500/50 shadow-sm cursor-pointer active:scale-95"
+                  title="离线下载当前视频"
+                >
+                  <Download className="w-4 h-4 text-cyan-400" />
+                  下载
+                </button>
+
                 {/* Watch Party Button with auto pause/resume lifecycle */}
                 <button
                   onClick={handleOpenCreateRoom}
@@ -635,6 +648,18 @@ export default function PlayPage() {
         initialEpisodeIndex={currentEpIndex}
         isOpen={createRoomOpen}
         onClose={handleCloseCreateRoom}
+      />
+
+      {/* 离线视频下载中心模态框 */}
+      <DownloadModal
+        isOpen={downloadModalOpen}
+        onClose={() => setDownloadModalOpen(false)}
+        vodName={item.name}
+        sources={item.sources}
+        currentSourceIndex={currentSourceIndex}
+        currentEpIndex={currentEpIndex}
+        onSelectEpisode={(epIdx) => handleEpisodeChange(epIdx)}
+        onSelectSource={(srcIdx) => handleSourceChange(srcIdx)}
       />
     </div>
   );
