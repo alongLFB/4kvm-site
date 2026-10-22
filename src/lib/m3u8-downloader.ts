@@ -84,7 +84,7 @@ export async function parseM3U8(m3u8Url: string, signal?: AbortSignal): Promise<
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (line.startsWith("#EXTINF:")) {
-      const durationMatch = line.match(/#EXTINF:([\d.]+)/);
+      const durationMatch = line.match(/#EXTINF:\s*([\d.]+)/);
       if (durationMatch) {
         totalDuration += parseFloat(durationMatch[1]);
       }
@@ -110,6 +110,110 @@ export async function parseM3U8(m3u8Url: string, signal?: AbortSignal): Promise<
     segments,
     totalDuration,
   };
+}
+
+/**
+ * Patches a fragmented MP4 initSegment:
+ * 1. Overwrites mvhd (Movie Header) duration and tkhd/mdhd duration with the actual media length.
+ * 2. Injects or updates the 'mehd' (Movie Extends Header) box in 'mvex' with the fragment duration.
+ *
+ * This completely resolves:
+ * - Windows Media Player displaying 13:15:21 (caused by 0xFFFFFFFF at 90kHz timescale)
+ * - QuickTime Player & iOS displaying 00:00 or disabling timeline seeking
+ * - Web browsers reporting video.duration as Infinity
+ */
+export function patchMp4InitSegment(initBytes: Uint8Array, durationSeconds: number): Uint8Array {
+  if (!initBytes || durationSeconds <= 0) return initBytes;
+
+  const u8 = new Uint8Array(initBytes);
+  const view = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+
+  let mvexOffset = -1;
+  let mvexSize = 0;
+  let moovOffset = -1;
+  let moovSize = 0;
+
+  function walk(offset: number, end: number) {
+    while (offset + 8 <= end) {
+      const size = view.getUint32(offset);
+      if (size < 8) break;
+      const type = String.fromCharCode(u8[offset + 4], u8[offset + 5], u8[offset + 6], u8[offset + 7]);
+
+      if (type === "moov") {
+        moovOffset = offset;
+        moovSize = size;
+        walk(offset + 8, offset + size);
+      } else if (type === "mvhd") {
+        // mvhd version 0: timescale at offset+20, duration at offset+24
+        const timescale = view.getUint32(offset + 20);
+        if (timescale > 0) {
+          const durationTicks = Math.min(0xfffffffe, Math.round(durationSeconds * timescale));
+          view.setUint32(offset + 24, durationTicks);
+        }
+      } else if (type === "tkhd") {
+        // tkhd version 0: duration at offset+28 (in mvhd timescale: 90000 in mux.js)
+        const durationTicks = Math.min(0xfffffffe, Math.round(durationSeconds * 90000));
+        view.setUint32(offset + 28, durationTicks);
+      } else if (type === "mdhd") {
+        // mdhd version 0: timescale at offset+20, duration at offset+24
+        const timescale = view.getUint32(offset + 20);
+        if (timescale > 0) {
+          const durationTicks = Math.min(0xfffffffe, Math.round(durationSeconds * timescale));
+          view.setUint32(offset + 24, durationTicks);
+        }
+      } else if (type === "mvex") {
+        mvexOffset = offset;
+        mvexSize = size;
+      } else if (["trak", "mdia", "minf"].includes(type)) {
+        walk(offset + 8, offset + size);
+      }
+      offset += size;
+    }
+  }
+
+  walk(0, u8.byteLength);
+
+  if (mvexOffset !== -1 && moovOffset !== -1) {
+    // Check if mehd already exists inside mvex
+    let hasMehd = false;
+    let scan = mvexOffset + 8;
+    const mvexEnd = mvexOffset + mvexSize;
+    while (scan + 8 <= mvexEnd) {
+      const bSize = view.getUint32(scan);
+      if (bSize < 8) break;
+      const bType = String.fromCharCode(u8[scan + 4], u8[scan + 5], u8[scan + 6], u8[scan + 7]);
+      if (bType === "mehd") {
+        hasMehd = true;
+        view.setUint32(scan + 12, Math.min(0xfffffffe, Math.round(durationSeconds * 90000)));
+        break;
+      }
+      scan += bSize;
+    }
+
+    if (!hasMehd) {
+      const mehdBox = new Uint8Array(16);
+      const mehdView = new DataView(mehdBox.buffer);
+      mehdView.setUint32(0, 16);
+      mehdBox[4] = 0x6d; // 'm'
+      mehdBox[5] = 0x65; // 'e'
+      mehdBox[6] = 0x68; // 'h'
+      mehdBox[7] = 0x64; // 'd'
+      mehdView.setUint32(8, 0); // version 0, flags 0
+      mehdView.setUint32(12, Math.min(0xfffffffe, Math.round(durationSeconds * 90000)));
+
+      const newInit = new Uint8Array(u8.byteLength + 16);
+      newInit.set(u8.subarray(0, mvexOffset + 8), 0);
+      newInit.set(mehdBox, mvexOffset + 8);
+      newInit.set(u8.subarray(mvexOffset + 8), mvexOffset + 8 + 16);
+
+      const newView = new DataView(newInit.buffer);
+      newView.setUint32(moovOffset, moovSize + 16);
+      newView.setUint32(mvexOffset, mvexSize + 16);
+      return newInit;
+    }
+  }
+
+  return u8;
 }
 
 export interface DownloadOptions {
@@ -245,9 +349,12 @@ export async function downloadAndSaveM3U8({
     let initSegment: Uint8Array | null = null;
     const mp4Chunks: Uint8Array[] = [];
 
+    // keepOriginalTimestamps MUST be false so timestamps are normalized to 0.
+    // Otherwise the first segment inherits the raw TS PTS/DTS (which can start at minutes or hours),
+    // causing players to show inaccurate duration or start playback with a large blank offset.
     const transmuxer = new muxjs.mp4.Transmuxer({
       remux: true,
-      keepOriginalTimestamps: true,
+      keepOriginalTimestamps: false,
     });
 
     transmuxer.on("data", (segment: any) => {
@@ -268,7 +375,11 @@ export async function downloadAndSaveM3U8({
     }
 
     if (initSegment && mp4Chunks.length > 0) {
-      outputBlob = new Blob([initSegment as unknown as BlobPart, ...mp4Chunks as unknown as BlobPart[]], { type: "video/mp4" });
+      // Patch the initSegment with the exact total duration calculated from M3U8 (#EXTINF)
+      // This fixes the famous 13:15:21 duration bug in Windows and 00:00/no-seek bug in QuickTime/iOS
+      const targetDuration = parsed.totalDuration > 0 ? parsed.totalDuration : 0;
+      const patchedInit = patchMp4InitSegment(initSegment, targetDuration);
+      outputBlob = new Blob([patchedInit as unknown as BlobPart, ...mp4Chunks as unknown as BlobPart[]], { type: "video/mp4" });
     } else {
       // Fallback: if transmux produced empty output, fallback to valid MPEG-TS
       console.warn("Remux produced no MP4 tracks, falling back to MPEG-TS blob");
