@@ -22,6 +22,9 @@ import {
   ChevronUp,
   Tv,
   Clapperboard,
+  Settings,
+  Zap,
+  Check,
 } from "lucide-react";
 import { useDownloadManager } from "@/contexts/DownloadContext";
 import { DownloadTaskRecord } from "@/lib/download-store";
@@ -182,12 +185,15 @@ export function DownloadManagerDrawer() {
     exportVideo,
     playOfflineVideo,
     storageQuota,
+    settings,
+    updateSettings,
   } = useDownloadManager();
 
   const [activeTab, setActiveTab] = useState<"downloading" | "completed">("downloading");
   const [categoryFilter, setCategoryFilter] = useState<CategoryType>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("grouped");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // 智能切换默认 Tab
   useEffect(() => {
@@ -641,23 +647,301 @@ export function DownloadManagerDrawer() {
         </div>
 
         {/* Footer Storage Quota Bar */}
-        <div className="p-4 border-t border-white/10 bg-dark-950/90 space-y-2">
-          <div className="flex items-center justify-between text-[11px] text-gray-400">
-            <span className="flex items-center gap-1.5">
+        {(() => {
+          const isCustomLimit = typeof settings.storageLimitGB === "number" && settings.storageLimitGB > 0;
+          const limitBytes = isCustomLimit ? settings.storageLimitGB! * 1024 * 1024 * 1024 : storageQuota.quotaBytes;
+          const percent = limitBytes > 0 ? Math.min(Math.round((storageQuota.usedBytes / limitBytes) * 100), 100) : 0;
+          const isFull = isCustomLimit && storageQuota.usedBytes >= limitBytes;
+          const isNearFull = isCustomLimit && percent >= 85;
+
+          return (
+            <div className="p-4 border-t border-white/10 bg-dark-950/90 space-y-2">
+              <div className="flex items-center justify-between text-[11px] text-gray-400">
+                <span className="flex items-center gap-1.5 font-medium text-gray-300">
+                  <HardDrive className="w-3.5 h-3.5 text-cyan-400" />
+                  离线存储空间
+                  {isCustomLimit && (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-400/10 text-amber-300 border border-amber-400/20 font-mono">
+                      限额 {settings.storageLimitGB} GB
+                    </span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 font-bold transition cursor-pointer hover:underline"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>设置上限与并发</span>
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] font-mono text-gray-300">
+                <span>
+                  已用 <strong className="text-cyan-400">{formatBytes(storageQuota.usedBytes)}</strong> /{" "}
+                  {isCustomLimit ? (
+                    <>
+                      上限 <strong className="text-amber-400">{settings.storageLimitGB} GB</strong>
+                    </>
+                  ) : (
+                    <>系统分配 {formatBytes(storageQuota.quotaBytes)}</>
+                  )}
+                </span>
+                <span className={isFull ? "text-rose-400 font-bold" : isNearFull ? "text-amber-400 font-bold" : "text-gray-400"}>
+                  {percent}%
+                </span>
+              </div>
+
+              <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    isFull
+                      ? "bg-rose-500 shadow-sm shadow-rose-500/50"
+                      : isNearFull
+                      ? "bg-amber-400"
+                      : "bg-gradient-to-r from-cyan-500 to-emerald-400"
+                  }`}
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+
+              {isFull ? (
+                <p className="text-[10px] text-rose-400 font-medium flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  已达到设定的 {settings.storageLimitGB} GB 离线存储上限，已自动暂停新任务。点击右上方设置可调整上限。
+                </p>
+              ) : isNearFull ? (
+                <p className="text-[10px] text-amber-300 font-medium">
+                  ⚠️ 存储空间已使用超过 85%，接近自设上限。
+                </p>
+              ) : null}
+            </div>
+          );
+        })()}
+
+        {/* 下载与存储偏好设置模态框 */}
+        {isSettingsOpen && (
+          <DownloadSettingsModal
+            settings={settings}
+            onUpdateSettings={updateSettings}
+            onClose={() => setIsSettingsOpen(false)}
+            storageQuota={storageQuota}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 下载并发与离线存储上限偏好设置模态框
+ */
+function DownloadSettingsModal({
+  settings,
+  onUpdateSettings,
+  onClose,
+  storageQuota,
+}: {
+  settings: any;
+  onUpdateSettings: (newSettings: any) => void;
+  onClose: () => void;
+  storageQuota: StorageQuotaInfo;
+}) {
+  const [customInput, setCustomInput] = useState<string>(
+    settings.storageLimitGB ? String(settings.storageLimitGB) : ""
+  );
+
+  const presetLimits = [
+    { label: "跟随系统 (不限)", val: null },
+    { label: "5 GB", val: 5 },
+    { label: "10 GB", val: 10 },
+    { label: "20 GB", val: 20 },
+    { label: "50 GB", val: 50 },
+    { label: "100 GB", val: 100 },
+  ];
+
+  const handleApplyCustom = (valStr: string) => {
+    const num = parseInt(valStr.trim(), 10);
+    if (!isNaN(num) && num > 0) {
+      onUpdateSettings({ storageLimitGB: num });
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[100000] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+      onClick={onClose}
+    >
+      <div
+        className="bg-dark-900 border border-white/10 rounded-2xl p-5 max-w-md w-full shadow-2xl space-y-5 animate-in zoom-in-95 duration-150"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-white/10">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+              <Settings className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">下载与存储设置</h3>
+              <p className="text-[11px] text-gray-400">自定义离线磁盘占用上限与并发性能</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* 1. 离线存储空间上限设置 */}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
               <HardDrive className="w-3.5 h-3.5 text-cyan-400" />
-              PWA 离线存储空间：
+              离线存储空间上限：
             </span>
-            <span className="font-mono text-gray-300">
-              已用 <strong className="text-cyan-400">{formatBytes(storageQuota.usedBytes)}</strong> / 剩余可分配{" "}
-              {formatBytes(storageQuota.quotaBytes)}
+            <span className="text-[11px] text-amber-400 font-mono font-semibold">
+              {settings.storageLimitGB ? `${settings.storageLimitGB} GB` : "跟随系统无限制"}
             </span>
           </div>
-          <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 rounded-full transition-all duration-300"
-              style={{ width: `${Math.min(storageQuota.usedPercent, 100)}%` }}
-            />
+
+          <div className="grid grid-cols-3 gap-2">
+            {presetLimits.map((item, idx) => {
+              const isSelected = settings.storageLimitGB === item.val;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => {
+                    onUpdateSettings({ storageLimitGB: item.val });
+                    setCustomInput(item.val ? String(item.val) : "");
+                  }}
+                  className={`py-2 px-2 rounded-xl text-xs font-semibold transition cursor-pointer text-center border ${
+                    isSelected
+                      ? "bg-cyan-500 text-dark-950 font-bold border-cyan-400 shadow-md shadow-cyan-500/20"
+                      : "bg-white/5 hover:bg-white/10 text-gray-300 border-white/5"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
           </div>
+
+          {/* 自定义 GB 输入 */}
+          <div className="flex items-center gap-2 pt-1">
+            <span className="text-xs text-gray-400 shrink-0">自定义上限：</span>
+            <div className="flex items-center gap-1.5 flex-1">
+              <input
+                type="number"
+                min="1"
+                max="2048"
+                placeholder="例如: 30"
+                value={customInput}
+                onChange={(e) => {
+                  setCustomInput(e.target.value);
+                  handleApplyCustom(e.target.value);
+                }}
+                className="w-full bg-dark-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-cyan-400 focus:outline-none"
+              />
+              <span className="text-xs text-gray-400 font-mono shrink-0">GB</span>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-gray-400 leading-relaxed bg-dark-950/60 p-2.5 rounded-xl border border-white/5">
+            💡 达到上限后下载任务将自动暂停保护磁盘空间。当前系统底层最多可分配{" "}
+            <span className="text-cyan-400 font-bold">{formatBytes(storageQuota.quotaBytes)}</span>。
+          </p>
+        </div>
+
+        {/* 2. 切片并发拉取线程 */}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              单集分片并发线程：
+            </span>
+            <span className="text-[11px] text-amber-400 font-mono font-semibold">
+              {settings.concurrency} 线程
+            </span>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { val: 4, label: "4 线程", tip: "普通" },
+              { val: 8, label: "8 线程", tip: "极速推荐" },
+              { val: 16, label: "16 线程", tip: "超高性能" },
+              { val: 32, label: "32 线程", tip: "狂暴千兆" },
+            ].map((item) => {
+              const isSelected = settings.concurrency === item.val;
+              return (
+                <button
+                  key={item.val}
+                  type="button"
+                  onClick={() => onUpdateSettings({ concurrency: item.val })}
+                  className={`py-2 px-1 rounded-xl text-xs font-semibold flex flex-col items-center justify-center gap-0.5 transition cursor-pointer border ${
+                    isSelected
+                      ? "bg-amber-400 text-dark-950 font-bold border-amber-300 shadow-md shadow-amber-400/20"
+                      : "bg-white/5 hover:bg-white/10 text-gray-300 border-white/5"
+                  }`}
+                >
+                  <span>{item.label}</span>
+                  <span className="text-[9px] font-normal opacity-75">{item.tip}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 3. 同时并发排队任务数 */}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+              同时并发下载集数：
+            </span>
+            <span className="text-[11px] text-cyan-400 font-mono font-semibold">
+              {settings.maxConcurrentTasks} 集
+            </span>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { val: 1, label: "1 集独占" },
+              { val: 2, label: "2 集并发" },
+              { val: 3, label: "3 集并发" },
+              { val: 4, label: "4 集并发" },
+            ].map((item) => {
+              const isSelected = settings.maxConcurrentTasks === item.val;
+              return (
+                <button
+                  key={item.val}
+                  type="button"
+                  onClick={() => onUpdateSettings({ maxConcurrentTasks: item.val })}
+                  className={`py-2 px-1 rounded-xl text-xs font-semibold transition cursor-pointer text-center border ${
+                    isSelected
+                      ? "bg-cyan-500 text-dark-950 font-bold border-cyan-400 shadow-md shadow-cyan-500/20"
+                      : "bg-white/5 hover:bg-white/10 text-gray-300 border-white/5"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="pt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-dark-950 font-bold text-xs transition cursor-pointer shadow-md shadow-cyan-500/20"
+          >
+            完成并保存设置
+          </button>
         </div>
       </div>
     </div>

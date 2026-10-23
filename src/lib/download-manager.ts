@@ -13,6 +13,11 @@ import {
   saveCompletedVideo,
   getCompletedVideo,
   deleteCompletedVideo,
+  requestPersistentStorage,
+  getStorageQuota,
+  loadDownloadSettings,
+  saveDownloadSettings,
+  DownloadSettings,
   DownloadTaskRecord,
 } from "./download-store";
 
@@ -24,11 +29,23 @@ class DownloadManager {
   private listeners: Set<DownloadListener> = new Set();
   private wakeLockSentinel: any = null;
   private initialized = false;
+  private settings: DownloadSettings = loadDownloadSettings();
 
   constructor() {
     if (typeof window !== "undefined") {
       this.init();
     }
+  }
+
+  public getSettings(): DownloadSettings {
+    return { ...this.settings };
+  }
+
+  public updateSettings(partial: Partial<DownloadSettings>): void {
+    this.settings = { ...this.settings, ...partial };
+    saveDownloadSettings(this.settings);
+    this.notify();
+    this.processQueue();
   }
 
   public async init(): Promise<void> {
@@ -46,6 +63,7 @@ class DownloadManager {
       }
       this.initialized = true;
       this.notify();
+      requestPersistentStorage().catch(() => {});
     } catch (err) {
       console.error("[DownloadManager] init failed:", err);
     }
@@ -112,6 +130,7 @@ class DownloadManager {
     cover?: string;
     m3u8Url: string;
     format?: "mp4" | "ts";
+    concurrency?: number;
   }): Promise<DownloadTaskRecord> {
     await this.init();
 
@@ -127,6 +146,10 @@ class DownloadManager {
         existing.typeName = params.typeName;
         saveTask(existing).catch(console.error);
       }
+      if (params.concurrency) {
+        existing.concurrency = params.concurrency;
+        saveTask(existing).catch(console.error);
+      }
       return existing;
     }
 
@@ -140,6 +163,7 @@ class DownloadManager {
       m3u8Url: params.m3u8Url,
       format: params.format || "mp4",
       status: "idle",
+      concurrency: params.concurrency || this.settings.concurrency || 8,
       totalSegments: 0,
       downloadedCount: 0,
       downloadedBytes: 0,
@@ -166,6 +190,23 @@ class DownloadManager {
 
     if (task.status === "downloading" || task.status === "remuxing") {
       return;
+    }
+
+    // 检查是否达到用户自定义的离线存储上限
+    if (this.settings.storageLimitGB && this.settings.storageLimitGB > 0) {
+      try {
+        const quota = await getStorageQuota();
+        const limitBytes = this.settings.storageLimitGB * 1024 * 1024 * 1024;
+        if (quota.usedBytes >= limitBytes) {
+          task.status = "paused";
+          task.error = `已达到您设置的离线存储上限 (${this.settings.storageLimitGB} GB)，已自动暂停下载以保护设备空间`;
+          await saveTask(task);
+          this.notify();
+          return;
+        }
+      } catch (err) {
+        console.warn("[DownloadManager] storage limit check error:", err);
+      }
     }
 
     const controller = new AbortController();
@@ -205,12 +246,12 @@ class DownloadManager {
         }
       }
 
-      // 3. Download missing segments concurrently
+      // 3. Download missing segments concurrently (使用多档位并发线程)
       let lastBytes = 0;
       let lastTime = Date.now();
       let totalBytes = task.downloadedBytes;
       let queuePointer = 0;
-      const concurrency = 4;
+      const concurrency = Math.min(Math.max(task.concurrency || this.settings.concurrency || 8, 2), 64);
 
       const speedInterval = setInterval(() => {
         const now = Date.now();
@@ -388,7 +429,8 @@ class DownloadManager {
       (t) => t.status === "downloading" || t.status === "remuxing" || t.status === "parsing"
     ).length;
 
-    const availableSlots = 2 - runningCount;
+    const maxTasks = this.settings.maxConcurrentTasks || 2;
+    const availableSlots = maxTasks - runningCount;
     if (availableSlots <= 0) return;
 
     const queuedTasks = Array.from(this.tasks.values())
@@ -404,19 +446,36 @@ class DownloadManager {
   /**
    * Batch create multiple episode download tasks and queue them
    */
-  public async createBatchTasks(taskList: Array<{
-    vodId?: string;
-    vodName: string;
-    episodeName: string;
-    typeName?: string;
-    cover?: string;
-    m3u8Url: string;
-    format?: "mp4" | "ts";
-  }>): Promise<DownloadTaskRecord[]> {
+  public async createBatchTasks(
+    taskList: Array<{
+      vodId?: string;
+      vodName: string;
+      episodeName: string;
+      typeName?: string;
+      cover?: string;
+      m3u8Url: string;
+      format?: "mp4" | "ts";
+      concurrency?: number;
+    }>,
+    batchOptions?: {
+      concurrency?: number;
+      maxConcurrentTasks?: number;
+    }
+  ): Promise<DownloadTaskRecord[]> {
     await this.init();
+    if (batchOptions?.concurrency) {
+      this.updateSettings({ concurrency: batchOptions.concurrency });
+    }
+    if (batchOptions?.maxConcurrentTasks) {
+      this.updateSettings({ maxConcurrentTasks: batchOptions.maxConcurrentTasks });
+    }
+
     const created: DownloadTaskRecord[] = [];
     for (const item of taskList) {
-      const task = await this.createTask(item);
+      const task = await this.createTask({
+        ...item,
+        concurrency: item.concurrency || batchOptions?.concurrency || this.settings.concurrency,
+      });
       if (task.status === "idle" || task.status === "paused") {
         task.status = "queued";
         await saveTask(task);

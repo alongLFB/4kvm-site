@@ -62,10 +62,19 @@ export function DownloadModal({
   onSelectEpisode,
   onSelectSource,
 }: DownloadModalProps) {
-  const { createAndStartTask, createBatchTasks, openDrawer } = useDownloadManager();
+  const { createAndStartTask, createBatchTasks, openDrawer, settings, updateSettings } = useDownloadManager();
   const [activeTab, setActiveTab] = useState<TabType>("browser");
   const [format, setFormat] = useState<"mp4" | "ts">("mp4");
-  const [concurrency, setConcurrency] = useState<number>(4);
+  const [concurrency, setConcurrency] = useState<number>(settings.concurrency || 8);
+  const [maxTasks, setMaxTasks] = useState<number>(settings.maxConcurrentTasks || 2);
+
+  // 打开弹窗时同步全局偏好设置
+  useEffect(() => {
+    if (isOpen) {
+      setConcurrency(settings.concurrency || 8);
+      setMaxTasks(settings.maxConcurrentTasks || 2);
+    }
+  }, [isOpen, settings]);
 
   // 批量下载模式与选中集数集合
   const [downloadMode, setDownloadMode] = useState<"single" | "batch">("single");
@@ -151,10 +160,14 @@ export function DownloadModal({
           cover,
           m3u8Url: ep.url,
           format,
+          concurrency,
         };
       });
 
-    await createBatchTasks(itemsToDownload);
+    await createBatchTasks(itemsToDownload, {
+      concurrency,
+      maxConcurrentTasks: maxTasks,
+    });
     onClose();
   };
 
@@ -519,31 +532,110 @@ export function DownloadModal({
                     })}
                   </div>
 
-                  {/* 格式选择与说明 */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-dark-950/60 border border-white/5 text-xs">
-                    <span className="text-gray-300 font-semibold flex items-center gap-1.5">
-                      <FileVideo className="w-3.5 h-3.5 text-cyan-400" />
-                      批量导出文件格式：
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setFormat("mp4")}
-                        className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                          format === "mp4" ? "bg-cyan-500 text-dark-950" : "bg-white/5 text-gray-300"
-                        }`}
-                      >
-                        MP4 格式 (推荐)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setFormat("ts")}
-                        className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                          format === "ts" ? "bg-cyan-500 text-dark-950" : "bg-white/5 text-gray-300"
-                        }`}
-                      >
-                        TS 原始流
-                      </button>
+                  {/* 格式选择与并发线程配置 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                    {/* 格式选择 */}
+                    <div className="p-3 rounded-xl bg-dark-950/60 border border-white/5 space-y-2">
+                      <span className="text-gray-300 font-semibold flex items-center gap-1.5">
+                        <FileVideo className="w-3.5 h-3.5 text-cyan-400" />
+                        批量文件格式：
+                      </span>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setFormat("mp4")}
+                          className={`py-1.5 px-2 rounded-lg font-bold text-center transition cursor-pointer ${
+                            format === "mp4"
+                              ? "bg-cyan-500 text-dark-950 shadow-sm"
+                              : "bg-white/5 text-gray-300 hover:bg-white/10"
+                          }`}
+                        >
+                          MP4 格式
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormat("ts")}
+                          className={`py-1.5 px-2 rounded-lg font-bold text-center transition cursor-pointer ${
+                            format === "ts"
+                              ? "bg-cyan-500 text-dark-950 shadow-sm"
+                              : "bg-white/5 text-gray-300 hover:bg-white/10"
+                          }`}
+                        >
+                          TS 原始流
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 切片拉取线程 */}
+                    <div className="p-3 rounded-xl bg-dark-950/60 border border-white/5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-300 font-semibold flex items-center gap-1.5">
+                          <Zap className="w-3.5 h-3.5 text-amber-400" />
+                          分片并发拉取：
+                        </span>
+                        <span className="text-[10px] text-amber-400 font-mono">{concurrency} 线程</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1">
+                        {[
+                          { val: 4, label: "4" },
+                          { val: 8, label: "8" },
+                          { val: 16, label: "16" },
+                          { val: 32, label: "32" },
+                        ].map((item) => (
+                          <button
+                            key={item.val}
+                            type="button"
+                            onClick={() => {
+                              setConcurrency(item.val);
+                              updateSettings({ concurrency: item.val });
+                            }}
+                            className={`py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                              concurrency === item.val
+                                ? "bg-amber-400 text-dark-950 shadow-sm"
+                                : "bg-white/5 hover:bg-white/10 text-gray-300"
+                            }`}
+                            title={`${item.val} 线程并发拉取切片`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 同时排队下载集数 */}
+                    <div className="p-3 rounded-xl bg-dark-950/60 border border-white/5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-300 font-semibold flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                          同时排队下载：
+                        </span>
+                        <span className="text-[10px] text-cyan-400 font-mono">{maxTasks} 集</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1">
+                        {[
+                          { val: 1, label: "1 集" },
+                          { val: 2, label: "2 集" },
+                          { val: 3, label: "3 集" },
+                          { val: 4, label: "4 集" },
+                        ].map((item) => (
+                          <button
+                            key={item.val}
+                            type="button"
+                            onClick={() => {
+                              setMaxTasks(item.val);
+                              updateSettings({ maxConcurrentTasks: item.val });
+                            }}
+                            className={`py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                              maxTasks === item.val
+                                ? "bg-cyan-500 text-dark-950 shadow-sm"
+                                : "bg-white/5 hover:bg-white/10 text-gray-300"
+                            }`}
+                            title={`同时排队启动 ${item.val} 集`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
@@ -554,7 +646,9 @@ export function DownloadModal({
                     className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-dark-950 font-bold text-sm shadow-xl shadow-cyan-500/25 transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
                   >
                     <Sparkles className="w-4 h-4" />
-                    <span>一键批量加入下载中心 (已选 {selectedEpIndices.size} 集 · 智能排队依次断点续传)</span>
+                    <span>
+                      一键批量加入下载中心 (已选 {selectedEpIndices.size} 集 · {concurrency} 线程 · 同时跑 {maxTasks} 集)
+                    </span>
                   </button>
                 </div>
               ) : (
@@ -597,28 +691,37 @@ export function DownloadModal({
                 </div>
 
                 <div className="bg-dark-800/80 border border-white/5 p-3.5 rounded-xl space-y-2">
-                  <span className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
-                    <Zap className="w-3.5 h-3.5 text-amber-400" />
-                    下载并发线程：
-                  </span>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      下载并发线程：
+                    </span>
+                    <span className="text-[10px] text-amber-400 font-mono font-bold">{concurrency} 线程</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
                     {[
-                      { val: 4, label: "4 线程 (均衡)" },
-                      { val: 8, label: "8 线程 (极速)" },
+                      { val: 4, label: "4 线程", tip: "普通" },
+                      { val: 8, label: "8 线程", tip: "推荐" },
+                      { val: 16, label: "16 线程", tip: "高性能" },
+                      { val: 32, label: "32 线程", tip: "狂暴千兆" },
                     ].map((item) => (
                       <button
                         key={item.val}
                         type="button"
                         disabled={isDownloading}
-                        onClick={() => setConcurrency(item.val)}
-                        className={`px-3 py-2 rounded-lg text-xs font-bold transition flex flex-col items-center gap-0.5 cursor-pointer ${
+                        onClick={() => {
+                          setConcurrency(item.val);
+                          updateSettings({ concurrency: item.val });
+                        }}
+                        className={`px-1.5 py-2 rounded-lg text-xs font-bold transition flex flex-col items-center gap-0.5 cursor-pointer ${
                           concurrency === item.val
                             ? "bg-amber-400 text-dark-950 shadow-md shadow-amber-400/20"
                             : "bg-white/5 hover:bg-white/10 text-gray-300"
                         } disabled:opacity-50`}
+                        title={item.tip}
                       >
-                        <span>{item.val} 线程</span>
-                        <span className="text-[10px] font-normal opacity-80">{item.label}</span>
+                        <span className="text-xs">{item.label}</span>
+                        <span className="text-[9px] font-normal opacity-75">{item.tip}</span>
                       </button>
                     ))}
                   </div>
@@ -652,6 +755,7 @@ export function DownloadModal({
                             cover,
                             m3u8Url: currentM3U8Url,
                             format,
+                            concurrency,
                           });
                           onClose();
                         }}

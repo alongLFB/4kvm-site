@@ -24,9 +24,46 @@ export interface DownloadTaskRecord {
   speed: number; // bytes / sec
   percent: number;
   error?: string;
+  concurrency?: number; // 4 | 8 | 16 | 32
   createdAt: number;
   updatedAt: number;
   completedSize?: number; // bytes
+}
+
+export interface DownloadSettings {
+  concurrency: number; // 切片并发拉取线程 (4, 8, 16, 32)
+  maxConcurrentTasks: number; // 同时下载的任务数 (1, 2, 3, 4)
+  storageLimitGB: number | null; // 自定义离线存储上限(GB), null 或 0 表示跟随系统
+}
+
+const SETTINGS_KEY = "4kvm_download_settings_v1";
+
+export function loadDownloadSettings(): DownloadSettings {
+  if (typeof window === "undefined") {
+    return { concurrency: 8, maxConcurrentTasks: 2, storageLimitGB: null };
+  }
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        concurrency: parsed.concurrency || 8,
+        maxConcurrentTasks: parsed.maxConcurrentTasks || 2,
+        storageLimitGB:
+          typeof parsed.storageLimitGB === "number" && parsed.storageLimitGB > 0
+            ? parsed.storageLimitGB
+            : null,
+      };
+    }
+  } catch {}
+  return { concurrency: 8, maxConcurrentTasks: 2, storageLimitGB: null };
+}
+
+export function saveDownloadSettings(settings: DownloadSettings): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch {}
 }
 
 export interface SegmentRecord {
@@ -312,3 +349,20 @@ export async function getStorageQuota(): Promise<StorageQuotaInfo> {
   }
   return { usedBytes: 0, quotaBytes: 1024 * 1024 * 1024 * 10, usedPercent: 0 };
 }
+
+/**
+ * 申请浏览器持久化存储权限 (防止系统在空间紧张时自动清理离线视频)
+ */
+export async function requestPersistentStorage(): Promise<boolean> {
+  if (typeof navigator !== "undefined" && navigator.storage && navigator.storage.persist) {
+    try {
+      const isPersisted = await navigator.storage.persisted();
+      if (!isPersisted) {
+        return await navigator.storage.persist();
+      }
+      return true;
+    } catch {}
+  }
+  return false;
+}
+

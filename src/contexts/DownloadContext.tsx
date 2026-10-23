@@ -2,7 +2,12 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 import { downloadManager } from "@/lib/download-manager";
-import { DownloadTaskRecord, StorageQuotaInfo, getStorageQuota } from "@/lib/download-store";
+import {
+  DownloadTaskRecord,
+  StorageQuotaInfo,
+  getStorageQuota,
+  DownloadSettings,
+} from "@/lib/download-store";
 
 interface OfflinePlaybackState {
   taskId: string;
@@ -21,6 +26,8 @@ interface DownloadContextType {
   openDrawer: () => void;
   closeDrawer: () => void;
   toggleDrawer: () => void;
+  settings: DownloadSettings;
+  updateSettings: (newSettings: Partial<DownloadSettings>) => void;
   createAndStartTask: (params: {
     vodId?: string;
     vodName: string;
@@ -29,16 +36,24 @@ interface DownloadContextType {
     cover?: string;
     m3u8Url: string;
     format?: "mp4" | "ts";
+    concurrency?: number;
   }) => Promise<DownloadTaskRecord>;
-  createBatchTasks: (taskList: Array<{
-    vodId?: string;
-    vodName: string;
-    episodeName: string;
-    typeName?: string;
-    cover?: string;
-    m3u8Url: string;
-    format?: "mp4" | "ts";
-  }>) => Promise<DownloadTaskRecord[]>;
+  createBatchTasks: (
+    taskList: Array<{
+      vodId?: string;
+      vodName: string;
+      episodeName: string;
+      typeName?: string;
+      cover?: string;
+      m3u8Url: string;
+      format?: "mp4" | "ts";
+      concurrency?: number;
+    }>,
+    batchOptions?: {
+      concurrency?: number;
+      maxConcurrentTasks?: number;
+    }
+  ) => Promise<DownloadTaskRecord[]>;
   pauseTask: (taskId: string) => Promise<void>;
   resumeTask: (taskId: string) => Promise<void>;
   pauseAll: () => Promise<void>;
@@ -58,11 +73,17 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const [tasks, setTasks] = useState<DownloadTaskRecord[]>([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [currentOfflineVideo, setCurrentOfflineVideo] = useState<OfflinePlaybackState | null>(null);
+  const [settings, setSettings] = useState<DownloadSettings>(downloadManager.getSettings());
   const [storageQuota, setStorageQuota] = useState<StorageQuotaInfo>({
     usedBytes: 0,
     quotaBytes: 1024 * 1024 * 1024 * 10,
     usedPercent: 0,
   });
+
+  const updateSettings = useCallback((newSettings: Partial<DownloadSettings>) => {
+    downloadManager.updateSettings(newSettings);
+    setSettings(downloadManager.getSettings());
+  }, []);
 
   const refreshStorageQuota = useCallback(async () => {
     try {
@@ -74,6 +95,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsub = downloadManager.subscribe((updatedTasks) => {
       setTasks([...updatedTasks]);
+      setSettings(downloadManager.getSettings());
     });
     refreshStorageQuota();
     return () => unsub();
@@ -113,6 +135,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       cover?: string;
       m3u8Url: string;
       format?: "mp4" | "ts";
+      concurrency?: number;
     }) => {
       const task = await downloadManager.createTask(params);
       downloadManager.startTask(task.id);
@@ -123,16 +146,23 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   );
 
   const createBatchTasks = useCallback(
-    async (taskList: Array<{
-      vodId?: string;
-      vodName: string;
-      episodeName: string;
-      typeName?: string;
-      cover?: string;
-      m3u8Url: string;
-      format?: "mp4" | "ts";
-    }>) => {
-      const created = await downloadManager.createBatchTasks(taskList);
+    async (
+      taskList: Array<{
+        vodId?: string;
+        vodName: string;
+        episodeName: string;
+        typeName?: string;
+        cover?: string;
+        m3u8Url: string;
+        format?: "mp4" | "ts";
+        concurrency?: number;
+      }>,
+      batchOptions?: {
+        concurrency?: number;
+        maxConcurrentTasks?: number;
+      }
+    ) => {
+      const created = await downloadManager.createBatchTasks(taskList, batchOptions);
       setIsDrawerOpen(true);
       return created;
     },
@@ -199,6 +229,8 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     openDrawer,
     closeDrawer,
     toggleDrawer,
+    settings,
+    updateSettings,
     createAndStartTask,
     createBatchTasks,
     pauseTask,
