@@ -29,6 +29,9 @@ export const metadata: Metadata = {
   },
 };
 
+import { DownloadProvider } from "@/contexts/DownloadContext";
+import { GlobalDownloadCenter } from "@/components/DownloadManagerDrawer";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -45,13 +48,16 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body className="bg-dark-950 text-gray-100 min-h-screen flex flex-col antialiased selection:bg-cyan-500/30 selection:text-cyan-300" suppressHydrationWarning>
-        <PwaRegister />
-        <Navbar />
-        <main className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-4 sm:py-6 pb-6 sm:pb-8">
-          {children}
-        </main>
-        <FloatingActions />
-        <Footer />
+        <DownloadProvider>
+          <PwaRegister />
+          <Navbar />
+          <main className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-4 sm:py-6 pb-6 sm:pb-8">
+            {children}
+          </main>
+          <FloatingActions />
+          <Footer />
+          <GlobalDownloadCenter />
+        </DownloadProvider>
       </body>
     </html>
   );

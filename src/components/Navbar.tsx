@@ -17,10 +17,12 @@ import {
   SlidersHorizontal,
   Trophy,
   Lock,
+  Download,
 } from "lucide-react";
 import { GATED_CONFIG, isTypeGated } from "@/config/gated-sections";
 import { DesktopSearch, MobileSearchModal } from "@/components/Search/GlobalSearch";
 import { OnlineBadge } from "@/components/OnlineBadge";
+import { useDownloadManager } from "@/contexts/DownloadContext";
 
 function NavbarContent() {
   const router = useRouter();
@@ -28,6 +30,7 @@ function NavbarContent() {
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { openDrawer, activeCount, completedCount } = useDownloadManager();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const handleLogoClick = (e: React.MouseEvent) => {
@@ -175,6 +178,20 @@ function NavbarContent() {
             <div className="hidden md:flex items-center gap-2 lg:gap-3 shrink-0">
               <DesktopSearch />
 
+              <button
+                type="button"
+                onClick={openDrawer}
+                className="relative p-2 rounded-full transition shrink-0 text-gray-300 hover:text-cyan-400 hover:bg-white/5 cursor-pointer"
+                title="PWA 离线下载中心"
+              >
+                <Download className="w-4 h-4 lg:w-5 lg:h-5" />
+                {activeCount > 0 ? (
+                  <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse ring-2 ring-dark-950" />
+                ) : completedCount > 0 ? (
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-dark-950" />
+                ) : null}
+              </button>
+
               <Link
                 href="/history"
                 className={`p-2 rounded-full transition shrink-0 ${
@@ -197,6 +214,20 @@ function NavbarContent() {
                 title="搜索影视"
               >
                 <Search className="w-4 h-4 text-cyan-400" />
+              </button>
+              <button
+                type="button"
+                onClick={openDrawer}
+                className="relative p-2 text-gray-300 hover:text-white rounded-xl bg-white/5 active:bg-white/10 transition flex items-center justify-center cursor-pointer"
+                aria-label="离线下载中心"
+                title="离线下载中心"
+              >
+                <Download className="w-4 h-4 text-cyan-400" />
+                {activeCount > 0 ? (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                ) : completedCount > 0 ? (
+                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                ) : null}
               </button>
               <Link
                 href="/hall"

@@ -23,6 +23,7 @@ import {
   downloadAndSaveM3U8,
   DownloadProgress,
 } from "@/lib/m3u8-downloader";
+import { useDownloadManager } from "@/contexts/DownloadContext";
 
 interface DownloadModalProps {
   isOpen: boolean;
@@ -55,6 +56,7 @@ export function DownloadModal({
   onSelectEpisode,
   onSelectSource,
 }: DownloadModalProps) {
+  const { createAndStartTask, openDrawer } = useDownloadManager();
   const [activeTab, setActiveTab] = useState<TabType>("browser");
   const [format, setFormat] = useState<"mp4" | "ts">("mp4");
   const [concurrency, setConcurrency] = useState<number>(4);
@@ -435,14 +437,35 @@ export function DownloadModal({
                         视频切片将直接在浏览器本地后台并发拉取并自动无损拼接，不占用网站服务器带宽。
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleStartDownload}
-                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-dark-950 font-bold text-sm shadow-xl shadow-cyan-500/25 transition active:scale-95 cursor-pointer flex items-center gap-2 mx-auto"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      开始下载此集 ({format.toUpperCase()})
-                    </button>
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-1 max-w-lg mx-auto">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await createAndStartTask({
+                            vodName,
+                            episodeName: currentEpisode.name,
+                            m3u8Url: currentM3U8Url,
+                            format,
+                          });
+                          onClose();
+                        }}
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-dark-950 font-bold text-xs sm:text-sm shadow-xl shadow-cyan-500/25 transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                        title="添加到后台下载管理中心，支持切片断点续传，关闭窗口也不受影响"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        加入后台下载 (支持断点续传 · 推荐)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleStartDownload}
+                        className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white font-medium text-xs sm:text-sm transition cursor-pointer flex items-center justify-center gap-1.5"
+                        title="在此弹窗中执行单次立即下载"
+                      >
+                        <Download className="w-4 h-4" />
+                        单次直接下载
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -804,9 +827,20 @@ export function DownloadModal({
 
         {/* 底部信息栏 */}
         <div className="p-4 border-t border-white/10 bg-dark-950/80 flex items-center justify-between text-xs text-gray-400">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-            <span>4KVM 流媒体离线引擎就绪</span>
+            <span className="hidden sm:inline">4KVM 流媒体离线引擎就绪</span>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                openDrawer();
+              }}
+              className="text-cyan-400 hover:text-cyan-300 font-semibold underline underline-offset-2 cursor-pointer flex items-center gap-1"
+            >
+              <span>查看离线下载中心</span>
+              <ExternalLink className="w-3 h-3" />
+            </button>
           </div>
           <button
             type="button"
