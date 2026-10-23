@@ -202,6 +202,23 @@ export default function PlayPage() {
       .catch(console.error);
   }, [id]);
 
+  // 离开页面或路由切换时，确保停止视频播放并释放媒体资源
+  useEffect(() => {
+    return () => {
+      const player = playerRef.current || (typeof window !== "undefined" ? (window as any).__4kvm_player__ : null);
+      if (player) {
+        try {
+          player.pause();
+          if (player.video) {
+            player.video.pause();
+            player.video.removeAttribute("src");
+            player.video.load();
+          }
+        } catch (e) {}
+      }
+    };
+  }, []);
+
   if (isGatedLocked) {
     return (
       <>
@@ -408,23 +425,6 @@ export default function PlayPage() {
       wasPlayingRef.current = false;
     }
   };
-
-  // 5. 离开页面或路由切换时，确保停止视频播放并释放媒体资源
-  useEffect(() => {
-    return () => {
-      const player = playerRef.current || (typeof window !== "undefined" ? (window as any).__4kvm_player__ : null);
-      if (player) {
-        try {
-          player.pause();
-          if (player.video) {
-            player.video.pause();
-            player.video.removeAttribute("src");
-            player.video.load();
-          }
-        } catch (e) {}
-      }
-    };
-  }, []);
 
   return (
     <div className="space-y-8">

@@ -104,6 +104,18 @@ export function DownloadModal({
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  const isDownloading =
+    progress.phase === "parsing" ||
+    progress.phase === "downloading" ||
+    progress.phase === "remuxing";
+
+  // 取消浏览器端下载
+  const handleCancelDownload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  };
+
   // 监听浏览器/手机手势返回 (popstate) 与 ESC 键
   useEffect(() => {
     if (!isOpen) return;
@@ -306,13 +318,6 @@ export function DownloadModal({
     }
   };
 
-  // 取消浏览器端下载
-  const handleCancelDownload = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-  };
-
   // 重置下载状态
   const handleResetDownload = () => {
     handleCancelDownload();
@@ -329,10 +334,7 @@ export function DownloadModal({
   const ffmpegCmd = `ffmpeg -i "${currentM3U8Url}" -c copy -bsf:a aac_adtstoasc "${currentFileName}.mp4"`;
   const ytdlpCmd = `yt-dlp "${currentM3U8Url}" -o "${currentFileName}.%(ext)s"`;
 
-  const isDownloading =
-    progress.phase === "parsing" ||
-    progress.phase === "downloading" ||
-    progress.phase === "remuxing";
+  if (!isOpen) return null;
 
   return (
     <div
