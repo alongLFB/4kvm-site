@@ -20,6 +20,7 @@ import {
   List,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
   Tv,
   Clapperboard,
   Settings,
@@ -214,15 +215,34 @@ export function DownloadManagerDrawer() {
     };
   }, [isDrawerOpen]);
 
-  // ESC 键监听
+  // 监听浏览器/手机手势返回 (popstate) 与 ESC 键
   useEffect(() => {
+    if (!isDrawerOpen) return;
+
+    // 记录 PWA 弹层历史栈，使得手机边缘侧滑返回或安卓物理返回键能优雅关闭抽屉，而非退出应用
+    window.history.pushState({ modal: "download-drawer" }, "");
+
+    const handlePopState = () => {
+      closeDrawer();
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isDrawerOpen) {
         closeDrawer();
       }
     };
+
+    window.addEventListener("popstate", handlePopState);
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("keydown", handleKeyDown);
+      // 如果是通过点击按钮主动关闭，且当前历史记录栈顶仍是本弹层，自动后退一步保持历史栈干净
+      if (window.history.state?.modal === "download-drawer") {
+        window.history.back();
+      }
+    };
   }, [isDrawerOpen, closeDrawer]);
 
   const currentList = activeTab === "downloading" ? activeTasks : completedTasks;
@@ -312,29 +332,41 @@ export function DownloadManagerDrawer() {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Drawer Header */}
-        <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-dark-950/80">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-md">
+        <div className="p-4 sm:p-5 pt-[max(1rem,env(safe-area-inset-top))] border-b border-white/10 flex items-center justify-between bg-dark-950/90 gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {/* 移动端专享返回按钮 */}
+            <button
+              onClick={closeDrawer}
+              className="p-1.5 -ml-1 text-gray-300 hover:text-white rounded-xl bg-white/5 hover:bg-white/10 flex items-center gap-0.5 transition cursor-pointer shrink-0"
+              title="返回观影"
+              aria-label="返回或关闭下载中心"
+            >
+              <ChevronLeft className="w-5 h-5 text-cyan-400" />
+              <span className="text-xs font-bold text-gray-200">返回</span>
+            </button>
+
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-md shrink-0">
               <Download className="w-4 h-4" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2 truncate">
                 PWA 离线下载中心
                 {activeCount > 0 && (
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping shrink-0" />
                 )}
               </h2>
-              <p className="text-[11px] text-gray-400">
-                支持断点续传 · 剧集智能聚合分类 · 离线免流起播
+              <p className="text-[11px] text-gray-400 truncate hidden xs:block">
+                支持断点续传 · 剧集聚合分类 · 离线免流起播
               </p>
             </div>
           </div>
 
           <button
             onClick={closeDrawer}
-            className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-white/5 transition cursor-pointer"
+            className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-white/5 transition cursor-pointer flex items-center gap-1 shrink-0"
             title="关闭窗口"
           >
+            <span className="text-xs text-gray-400 hidden sm:inline">关闭</span>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -718,6 +750,18 @@ export function DownloadManagerDrawer() {
             </div>
           );
         })()}
+
+        {/* 移动端底部常驻快捷退出/返回条 */}
+        <div className="p-3 border-t border-white/10 bg-dark-950 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <button
+            type="button"
+            onClick={closeDrawer}
+            className="w-full py-2.5 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-dark-950 font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-98 shadow-md shadow-cyan-500/20 cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>返回继续观影 / 关闭下载中心</span>
+          </button>
+        </div>
 
         {/* 下载与存储偏好设置模态框 */}
         {isSettingsOpen && (

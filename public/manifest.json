@@ -3,6 +3,7 @@
   "short_name": "4KVM影视",
   "description": "全网海量1080P/4K超清影视、热播电视剧、新番动漫无广告在线播放",
   "start_url": "/",
+  "scope": "/",
   "id": "/",
   "display": "standalone",
   "background_color": "#050811",

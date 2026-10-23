@@ -1,4 +1,4 @@
-const CACHE_NAME = '4kvm-pwa-v2';
+const CACHE_NAME = '4kvm-pwa-v3';
 const PRECACHE_URLS = [
   '/',
   '/manifest.json',
@@ -61,6 +61,30 @@ self.addEventListener('fetch', (event) => {
         }
         return networkResponse;
       })
-      .catch(() => caches.match(event.request))
+      .catch(async () => {
+        // 先检查是否有当前请求的具体离线缓存
+        const cached = await caches.match(event.request);
+        if (cached) {
+          return cached;
+        }
+
+        // 如果是 HTML 页面导航 (用户点击页面链接或刷新)，降级回退到 precache 的根页面 SPA 壳
+        // Next.js 客户端路由即可接管渲染，避免 Safari / PWA 报原生的 "This page couldn’t load" 崩溃
+        if (event.request.mode === 'navigate') {
+          const shell = await caches.match('/');
+          if (shell) {
+            return shell;
+          }
+        }
+
+        // 兜底返回结构完备的友好提示，决不返回 undefined 导致浏览器抛出致命 NetworkError
+        return new Response(
+          '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>网络连接不稳定 - 4KVM</title><style>body{background:#050811;color:#e2e8f0;font-family:system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;padding:24px;text-align:center;}h2{color:#22d3ee;font-size:18px;margin-bottom:8px;}p{color:#94a3b8;font-size:13px;max-width:320px;line-height:1.5;margin-bottom:24px;}button{background:#06b6d4;color:#050811;font-weight:bold;border:none;padding:10px 22px;border-radius:12px;font-size:14px;cursor:pointer;box-shadow:0 4px 12px rgba(6,182,212,0.3);}</style></head><body><h2>网络连接暂时中断</h2><p>当前页面未能成功载入，请检查手机网络连接后点击重试。</p><button onclick="location.reload()">重新加载页面</button></body></html>',
+          {
+            status: 200,
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+          }
+        );
+      })
   );
 });

@@ -17,6 +17,7 @@ import {
   Square,
   Sparkles,
   ExternalLink,
+  ChevronLeft,
 } from "lucide-react";
 import { PlaySource, Episode } from "@/lib/types";
 import {
@@ -102,6 +103,46 @@ export function DownloadModal({
   });
 
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // 监听浏览器/手机手势返回 (popstate) 与 ESC 键
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // 记录 PWA 弹层历史栈，使得手机边缘侧滑返回或安卓物理返回键能优雅关闭弹窗，而非退出应用
+    window.history.pushState({ modal: "download-modal" }, "");
+
+    const handlePopState = () => {
+      if (isDownloading) {
+        if (!confirm("当前正在下载切片中，关闭将中止任务，确定退出吗？")) {
+          window.history.pushState({ modal: "download-modal" }, "");
+          return;
+        }
+        handleCancelDownload();
+      }
+      onClose();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        if (isDownloading) {
+          if (!confirm("当前正在下载切片中，关闭将中止任务，确定退出吗？")) return;
+          handleCancelDownload();
+        }
+        onClose();
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("keydown", handleKeyDown);
+      if (window.history.state?.modal === "download-modal") {
+        window.history.back();
+      }
+    };
+  }, [isOpen, onClose, isDownloading]);
 
   const currentSource =
     sources[currentSourceIndex] || sources[0] || { sourceName: "默认线路", episodes: [] };
@@ -309,19 +350,36 @@ export function DownloadModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* 顶部标题区 */}
-        <div className="p-5 border-b border-white/10 flex items-center justify-between bg-dark-950/60">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-lg shadow-cyan-500/10">
-              <Download className="w-5 h-5" />
+        <div className="p-4 sm:p-5 pt-[max(1rem,env(safe-area-inset-top))] border-b border-white/10 flex items-center justify-between bg-dark-950/80 gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {/* 移动端专享返回按钮 */}
+            <button
+              onClick={() => {
+                if (isDownloading) {
+                  if (!confirm("当前正在下载切片中，关闭将中止任务，确定退出吗？")) return;
+                  handleCancelDownload();
+                }
+                onClose();
+              }}
+              className="p-1.5 -ml-1 text-gray-300 hover:text-white rounded-xl bg-white/5 hover:bg-white/10 flex items-center gap-0.5 transition cursor-pointer shrink-0"
+              title="返回观影"
+              aria-label="返回或关闭下载窗口"
+            >
+              <ChevronLeft className="w-5 h-5 text-cyan-400" />
+              <span className="text-xs font-bold text-gray-200">返回</span>
+            </button>
+
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-lg shadow-cyan-500/10 shrink-0">
+              <Download className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+            <div className="min-w-0">
+              <h3 className="text-sm sm:text-lg font-bold text-white flex items-center gap-2 truncate">
                 离线视频下载中心
-                <span className="text-xs font-normal text-cyan-400 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
+                <span className="text-xs font-normal text-cyan-400 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 shrink-0">
                   {currentEpisode.name}
                 </span>
               </h3>
-              <p className="text-xs text-gray-400 truncate max-w-[280px] sm:max-w-md mt-0.5">
+              <p className="text-xs text-gray-400 truncate max-w-[200px] sm:max-w-md mt-0.5">
                 {vodName} · 线路：{currentSource.sourceName}
               </p>
             </div>
@@ -335,9 +393,10 @@ export function DownloadModal({
               }
               onClose();
             }}
-            className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-white/5 transition cursor-pointer"
+            className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-white/5 transition cursor-pointer flex items-center gap-1 shrink-0"
             title="关闭窗口"
           >
+            <span className="text-xs text-gray-400 hidden sm:inline">关闭</span>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1138,9 +1197,9 @@ export function DownloadModal({
         </div>
 
         {/* 底部信息栏 */}
-        <div className="p-4 border-t border-white/10 bg-dark-950/80 flex items-center justify-between text-xs text-gray-400">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+        <div className="p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-white/10 bg-dark-950/90 flex items-center justify-between text-xs text-gray-400 gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0" />
             <span className="hidden sm:inline">4KVM 流媒体离线引擎就绪</span>
             <button
               type="button"
@@ -1148,10 +1207,10 @@ export function DownloadModal({
                 onClose();
                 openDrawer();
               }}
-              className="text-cyan-400 hover:text-cyan-300 font-semibold underline underline-offset-2 cursor-pointer flex items-center gap-1"
+              className="text-cyan-400 hover:text-cyan-300 font-semibold underline underline-offset-2 cursor-pointer flex items-center gap-1 truncate"
             >
               <span>查看离线下载中心</span>
-              <ExternalLink className="w-3 h-3" />
+              <ExternalLink className="w-3 h-3 shrink-0" />
             </button>
           </div>
           <button
@@ -1163,9 +1222,9 @@ export function DownloadModal({
               }
               onClose();
             }}
-            className="px-4 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-medium transition cursor-pointer"
+            className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 active:scale-95 text-white font-bold text-xs transition cursor-pointer shrink-0"
           >
-            关闭
+            关闭返回
           </button>
         </div>
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { X, Play, HardDrive, CheckCircle2 } from "lucide-react";
+import { X, Play, HardDrive, CheckCircle2, ChevronLeft } from "lucide-react";
 
 interface OfflinePlayerModalProps {
   isOpen: boolean;
@@ -28,15 +28,32 @@ export function OfflinePlayerModal({
     };
   }, [isOpen]);
 
-  // ESC key
+  // 监听浏览器/手机手势返回 (popstate) 与 ESC 键
   useEffect(() => {
+    if (!isOpen) return;
+
+    window.history.pushState({ modal: "offline-player" }, "");
+
+    const handlePopState = () => {
+      onClose();
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isOpen) {
         onClose();
       }
     };
+
+    window.addEventListener("popstate", handlePopState);
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("keydown", handleKeyDown);
+      if (window.history.state?.modal === "offline-player") {
+        window.history.back();
+      }
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen || !videoUrl) return null;
@@ -51,15 +68,26 @@ export function OfflinePlayerModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-dark-950/80">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+        <div className="p-4 sm:p-5 pt-[max(1rem,env(safe-area-inset-top))] border-b border-white/10 flex items-center justify-between bg-dark-950/80 gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {/* 移动端专享返回按钮 */}
+            <button
+              onClick={onClose}
+              className="p-1.5 -ml-1 text-gray-300 hover:text-white rounded-xl bg-white/5 hover:bg-white/10 flex items-center gap-0.5 transition cursor-pointer shrink-0"
+              title="返回下载中心"
+              aria-label="返回下载中心"
+            >
+              <ChevronLeft className="w-5 h-5 text-emerald-400" />
+              <span className="text-xs font-bold text-gray-200">返回</span>
+            </button>
+
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
               <Play className="w-4 h-4 fill-current" />
             </div>
-            <div>
-              <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+            <div className="min-w-0">
+              <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2 truncate">
                 {vodName}
-                <span className="text-xs font-normal text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                <span className="text-xs font-normal text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shrink-0">
                   {episodeName}
                 </span>
                 <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-300 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
@@ -72,9 +100,10 @@ export function OfflinePlayerModal({
 
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-white/5 transition cursor-pointer"
+            className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-white/5 transition cursor-pointer flex items-center gap-1 shrink-0"
             title="关闭播放器"
           >
+            <span className="text-xs text-gray-400 hidden sm:inline">关闭</span>
             <X className="w-5 h-5" />
           </button>
         </div>
