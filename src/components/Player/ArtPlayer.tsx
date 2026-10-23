@@ -582,8 +582,24 @@ export default function VideoPlayer({
     });
 
     return () => {
-      if (art && art.destroy) {
-        art.destroy(false);
+      try {
+        if (art.video) {
+          art.video.pause();
+          art.video.removeAttribute("src");
+          art.video.load();
+        }
+        if (art.hls) {
+          art.hls.destroy();
+          art.hls = null;
+        }
+        if (art && art.destroy) {
+          art.destroy(true);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+      if (typeof window !== "undefined" && (window as any).__4kvm_player__ === art) {
+        delete (window as any).__4kvm_player__;
       }
     };
   }, [url]);

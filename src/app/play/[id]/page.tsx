@@ -361,7 +361,7 @@ export default function PlayPage() {
     }
   };
 
-  // 1. Pause video when opening modal, and record playing state
+  // 1. Pause video when opening room modal, and record playing state
   const handleOpenCreateRoom = () => {
     const player = playerRef.current || (typeof window !== "undefined" ? (window as any).__4kvm_player__ : null);
     if (player) {
@@ -375,15 +375,56 @@ export default function PlayPage() {
     setCreateRoomOpen(true);
   };
 
-  // 2. Resume video if it was playing before when modal is closed
+  // 2. Resume video if it was playing before when room modal is closed
   const handleCloseCreateRoom = () => {
     setCreateRoomOpen(false);
     const player = playerRef.current || (typeof window !== "undefined" ? (window as any).__4kvm_player__ : null);
     if (player && wasPlayingRef.current) {
-      player.play();
+      player.play().catch(() => {});
       wasPlayingRef.current = false;
     }
   };
+
+  // 3. Pause video when opening download modal, and record playing state
+  const handleOpenDownloadModal = () => {
+    const player = playerRef.current || (typeof window !== "undefined" ? (window as any).__4kvm_player__ : null);
+    if (player) {
+      if (player.playing) {
+        wasPlayingRef.current = true;
+        player.pause();
+      } else {
+        wasPlayingRef.current = false;
+      }
+    }
+    setDownloadModalOpen(true);
+  };
+
+  // 4. Resume video if it was playing before when download modal is closed
+  const handleCloseDownloadModal = () => {
+    setDownloadModalOpen(false);
+    const player = playerRef.current || (typeof window !== "undefined" ? (window as any).__4kvm_player__ : null);
+    if (player && wasPlayingRef.current) {
+      player.play().catch(() => {});
+      wasPlayingRef.current = false;
+    }
+  };
+
+  // 5. 离开页面或路由切换时，确保停止视频播放并释放媒体资源
+  useEffect(() => {
+    return () => {
+      const player = playerRef.current || (typeof window !== "undefined" ? (window as any).__4kvm_player__ : null);
+      if (player) {
+        try {
+          player.pause();
+          if (player.video) {
+            player.video.pause();
+            player.video.removeAttribute("src");
+            player.video.load();
+          }
+        } catch (e) {}
+      }
+    };
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -473,7 +514,7 @@ export default function PlayPage() {
                 {/* Download Button */}
                 <button
                   type="button"
-                  onClick={() => setDownloadModalOpen(true)}
+                  onClick={handleOpenDownloadModal}
                   className="px-3.5 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 transition border border-cyan-500/30 hover:border-cyan-500/50 shadow-sm cursor-pointer active:scale-95"
                   title="离线下载当前视频"
                 >
@@ -653,7 +694,7 @@ export default function PlayPage() {
       {/* 离线视频下载中心模态框 */}
       <DownloadModal
         isOpen={downloadModalOpen}
-        onClose={() => setDownloadModalOpen(false)}
+        onClose={handleCloseDownloadModal}
         vodId={item.id}
         vodName={item.name}
         typeName={item.type_name}

@@ -115,16 +115,36 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
   const completedCount = completedTasks.length;
 
+  const pauseActivePagePlayers = useCallback(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const art = (window as any).__4kvm_player__;
+        if (art && typeof art.pause === "function") {
+          art.pause();
+        }
+        document.querySelectorAll("video").forEach((v) => {
+          if (!v.paused) {
+            v.pause();
+          }
+        });
+      } catch (e) {}
+    }
+  }, []);
+
   const openDrawer = useCallback(() => {
+    pauseActivePagePlayers();
     setIsDrawerOpen(true);
     refreshStorageQuota();
-  }, [refreshStorageQuota]);
+  }, [pauseActivePagePlayers, refreshStorageQuota]);
 
   const closeDrawer = useCallback(() => setIsDrawerOpen(false), []);
   const toggleDrawer = useCallback(() => {
-    setIsDrawerOpen((prev) => !prev);
+    setIsDrawerOpen((prev) => {
+      if (!prev) pauseActivePagePlayers();
+      return !prev;
+    });
     refreshStorageQuota();
-  }, [refreshStorageQuota]);
+  }, [pauseActivePagePlayers, refreshStorageQuota]);
 
   const createAndStartTask = useCallback(
     async (params: {
@@ -199,6 +219,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
   const playOfflineVideo = useCallback(
     async (taskId: string) => {
+      pauseActivePagePlayers();
       const task = tasks.find((t) => t.id === taskId);
       if (!task) return;
       const blobUrl = await downloadManager.getOfflinePlaybackUrl(taskId);
@@ -209,7 +230,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         blobUrl,
       });
     },
-    [tasks]
+    [pauseActivePagePlayers, tasks]
   );
 
   const closeOfflinePlayer = useCallback(() => {

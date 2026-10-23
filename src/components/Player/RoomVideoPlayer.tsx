@@ -323,18 +323,21 @@ export default function RoomVideoPlayer({
     });
 
     return () => {
-      if (hlsRef.current) {
-        try {
+      try {
+        if (art.video) {
+          art.video.pause();
+          art.video.removeAttribute("src");
+          art.video.load();
+        }
+        if (hlsRef.current) {
           hlsRef.current.destroy();
           hlsRef.current = null;
-        } catch (e) {}
-      }
-      if (art && art.destroy) {
-        try {
-          art.destroy(false);
+        }
+        if (art && art.destroy) {
+          art.destroy(true);
           artRef.current = null;
-        } catch (e) {}
-      }
+        }
+      } catch (e) {}
     };
   }, [url]);
 
