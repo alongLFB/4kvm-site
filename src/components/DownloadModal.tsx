@@ -85,6 +85,16 @@ export function DownloadModal({
   const currentM3U8Url = currentEpisode.url || "";
   const currentFileName = `${vodName} - ${currentEpisode.name}`;
 
+  // 锁定背景页面滚动，防止上下滚动穿透
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
+
   // ESC 键关闭模态框
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -199,7 +209,7 @@ export function DownloadModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
+      className="fixed inset-0 z-[99999] overscroll-contain bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
       onClick={() => {
         if (isDownloading) {
           if (!confirm("当前正在下载切片中，关闭将中止任务，确定退出吗？")) return;
@@ -209,7 +219,7 @@ export function DownloadModal({
       }}
     >
       <div
-        className="bg-dark-900 border border-white/10 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden"
+        className="bg-dark-900 border border-white/10 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden overscroll-contain"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 顶部标题区 */}
@@ -248,7 +258,7 @@ export function DownloadModal({
 
         {/* 选集快速切换条（针对多集连续剧/动漫） */}
         {currentSource.episodes && currentSource.episodes.length > 1 && (
-          <div className="px-5 py-2.5 bg-dark-850/80 border-b border-white/5 flex items-center gap-2 overflow-x-auto no-scrollbar">
+          <div className="px-5 py-2.5 bg-dark-850/80 border-b border-white/5 flex items-center gap-2 overflow-x-auto overscroll-contain no-scrollbar">
             <span className="text-xs text-gray-400 shrink-0 flex items-center gap-1">
               <ListOrdered className="w-3.5 h-3.5 text-cyan-400" />
               当前下载集：
@@ -340,7 +350,7 @@ export function DownloadModal({
         </div>
 
         {/* 内容主体区 */}
-        <div className="p-5 overflow-y-auto space-y-5 flex-1">
+        <div className="p-5 overflow-y-auto overscroll-contain space-y-5 flex-1">
           {/* TAB 1: 浏览器直接下载 */}
           {activeTab === "browser" && (
             <div className="space-y-4">
@@ -754,7 +764,7 @@ export function DownloadModal({
                 </button>
               </div>
 
-              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-56 overflow-y-auto overscroll-contain pr-1">
                 {currentSource.episodes.map((ep: Episode, idx: number) => (
                   <div
                     key={idx}
