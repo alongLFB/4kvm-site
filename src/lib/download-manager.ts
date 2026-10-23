@@ -108,6 +108,7 @@ class DownloadManager {
     vodId?: string;
     vodName: string;
     episodeName: string;
+    typeName?: string;
     cover?: string;
     m3u8Url: string;
     format?: "mp4" | "ts";
@@ -121,6 +122,11 @@ class DownloadManager {
 
     const existing = this.tasks.get(taskId);
     if (existing) {
+      // If typeName was missing before, backfill it
+      if (params.typeName && !existing.typeName) {
+        existing.typeName = params.typeName;
+        saveTask(existing).catch(console.error);
+      }
       return existing;
     }
 
@@ -129,6 +135,7 @@ class DownloadManager {
       vodId: params.vodId,
       vodName: params.vodName,
       episodeName: params.episodeName,
+      typeName: params.typeName,
       cover: params.cover,
       m3u8Url: params.m3u8Url,
       format: params.format || "mp4",
@@ -368,7 +375,88 @@ class DownloadManager {
     } finally {
       this.activeControllers.delete(taskId);
       this.releaseWakeLock();
+      this.processQueue();
     }
+  }
+
+  /**
+   * Automatically process queued download tasks
+   */
+  public async processQueue(): Promise<void> {
+    await this.init();
+    const runningCount = Array.from(this.tasks.values()).filter(
+      (t) => t.status === "downloading" || t.status === "remuxing" || t.status === "parsing"
+    ).length;
+
+    const availableSlots = 2 - runningCount;
+    if (availableSlots <= 0) return;
+
+    const queuedTasks = Array.from(this.tasks.values())
+      .filter((t) => t.status === "queued" || t.status === "idle")
+      .sort((a, b) => a.createdAt - b.createdAt);
+
+    for (let i = 0; i < Math.min(availableSlots, queuedTasks.length); i++) {
+      const nextTask = queuedTasks[i];
+      this.startTask(nextTask.id).catch(console.error);
+    }
+  }
+
+  /**
+   * Batch create multiple episode download tasks and queue them
+   */
+  public async createBatchTasks(taskList: Array<{
+    vodId?: string;
+    vodName: string;
+    episodeName: string;
+    typeName?: string;
+    cover?: string;
+    m3u8Url: string;
+    format?: "mp4" | "ts";
+  }>): Promise<DownloadTaskRecord[]> {
+    await this.init();
+    const created: DownloadTaskRecord[] = [];
+    for (const item of taskList) {
+      const task = await this.createTask(item);
+      if (task.status === "idle" || task.status === "paused") {
+        task.status = "queued";
+        await saveTask(task);
+      }
+      created.push(task);
+    }
+    this.notify();
+    this.processQueue();
+    return created;
+  }
+
+  /**
+   * Pause all active and queued tasks
+   */
+  public async pauseAll(): Promise<void> {
+    for (const [taskId] of this.activeControllers) {
+      await this.pauseTask(taskId);
+    }
+    for (const [, task] of this.tasks) {
+      if (task.status === "queued" || task.status === "downloading" || task.status === "parsing") {
+        task.status = "paused";
+        task.speed = 0;
+        await saveTask(task);
+      }
+    }
+    this.notify();
+  }
+
+  /**
+   * Resume all paused or queued tasks
+   */
+  public async resumeAll(): Promise<void> {
+    for (const [, task] of this.tasks) {
+      if (task.status === "paused" || task.status === "error" || task.status === "idle") {
+        task.status = "queued";
+        await saveTask(task);
+      }
+    }
+    this.notify();
+    this.processQueue();
   }
 
   /**
@@ -388,6 +476,7 @@ class DownloadManager {
       this.notify();
     }
     this.releaseWakeLock();
+    this.processQueue();
   }
 
   /**
@@ -410,6 +499,7 @@ class DownloadManager {
     await dbDeleteTask(taskId);
     this.releaseWakeLock();
     this.notify();
+    this.processQueue();
   }
 
   /**

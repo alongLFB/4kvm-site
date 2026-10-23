@@ -12,10 +12,11 @@ export interface DownloadTaskRecord {
   vodId?: string;
   vodName: string;
   episodeName: string;
+  typeName?: string; // e.g. "电影" | "电视剧" | "动漫" | "综艺"
   cover?: string;
   m3u8Url: string;
   format: "mp4" | "ts";
-  status: "idle" | "parsing" | "downloading" | "paused" | "remuxing" | "completed" | "error";
+  status: "idle" | "queued" | "parsing" | "downloading" | "paused" | "remuxing" | "completed" | "error";
   totalSegments: number;
   downloadedCount: number;
   downloadedBytes: number;

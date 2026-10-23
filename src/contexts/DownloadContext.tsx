@@ -25,12 +25,24 @@ interface DownloadContextType {
     vodId?: string;
     vodName: string;
     episodeName: string;
+    typeName?: string;
     cover?: string;
     m3u8Url: string;
     format?: "mp4" | "ts";
   }) => Promise<DownloadTaskRecord>;
+  createBatchTasks: (taskList: Array<{
+    vodId?: string;
+    vodName: string;
+    episodeName: string;
+    typeName?: string;
+    cover?: string;
+    m3u8Url: string;
+    format?: "mp4" | "ts";
+  }>) => Promise<DownloadTaskRecord[]>;
   pauseTask: (taskId: string) => Promise<void>;
   resumeTask: (taskId: string) => Promise<void>;
+  pauseAll: () => Promise<void>;
+  resumeAll: () => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
   exportVideo: (taskId: string) => Promise<void>;
   playOfflineVideo: (taskId: string) => Promise<void>;
@@ -97,6 +109,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       vodId?: string;
       vodName: string;
       episodeName: string;
+      typeName?: string;
       cover?: string;
       m3u8Url: string;
       format?: "mp4" | "ts";
@@ -109,12 +122,37 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const createBatchTasks = useCallback(
+    async (taskList: Array<{
+      vodId?: string;
+      vodName: string;
+      episodeName: string;
+      typeName?: string;
+      cover?: string;
+      m3u8Url: string;
+      format?: "mp4" | "ts";
+    }>) => {
+      const created = await downloadManager.createBatchTasks(taskList);
+      setIsDrawerOpen(true);
+      return created;
+    },
+    []
+  );
+
   const pauseTask = useCallback(async (taskId: string) => {
     await downloadManager.pauseTask(taskId);
   }, []);
 
   const resumeTask = useCallback(async (taskId: string) => {
     await downloadManager.resumeTask(taskId);
+  }, []);
+
+  const pauseAll = useCallback(async () => {
+    await downloadManager.pauseAll();
+  }, []);
+
+  const resumeAll = useCallback(async () => {
+    await downloadManager.resumeAll();
   }, []);
 
   const deleteTask = useCallback(
@@ -162,8 +200,11 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     closeDrawer,
     toggleDrawer,
     createAndStartTask,
+    createBatchTasks,
     pauseTask,
     resumeTask,
+    pauseAll,
+    resumeAll,
     deleteTask,
     exportVideo,
     playOfflineVideo,

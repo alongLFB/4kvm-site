@@ -654,7 +654,10 @@ export default function PlayPage() {
       <DownloadModal
         isOpen={downloadModalOpen}
         onClose={() => setDownloadModalOpen(false)}
+        vodId={item.id}
         vodName={item.name}
+        typeName={item.type_name}
+        cover={item.pic}
         sources={item.sources}
         currentSourceIndex={currentSourceIndex}
         currentEpIndex={currentEpIndex}

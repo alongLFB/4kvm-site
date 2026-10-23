@@ -28,7 +28,10 @@ import { useDownloadManager } from "@/contexts/DownloadContext";
 interface DownloadModalProps {
   isOpen: boolean;
   onClose: () => void;
+  vodId?: string;
   vodName: string;
+  typeName?: string;
+  cover?: string;
   sources: PlaySource[];
   currentSourceIndex: number;
   currentEpIndex: number;
@@ -49,17 +52,29 @@ function formatBytes(bytes: number) {
 export function DownloadModal({
   isOpen,
   onClose,
+  vodId,
   vodName,
+  typeName,
+  cover,
   sources,
   currentSourceIndex,
   currentEpIndex,
   onSelectEpisode,
   onSelectSource,
 }: DownloadModalProps) {
-  const { createAndStartTask, openDrawer } = useDownloadManager();
+  const { createAndStartTask, createBatchTasks, openDrawer } = useDownloadManager();
   const [activeTab, setActiveTab] = useState<TabType>("browser");
   const [format, setFormat] = useState<"mp4" | "ts">("mp4");
   const [concurrency, setConcurrency] = useState<number>(4);
+
+  // 批量下载模式与选中集数集合
+  const [downloadMode, setDownloadMode] = useState<"single" | "batch">("single");
+  const [selectedEpIndices, setSelectedEpIndices] = useState<Set<number>>(new Set([currentEpIndex]));
+
+  // 同步选中集数
+  useEffect(() => {
+    setSelectedEpIndices(new Set([currentEpIndex]));
+  }, [currentEpIndex, isOpen]);
 
   // 复制反馈状态
   const [copiedUrl, setCopiedUrl] = useState(false);
@@ -86,6 +101,62 @@ export function DownloadModal({
 
   const currentM3U8Url = currentEpisode.url || "";
   const currentFileName = `${vodName} - ${currentEpisode.name}`;
+
+  // 批量选集交互
+  const handleToggleSelectEp = (index: number) => {
+    setSelectedEpIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        if (next.size > 1) next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllEps = () => {
+    if (!currentSource.episodes) return;
+    const all = new Set<number>();
+    currentSource.episodes.forEach((_, i) => all.add(i));
+    setSelectedEpIndices(all);
+  };
+
+  const handleClearSelectEps = () => {
+    setSelectedEpIndices(new Set([currentEpIndex]));
+  };
+
+  const handleInvertSelectEps = () => {
+    if (!currentSource.episodes) return;
+    setSelectedEpIndices((prev) => {
+      const next = new Set<number>();
+      currentSource.episodes.forEach((_, i) => {
+        if (!prev.has(i)) next.add(i);
+      });
+      return next.size > 0 ? next : new Set([currentEpIndex]);
+    });
+  };
+
+  const handleStartBatchQueue = async () => {
+    if (!currentSource.episodes || selectedEpIndices.size === 0) return;
+    const itemsToDownload = Array.from(selectedEpIndices)
+      .sort((a, b) => a - b)
+      .map((idx) => {
+        const ep = currentSource.episodes[idx];
+        return {
+          vodId,
+          vodName,
+          episodeName: ep.name,
+          typeName,
+          cover,
+          m3u8Url: ep.url,
+          format,
+        };
+      });
+
+    await createBatchTasks(itemsToDownload);
+    onClose();
+  };
 
   // 锁定背景页面滚动，防止上下滚动穿透
   useEffect(() => {
@@ -356,6 +427,138 @@ export function DownloadModal({
           {/* TAB 1: 浏览器直接下载 */}
           {activeTab === "browser" && (
             <div className="space-y-4">
+              {/* 多集资源展示：单集下载 vs 批量多选切换 */}
+              {currentSource.episodes && currentSource.episodes.length > 1 && (
+                <div className="flex items-center justify-between p-1 bg-dark-950/60 rounded-xl border border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => setDownloadMode("single")}
+                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      downloadMode === "single"
+                        ? "bg-cyan-500 text-dark-950 shadow-md shadow-cyan-500/20"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    <span>单集下载 ({currentEpisode.name})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDownloadMode("batch")}
+                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      downloadMode === "batch"
+                        ? "bg-cyan-500 text-dark-950 shadow-md shadow-cyan-500/20"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>批量多选 / 全选整季 ({selectedEpIndices.size}/{currentSource.episodes.length} 集)</span>
+                  </button>
+                </div>
+              )}
+
+              {downloadMode === "batch" ? (
+                <div className="bg-dark-800/90 border border-white/10 rounded-2xl p-4 sm:p-5 space-y-4 shadow-inner">
+                  {/* 快捷批量选择工具条 */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/10 text-xs">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSelectAllEps}
+                        className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/30 transition cursor-pointer"
+                      >
+                        全选整季 ({currentSource.episodes.length} 集)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleInvertSelectEps}
+                        className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 font-medium transition cursor-pointer"
+                      >
+                        反选
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleClearSelectEps}
+                        className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-gray-200 transition cursor-pointer"
+                      >
+                        重置选中
+                      </button>
+                    </div>
+                    <div className="text-gray-400 font-mono text-xs">
+                      已选择 <strong className="text-cyan-400 font-bold text-sm">{selectedEpIndices.size}</strong> / {currentSource.episodes.length} 集
+                    </div>
+                  </div>
+
+                  {/* 选集网格列表 */}
+                  <div className="max-h-56 overflow-y-auto overscroll-contain grid grid-cols-3 sm:grid-cols-6 gap-2 p-1 pr-1.5 no-scrollbar">
+                    {currentSource.episodes.map((ep: Episode, idx: number) => {
+                      const isSelected = selectedEpIndices.has(idx);
+                      const isCurrent = idx === currentEpIndex;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleToggleSelectEp(idx)}
+                          className={`relative p-2.5 rounded-xl text-xs font-semibold flex flex-col items-center justify-center gap-1 transition cursor-pointer border ${
+                            isSelected
+                              ? "bg-cyan-500 text-dark-950 font-bold border-cyan-400 shadow-md shadow-cyan-500/20"
+                              : "bg-white/5 hover:bg-white/10 text-gray-300 border-white/5 hover:border-white/10"
+                          }`}
+                        >
+                          <span className="truncate w-full text-center">{ep.name}</span>
+                          {isCurrent && (
+                            <span
+                              className={`text-[9px] px-1 rounded-sm leading-tight ${
+                                isSelected ? "bg-dark-950 text-cyan-300" : "bg-cyan-500/20 text-cyan-400"
+                              }`}
+                            >
+                              当前集
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* 格式选择与说明 */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-dark-950/60 border border-white/5 text-xs">
+                    <span className="text-gray-300 font-semibold flex items-center gap-1.5">
+                      <FileVideo className="w-3.5 h-3.5 text-cyan-400" />
+                      批量导出文件格式：
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormat("mp4")}
+                        className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                          format === "mp4" ? "bg-cyan-500 text-dark-950" : "bg-white/5 text-gray-300"
+                        }`}
+                      >
+                        MP4 格式 (推荐)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormat("ts")}
+                        className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                          format === "ts" ? "bg-cyan-500 text-dark-950" : "bg-white/5 text-gray-300"
+                        }`}
+                      >
+                        TS 原始流
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 提交批量加入下载中心 */}
+                  <button
+                    type="button"
+                    onClick={handleStartBatchQueue}
+                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-dark-950 font-bold text-sm shadow-xl shadow-cyan-500/25 transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>一键批量加入下载中心 (已选 {selectedEpIndices.size} 集 · 智能排队依次断点续传)</span>
+                  </button>
+                </div>
+              ) : (
+                <>
               {/* 参数选择卡片 */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="bg-dark-800/80 border border-white/5 p-3.5 rounded-xl space-y-2">
@@ -442,8 +645,11 @@ export function DownloadModal({
                         type="button"
                         onClick={async () => {
                           await createAndStartTask({
+                            vodId,
                             vodName,
                             episodeName: currentEpisode.name,
+                            typeName,
+                            cover,
                             m3u8Url: currentM3U8Url,
                             format,
                           });
@@ -609,8 +815,10 @@ export function DownloadModal({
                 <p>1. 浏览器直下适合电脑端或剩余内存充裕的手机设备（整部电影一般约需 600MB~1.5GB 内存空间）。</p>
                 <p>2. 下载进行中请尽量保持本标签页处于前台，防止部分手机浏览器在后台休眠降低下载速度。</p>
               </div>
-            </div>
+            </>
           )}
+        </div>
+      )}
 
           {/* TAB 2: 专业工具下载 */}
           {activeTab === "external" && (
