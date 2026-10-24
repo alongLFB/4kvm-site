@@ -76,23 +76,34 @@ export async function parseM3U8(m3u8Url: string, signal?: AbortSignal): Promise<
     }
   }
 
-  // Parse segments from playlistContent
+  // Parse segments from playlistContent with intelligent Ad filtering
   const lines = playlistContent.split(/\r?\n/);
-  const segments: string[] = [];
-  let totalDuration = 0;
+
+  interface RawSegmentItem {
+    url: string;
+    duration: number;
+    discIndex: number;
+  }
+
+  const rawSegments: RawSegmentItem[] = [];
+  let currentDiscIndex = 0;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
-    if (line.startsWith("#EXTINF:")) {
+    if (line === "#EXT-X-DISCONTINUITY") {
+      currentDiscIndex++;
+    } else if (line.startsWith("#EXTINF:")) {
       const durationMatch = line.match(/#EXTINF:\s*([\d.]+)/);
-      if (durationMatch) {
-        totalDuration += parseFloat(durationMatch[1]);
-      }
+      const dur = durationMatch ? parseFloat(durationMatch[1]) : 0;
       for (let j = i + 1; j < lines.length; j++) {
         const nextLine = lines[j].trim();
         if (nextLine && !nextLine.startsWith("#")) {
           const resolvedSegUrl = new URL(nextLine, targetPlaylistUrl).href;
-          segments.push(resolvedSegUrl);
+          rawSegments.push({
+            url: resolvedSegUrl,
+            duration: dur,
+            discIndex: currentDiscIndex,
+          });
           i = j;
           break;
         }
@@ -100,14 +111,88 @@ export async function parseM3U8(m3u8Url: string, signal?: AbortSignal): Promise<
     }
   }
 
-  if (segments.length === 0) {
+  if (rawSegments.length === 0) {
     throw new Error("无法从流媒体播放列表中解析出视频分片，可能该源已失效或需要专属鉴权。");
+  }
+
+  let finalSegments: string[] = [];
+  let totalDuration = 0;
+
+  // 如果没有 DISCONTINUITY 不连续标记，说明是纯净连续流，无需过滤
+  if (currentDiscIndex === 0) {
+    finalSegments = rawSegments.map((s) => s.url);
+    totalDuration = rawSegments.reduce((acc, s) => acc + s.duration, 0);
+  } else {
+    // 存在不连续段（通常包含插播贴片/中插广告，分辨率与 SPS/PPS 参数不一致导致合成报错和画面卡死）
+    const groups = new Map<number, RawSegmentItem[]>();
+    for (const seg of rawSegments) {
+      if (!groups.has(seg.discIndex)) {
+        groups.set(seg.discIndex, []);
+      }
+      groups.get(seg.discIndex)!.push(seg);
+    }
+
+    // 寻找正片的主体特征（拥有最多切片数的主目录路径）
+    let maxGroupCount = 0;
+    let mainSampleUrl = "";
+    for (const [, list] of groups.entries()) {
+      if (list.length > maxGroupCount) {
+        maxGroupCount = list.length;
+        mainSampleUrl = list[0].url;
+      }
+    }
+
+    let mainDir = "";
+    try {
+      const parsedMain = new URL(mainSampleUrl);
+      mainDir = parsedMain.pathname.substring(0, parsedMain.pathname.lastIndexOf("/"));
+    } catch {}
+
+    let filteredAdCount = 0;
+    for (const seg of rawSegments) {
+      let isAd = false;
+      const grp = groups.get(seg.discIndex);
+      if (grp) {
+        const grpDuration = grp.reduce((acc, s) => acc + s.duration, 0);
+        // 判定广告条件：
+        // 1. 处于短小不连续段中（切片数 <= 12 且时长 <= 45秒）
+        // 2. 并且切片路径与主体正片路径不一致，或者带有常见广告关键词
+        if (grp.length <= 12 && grpDuration <= 45) {
+          try {
+            const segUrl = new URL(seg.url);
+            const segDir = segUrl.pathname.substring(0, segUrl.pathname.lastIndexOf("/"));
+            const hasAdKeywords = /10103kb|advert|adjump|gdt|ad[\/_]|doubleclick|piao/i.test(seg.url);
+            if (hasAdKeywords || (mainDir && segDir !== mainDir)) {
+              isAd = true;
+            }
+          } catch {}
+        }
+      }
+
+      if (isAd) {
+        filteredAdCount++;
+      } else {
+        finalSegments.push(seg.url);
+        totalDuration += seg.duration;
+      }
+    }
+
+    if (filteredAdCount > 0) {
+      console.log(
+        `[M3U8Parser] 智能广告过滤：已自动剔除 ${filteredAdCount} 个插播广告切片，保留 ${finalSegments.length} 个正片切片（净片长: ${Math.round(totalDuration)}秒）`
+      );
+    }
+
+    if (finalSegments.length === 0) {
+      finalSegments = rawSegments.map((s) => s.url);
+      totalDuration = rawSegments.reduce((acc, s) => acc + s.duration, 0);
+    }
   }
 
   return {
     title: "",
     subPlaylistUrl: targetPlaylistUrl,
-    segments,
+    segments: finalSegments,
     totalDuration,
   };
 }
@@ -369,8 +454,15 @@ export async function downloadAndSaveM3U8({
     for (let i = 0; i < segmentBuffers.length; i++) {
       const buf = segmentBuffers[i];
       if (buf) {
-        transmuxer.push(buf);
-        transmuxer.flush();
+        try {
+          transmuxer.push(buf);
+          transmuxer.flush();
+        } catch (e) {
+          console.warn(`[Downloader] 切片 #${i} 转封装跳过:`, e);
+        }
+      }
+      if (i % 8 === 0) {
+        await new Promise((r) => setTimeout(r, 0));
       }
     }
 

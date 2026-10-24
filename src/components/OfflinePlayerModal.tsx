@@ -10,7 +10,7 @@ import {
   ChevronLeft,
   Zap,
   ShieldCheck,
-  RefreshCw,
+  FastForward,
 } from "lucide-react";
 
 interface OfflinePlayerModalProps {
@@ -40,9 +40,10 @@ export function OfflinePlayerModal({
   const framesRenderedRef = useRef<number>(0);
   const isSeekingRef = useRef<boolean>(false);
   const isCalibratingRef = useRef<boolean>(false);
+  const stallCountRef = useRef<number>(0);
 
-  // 手动/自动执行音画关键帧校准
-  const performCalibration = useCallback((isManual = false) => {
+  // 手动/自动执行音画关键帧校准 (支持微步对齐与深度跳过卡顿广告片段)
+  const performCalibration = useCallback((isManual = false, isDeepSkip = false) => {
     const art = artRef.current;
     if (!art || !art.video) return;
 
@@ -52,23 +53,27 @@ export function OfflinePlayerModal({
     const vid = art.video;
     const curTime = vid.currentTime;
 
-    // 微步前移跳过残损 GOP，强制解码器寻找下一个 IDR 关键帧包
-    const nudgeDelta = 0.08;
-    vid.currentTime = curTime + nudgeDelta;
+    // 常规微步前移 0.08s 跳过残损 GOP；若遭遇插播广告片段卡死则跳跃 +5s 彻底跨越
+    const nudgeDelta = isDeepSkip ? 5.0 : 0.08;
+    vid.currentTime = Math.min(vid.duration || Infinity, curTime + nudgeDelta);
 
     if (art.notice) {
-      art.notice.show = isManual ? "⚡ 手动校准关键帧中..." : "⚡ 画面校准中，正在对齐关键帧...";
+      art.notice.show = isDeepSkip
+        ? "⏩ 已跳过卡顿片段 (+5秒)，音画重新同步"
+        : isManual
+        ? "⚡ 手动校准关键帧中..."
+        : "⚡ 画面校准中，正在对齐关键帧...";
     }
 
     setTimeout(() => {
       // 若依然未渲染出新画面且仍在播放，进行快速排空解码器缓存循环
       if (vid && !vid.paused && framesRenderedRef.current === 0) {
         vid.pause();
-        vid.currentTime = vid.currentTime + 0.12;
+        vid.currentTime = vid.currentTime + (isDeepSkip ? 2.0 : 0.15);
         vid.play().catch(() => {});
       }
       if (art.notice) {
-        art.notice.show = "⚡ 关键帧校准完成，音画已同步";
+        art.notice.show = isDeepSkip ? "⚡ 已成功跨越卡顿片段" : "⚡ 关键帧校准完成，音画已同步";
       }
       setLastCalibratedTime(Date.now());
       setCalibrating(false);
@@ -171,7 +176,17 @@ export function OfflinePlayerModal({
           tooltip: "若拖动进度条后画面卡住定格，点击此处立即强制校准关键帧与音画同步",
           html: `<button type="button" class="calibrate-action-btn flex items-center gap-1 text-xs text-amber-300 hover:text-amber-200 font-semibold px-2 py-0.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 transition cursor-pointer select-none">⚡ 画面校准</button>`,
           click: function () {
-            performCalibration(true);
+            performCalibration(true, false);
+          },
+        },
+        {
+          name: "skipAdButton",
+          position: "right",
+          index: 16,
+          tooltip: "若画面遇到插播广告或严重卡顿，点击直接快进 5 秒跳过卡顿片段",
+          html: `<button type="button" class="skip-action-btn flex items-center gap-1 text-xs text-cyan-300 hover:text-cyan-200 font-semibold px-2 py-0.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 transition cursor-pointer select-none">⏩ 跳过广告 (+5s)</button>`,
+          click: function () {
+            performCalibration(true, true);
           },
         },
       ],
@@ -188,6 +203,7 @@ export function OfflinePlayerModal({
       if ("requestVideoFrameCallback" in vid) {
         const onFrame = () => {
           framesRenderedRef.current++;
+          stallCountRef.current = 0;
           if (watchdogTimerRef.current) {
             clearTimeout(watchdogTimerRef.current);
             watchdogTimerRef.current = null;
@@ -226,14 +242,18 @@ export function OfflinePlayerModal({
       watchdogTimerRef.current = setTimeout(() => {
         if (!vid || vid.paused || vid.ended || isCalibratingRef.current) return;
 
-        // 如果播放中，且 requestVideoFrameCallback 始终未产生新帧，说明解码器卡在非 IDR 帧上
+        // 如果播放中，且 requestVideoFrameCallback 始终未产生新帧，说明解码器卡在非 IDR 帧或广告段上
         const isFrameStalled = framesRenderedRef.current === 0;
 
         if (isFrameStalled) {
+          stallCountRef.current++;
+          const isDeepAdStall = stallCountRef.current >= 2;
           console.warn(
-            `[OfflinePlayer] 检测到拖拽进度条至 ${seekTarget.toFixed(2)}s 后画面定格，自动执行关键帧对齐...`
+            `[OfflinePlayer] 检测到拖拽进度条至 ${seekTarget.toFixed(2)}s 后画面定格 (连续卡顿: ${stallCountRef.current})，执行校准...`
           );
-          performCalibration(false);
+          performCalibration(false, isDeepAdStall);
+        } else {
+          stallCountRef.current = 0;
         }
       }, 320);
     });
@@ -243,7 +263,8 @@ export function OfflinePlayerModal({
       if (!isSeekingRef.current && !isCalibratingRef.current && vid && !vid.paused) {
         watchdogTimerRef.current = setTimeout(() => {
           if (vid && !vid.paused && framesRenderedRef.current === 0) {
-            performCalibration(false);
+            stallCountRef.current++;
+            performCalibration(false, stallCountRef.current >= 2);
           }
         }, 500);
       }
@@ -320,13 +341,25 @@ export function OfflinePlayerModal({
             {/* 顶栏快速画面校准按钮 */}
             <button
               type="button"
-              onClick={() => performCalibration(true)}
+              onClick={() => performCalibration(true, false)}
               disabled={calibrating}
               className="px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 text-xs font-bold text-amber-300 hover:text-amber-200 flex items-center gap-1.5 transition border border-amber-500/30 shadow-sm cursor-pointer disabled:opacity-50"
-              title="若拖拽进度条后画面定格不动，点击此处立即校准音画同步"
+              title="若拖拽进度条后画面定格不动，点击此处立即微调对齐关键帧"
             >
               <Zap className={`w-3.5 h-3.5 ${calibrating ? "animate-spin" : ""}`} />
               <span className="hidden sm:inline">画面校准</span>
+            </button>
+
+            {/* 顶栏跳过卡顿/广告按钮 */}
+            <button
+              type="button"
+              onClick={() => performCalibration(true, true)}
+              disabled={calibrating}
+              className="px-2.5 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 active:scale-95 text-xs font-bold text-cyan-300 hover:text-cyan-200 flex items-center gap-1.5 transition border border-cyan-500/30 shadow-sm cursor-pointer disabled:opacity-50"
+              title="若画面卡在广告页面或严重黑屏，点击直接快进 5 秒跳过"
+            >
+              <FastForward className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">跳过卡顿 (+5s)</span>
             </button>
 
             <button

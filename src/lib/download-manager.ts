@@ -331,66 +331,88 @@ class DownloadManager {
       // 4. Remux or assemble to MP4 / TS
       task.status = "remuxing";
       task.speed = 0;
-      task.percent = 99;
+      task.percent = 95;
       await saveTask(task);
       this.notify();
 
       let outputBlob: Blob;
+      let finalExt = task.format === "mp4" ? ".mp4" : ".ts";
 
       if (task.format === "mp4") {
         let initSegment: Uint8Array | null = null;
         const mp4Chunks: Uint8Array[] = [];
 
-        // Set keepOriginalTimestamps: false to normalize PTS to 0
-        const transmuxer = new muxjs.mp4.Transmuxer({
-          remux: true,
-          keepOriginalTimestamps: false,
-        });
-
-        transmuxer.on("data", (segment: any) => {
-          if (segment.initSegment && !initSegment) {
-            initSegment = segment.initSegment;
-          }
-          if (segment.data && segment.data.byteLength > 0) {
-            mp4Chunks.push(segment.data);
-          }
-        });
-
-        // Read all segments sequentially from IndexedDB to avoid holding all in memory
-        for (let i = 0; i < total; i++) {
-          const buf = await getSegment(taskId, i);
-          if (buf) {
-            transmuxer.push(buf);
-            transmuxer.flush();
-          }
-        }
-
-        if (initSegment && mp4Chunks.length > 0) {
-          const patchedInit = patchMp4InitSegment(initSegment, task.totalDuration);
-          outputBlob = new Blob([patchedInit as unknown as BlobPart, ...mp4Chunks as unknown as BlobPart[]], {
-            type: "video/mp4",
+        try {
+          // Set keepOriginalTimestamps: false to normalize PTS to 0
+          const transmuxer = new muxjs.mp4.Transmuxer({
+            remux: true,
+            keepOriginalTimestamps: false,
           });
-        } else {
-          // Fallback to MPEG-TS
+
+          transmuxer.on("data", (segment: any) => {
+            if (segment.initSegment && !initSegment) {
+              initSegment = segment.initSegment;
+            }
+            if (segment.data && segment.data.byteLength > 0) {
+              mp4Chunks.push(segment.data);
+            }
+          });
+
+          // Read all segments sequentially from IndexedDB to avoid holding all in memory
+          for (let i = 0; i < total; i++) {
+            const buf = await getSegment(taskId, i);
+            if (buf) {
+              try {
+                transmuxer.push(buf);
+                transmuxer.flush();
+              } catch (segErr) {
+                console.warn(`[DownloadManager] 切片 #${i} 转封装跳过:`, segErr);
+              }
+            }
+
+            // 移动端防冻结核心：每处理 8 个切片让出一次微任务调度队列，避免阻塞主线程及被系统杀进程
+            if (i % 8 === 0) {
+              await new Promise((resolve) => setTimeout(resolve, 0));
+              task.percent = Math.min(99, Math.floor(95 + (i / total) * 4));
+              this.notify();
+            }
+          }
+
+          if (initSegment && mp4Chunks.length > 0) {
+            const patchedInit = patchMp4InitSegment(initSegment, task.totalDuration);
+            outputBlob = new Blob([patchedInit as unknown as BlobPart, ...mp4Chunks as unknown as BlobPart[]], {
+              type: "video/mp4",
+            });
+            finalExt = ".mp4";
+          } else {
+            throw new Error("转封装未产生有效 MP4 音视频轨道");
+          }
+        } catch (remuxErr: any) {
+          console.warn("[DownloadManager] MP4 合成受限或内存溢出，平滑降级为原生 MPEG-TS 容器储存:", remuxErr);
+          // 移动端内存不足或转封装异常时的平滑降级方案：合并为原始 TS 格式存储
           const rawChunks: Uint8Array[] = [];
           for (let i = 0; i < total; i++) {
             const buf = await getSegment(taskId, i);
             if (buf) rawChunks.push(buf);
+            if (i % 25 === 0) await new Promise((r) => setTimeout(r, 0));
           }
           outputBlob = new Blob(rawChunks as unknown as BlobPart[], { type: "video/mp2t" });
+          task.format = "ts";
+          finalExt = ".ts";
         }
       } else {
         const rawChunks: Uint8Array[] = [];
         for (let i = 0; i < total; i++) {
           const buf = await getSegment(taskId, i);
           if (buf) rawChunks.push(buf);
+          if (i % 25 === 0) await new Promise((r) => setTimeout(r, 0));
         }
         outputBlob = new Blob(rawChunks as unknown as BlobPart[], { type: "video/mp2t" });
+        finalExt = ".ts";
       }
 
       // 5. Save the finished video into IndexedDB for in-app offline playback
-      const ext = task.format === "mp4" ? ".mp4" : ".ts";
-      const filename = `${task.vodName} - ${task.episodeName}${ext}`;
+      const filename = `${task.vodName} - ${task.episodeName}${finalExt}`;
       await saveCompletedVideo(taskId, outputBlob, filename, outputBlob.type, task.totalDuration);
 
       // Clean up intermediate raw chunk segments to save disk space
