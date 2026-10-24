@@ -704,7 +704,7 @@ class DownloadManager {
   }
 
   /**
-   * Export the completed video to user's device Downloads folder
+   * Export the completed video to user's device Downloads folder or iOS Photos/Files
    */
   public async exportVideo(taskId: string): Promise<void> {
     const record = await getCompletedVideo(taskId);
@@ -712,10 +712,38 @@ class DownloadManager {
       throw new Error("本地未找到已完成的视频文件");
     }
 
+    const mime = record.mimeType || "video/mp4";
+    const filename = record.filename || "video.mp4";
+
+    // 优先尝试 Web Share API (在 iOS Safari / PWA 上可直接唤起原生面板“存储视频到相册”或“存储到文件”)
+    if (typeof navigator !== "undefined" && typeof (navigator as any).share === "function") {
+      try {
+        const file = new File([record.blob], filename, { type: mime });
+        if (
+          typeof (navigator as any).canShare === "function" &&
+          (navigator as any).canShare({ files: [file] })
+        ) {
+          await (navigator as any).share({
+            files: [file],
+            title: filename,
+            text: `离线视频导出: ${filename}`,
+          });
+          return;
+        }
+      } catch (shareErr: any) {
+        // 用户主动取消分享则无需再弹窗报错
+        if (shareErr.name === "AbortError") {
+          return;
+        }
+        console.warn("[DownloadManager] Web Share 导出异常，降级至标准下载链接:", shareErr);
+      }
+    }
+
+    // 桌面端及不支持 Web Share 的浏览器降级走标准 a 标签下载
     const blobUrl = URL.createObjectURL(record.blob);
     const a = document.createElement("a");
     a.href = blobUrl;
-    a.download = record.filename;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -726,12 +754,31 @@ class DownloadManager {
   }
 
   /**
-   * Retrieve Blob URL for in-app offline video playback
+   * Retrieve URL for in-app offline video playback.
+   * Prefers Service Worker virtual stream endpoint (/offline-media/:taskId/video.mp4 or playlist.m3u8),
+   * providing native HTTP 206 Partial Content (Range Requests) essential for iOS AVPlayer.
+   * Falls back to Blob URL if Service Worker is not available.
    */
   public async getOfflinePlaybackUrl(taskId: string): Promise<string> {
     const record = await getCompletedVideo(taskId);
-    if (!record || !record.blob) {
+    if (!record) {
       throw new Error("本地未找到可离线播放的视频");
+    }
+
+    // 检查 Service Worker 是否已就绪或处于安全上下文控制中
+    const hasServiceWorker =
+      typeof navigator !== "undefined" &&
+      navigator.serviceWorker &&
+      (navigator.serviceWorker.controller || window.isSecureContext);
+
+    if (hasServiceWorker) {
+      const isTs = record.mimeType === "video/mp2t" || record.filename.endsWith(".ts");
+      const streamFilename = isTs ? "playlist.m3u8" : "video.mp4";
+      return `/offline-media/${encodeURIComponent(taskId)}/${streamFilename}`;
+    }
+
+    if (!record.blob) {
+      throw new Error("本地未找到可离线播放的视频数据");
     }
     return URL.createObjectURL(record.blob);
   }

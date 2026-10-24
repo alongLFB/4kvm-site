@@ -1487,7 +1487,7 @@ function CompletedTaskItem({
 }
 
 export function GlobalDownloadCenter() {
-  const { currentOfflineVideo, closeOfflinePlayer } = useDownloadManager();
+  const { currentOfflineVideo, closeOfflinePlayer, exportVideo } = useDownloadManager();
 
   return (
     <>
@@ -1495,9 +1495,11 @@ export function GlobalDownloadCenter() {
       <OfflinePlayerModal
         isOpen={!!currentOfflineVideo}
         onClose={closeOfflinePlayer}
+        taskId={currentOfflineVideo?.taskId}
         vodName={currentOfflineVideo?.vodName || ""}
         episodeName={currentOfflineVideo?.episodeName || ""}
         videoUrl={currentOfflineVideo?.blobUrl || ""}
+        onExport={currentOfflineVideo?.taskId ? () => exportVideo(currentOfflineVideo.taskId) : undefined}
       />
     </>
   );

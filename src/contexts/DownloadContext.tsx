@@ -234,7 +234,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   );
 
   const closeOfflinePlayer = useCallback(() => {
-    if (currentOfflineVideo?.blobUrl) {
+    if (currentOfflineVideo?.blobUrl && currentOfflineVideo.blobUrl.startsWith("blob:")) {
       URL.revokeObjectURL(currentOfflineVideo.blobUrl);
     }
     setCurrentOfflineVideo(null);

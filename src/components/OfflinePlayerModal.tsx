@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import Artplayer from "artplayer";
+import Hls from "hls.js";
 import {
   X,
   Play,
@@ -11,27 +12,39 @@ import {
   Zap,
   ShieldCheck,
   FastForward,
+  AlertTriangle,
+  ArrowDownToLine,
+  RefreshCw,
 } from "lucide-react";
 
 interface OfflinePlayerModalProps {
   isOpen: boolean;
   onClose: () => void;
+  taskId?: string;
   vodName: string;
   episodeName: string;
   videoUrl: string;
+  onExport?: () => void;
 }
 
 export function OfflinePlayerModal({
   isOpen,
   onClose,
+  taskId,
   vodName,
   episodeName,
   videoUrl,
+  onExport,
 }: OfflinePlayerModalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const artRef = useRef<Artplayer | null>(null);
   const [calibrating, setCalibrating] = useState(false);
   const [lastCalibratedTime, setLastCalibratedTime] = useState<number | null>(null);
+  const [playbackError, setPlaybackError] = useState<{
+    code?: number;
+    message: string;
+    detail?: string;
+  } | null>(null);
 
   // 防卡顿校准器内部追踪变量
   const watchdogTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -41,11 +54,33 @@ export function OfflinePlayerModal({
   const isSeekingRef = useRef<boolean>(false);
   const isCalibratingRef = useRef<boolean>(false);
   const stallCountRef = useRef<number>(0);
+  const calibrationCountRef = useRef<number>(0);
 
   // 手动/自动执行音画关键帧校准 (支持微步对齐与深度跳过卡顿广告片段)
   const performCalibration = useCallback((isManual = false, isDeepSkip = false) => {
     const art = artRef.current;
     if (!art || !art.video) return;
+
+    // 视频出错时坚决不执行校准，终止重试链，彻底遏制死循环
+    if (art.video.error) {
+      console.warn("[OfflinePlayer] 视频底层已报错，终止自动校准");
+      return;
+    }
+
+    // 连续自动校准超过 3 次且物理帧数依然为 0，停止自动重试
+    if (!isManual) {
+      calibrationCountRef.current++;
+      if (calibrationCountRef.current > 3 && framesRenderedRef.current === 0) {
+        console.warn("[OfflinePlayer] 自动校准达到 3 次上限且无物理帧呈现，停止自动重试以防死循环");
+        if (art.notice) {
+          art.notice.show = "⚠️ 解码未产生新画面，已停止自动重试";
+        }
+        return;
+      }
+    } else {
+      // 手动触发则重置计数器
+      calibrationCountRef.current = 0;
+    }
 
     isCalibratingRef.current = true;
     setCalibrating(true);
@@ -55,7 +90,9 @@ export function OfflinePlayerModal({
 
     // 常规微步前移 0.08s 跳过残损 GOP；若遭遇插播广告片段卡死则跳跃 +5s 彻底跨越
     const nudgeDelta = isDeepSkip ? 5.0 : 0.08;
-    vid.currentTime = Math.min(vid.duration || Infinity, curTime + nudgeDelta);
+    try {
+      vid.currentTime = Math.min(vid.duration || Infinity, curTime + nudgeDelta);
+    } catch (e) {}
 
     if (art.notice) {
       art.notice.show = isDeepSkip
@@ -67,10 +104,12 @@ export function OfflinePlayerModal({
 
     setTimeout(() => {
       // 若依然未渲染出新画面且仍在播放，进行快速排空解码器缓存循环
-      if (vid && !vid.paused && framesRenderedRef.current === 0) {
-        vid.pause();
-        vid.currentTime = vid.currentTime + (isDeepSkip ? 2.0 : 0.15);
-        vid.play().catch(() => {});
+      if (vid && !vid.paused && !vid.error && framesRenderedRef.current === 0) {
+        try {
+          vid.pause();
+          vid.currentTime = vid.currentTime + (isDeepSkip ? 2.0 : 0.15);
+          vid.play().catch(() => {});
+        } catch (e) {}
       }
       if (art.notice) {
         art.notice.show = isDeepSkip ? "⚡ 已成功跨越卡顿片段" : "⚡ 关键帧校准完成，音画已同步";
@@ -123,6 +162,11 @@ export function OfflinePlayerModal({
   useEffect(() => {
     if (!isOpen || !videoUrl || !containerRef.current) return;
 
+    // 重置状态
+    setPlaybackError(null);
+    calibrationCountRef.current = 0;
+    framesRenderedRef.current = 0;
+
     // 清理可能存在的旧实例与定时器
     if (watchdogTimerRef.current) clearTimeout(watchdogTimerRef.current);
     if (secondaryTimerRef.current) clearTimeout(secondaryTimerRef.current);
@@ -161,6 +205,26 @@ export function OfflinePlayerModal({
         "x5-video-player-fullscreen": "true",
         "x5-playsinline": "true",
       } as any,
+      customType: {
+        m3u8: function (video: HTMLMediaElement, url: string, artInstance: Artplayer) {
+          if (Hls.isSupported()) {
+            if ((artInstance as any).hls) ((artInstance as any).hls as any).destroy();
+            const hls = new Hls({
+              maxBufferLength: 30,
+            });
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            (artInstance as any).hls = hls;
+            artInstance.on("destroy", () => hls.destroy());
+          } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+            video.src = url;
+          } else {
+            if (artInstance.notice) {
+              artInstance.notice.show = "当前环境不支持播放 M3U8 格式";
+            }
+          }
+        },
+      },
       controls: [
         {
           name: "offlineTag",
@@ -193,7 +257,6 @@ export function OfflinePlayerModal({
     });
 
     artRef.current = art;
-
     const vid = art.video;
 
     // 核心防卡顿引擎：启动视频物理帧呈现监听器
@@ -204,6 +267,9 @@ export function OfflinePlayerModal({
         const onFrame = () => {
           framesRenderedRef.current++;
           stallCountRef.current = 0;
+          calibrationCountRef.current = 0; // 成功产生画面物理帧，重置连续校准保护计数
+          setPlaybackError(null);
+
           if (watchdogTimerRef.current) {
             clearTimeout(watchdogTimerRef.current);
             watchdogTimerRef.current = null;
@@ -240,12 +306,12 @@ export function OfflinePlayerModal({
 
       // 拖动后给底层解码器 320ms 时间生产新帧
       watchdogTimerRef.current = setTimeout(() => {
-        if (!vid || vid.paused || vid.ended || isCalibratingRef.current) return;
+        if (!vid || vid.paused || vid.ended || vid.error || isCalibratingRef.current) return;
 
-        // 如果播放中，且 requestVideoFrameCallback 始终未产生新帧，说明解码器卡在非 IDR 帧或广告段上
+        // 如果播放中，且始终未产生新帧，说明解码器卡在非 IDR 帧或广告段上
         const isFrameStalled = framesRenderedRef.current === 0;
 
-        if (isFrameStalled) {
+        if (isFrameStalled && calibrationCountRef.current < 3) {
           stallCountRef.current++;
           const isDeepAdStall = stallCountRef.current >= 2;
           console.warn(
@@ -260,15 +326,55 @@ export function OfflinePlayerModal({
 
     // 监听播放器停滞事件
     art.on("video:waiting", () => {
-      if (!isSeekingRef.current && !isCalibratingRef.current && vid && !vid.paused) {
+      if (!isSeekingRef.current && !isCalibratingRef.current && vid && !vid.paused && !vid.error) {
         watchdogTimerRef.current = setTimeout(() => {
-          if (vid && !vid.paused && framesRenderedRef.current === 0) {
+          if (vid && !vid.paused && !vid.error && framesRenderedRef.current === 0 && calibrationCountRef.current < 3) {
             stallCountRef.current++;
             performCalibration(false, stallCountRef.current >= 2);
           }
         }, 500);
       }
     });
+
+    // 监听视频底层严重错误：立即清除看门狗，停止重试，展示友好错误指引
+    const onVideoError = () => {
+      if (watchdogTimerRef.current) clearTimeout(watchdogTimerRef.current);
+      if (secondaryTimerRef.current) clearTimeout(secondaryTimerRef.current);
+      isCalibratingRef.current = false;
+
+      const mediaErr = vid?.error;
+      console.error("[OfflinePlayer] 视频底层解码/播放错误:", mediaErr);
+
+      let msg = "离线视频加载或解码异常";
+      let detail = "当前播放环境未能成功解码该本地视频文件。";
+      if (mediaErr) {
+        if (mediaErr.code === 3) {
+          msg = "视频解码失败 (MEDIA_ERR_DECODE)";
+          detail = "iOS WebKit 底层引擎对该离线封装格式解码受限。推荐直接点击下方【导出视频】保存到手机相册或在系统播放器中观看。";
+        } else if (mediaErr.code === 4) {
+          msg = "播放格式不受支持 (MEDIA_ERR_SRC_NOT_SUPPORTED)";
+          detail = "浏览器不支持直接播放此离线视频格式。推荐点击下方按钮导出文件至本地。";
+        } else if (mediaErr.code === 2) {
+          msg = "本地流媒体读取中断 (MEDIA_ERR_NETWORK)";
+          detail = "读取沙盒离线数据中断，您可以点击重新加载或导出视频。";
+        }
+      }
+
+      setPlaybackError({
+        code: mediaErr?.code,
+        message: msg,
+        detail,
+      });
+
+      if (art.notice) {
+        art.notice.show = `❌ ${msg}`;
+      }
+    };
+
+    if (vid) {
+      vid.addEventListener("error", onVideoError);
+    }
+    art.on("error", onVideoError);
 
     return () => {
       if (watchdogTimerRef.current) clearTimeout(watchdogTimerRef.current);
@@ -278,6 +384,7 @@ export function OfflinePlayerModal({
       }
       try {
         if (art.video) {
+          art.video.removeEventListener("error", onVideoError);
           art.video.pause();
           art.video.removeAttribute("src");
           art.video.load();
@@ -331,13 +438,26 @@ export function OfflinePlayerModal({
                 </span>
                 <span className="hidden lg:inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-300 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
                   <ShieldCheck className="w-3 h-3 text-cyan-400" />
-                  防画面卡顿保护已开启
+                  防卡顿看门狗保护中
                 </span>
               </h3>
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {/* 快捷导出视频按钮 (iOS / 移动端可直接存入相册) */}
+            {onExport && (
+              <button
+                type="button"
+                onClick={onExport}
+                className="px-2.5 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 active:scale-95 text-xs font-bold text-emerald-300 hover:text-emerald-200 flex items-center gap-1.5 transition border border-emerald-500/30 shadow-sm cursor-pointer"
+                title="导出视频至本地文件或直接存入 iOS 相册"
+              >
+                <ArrowDownToLine className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">导出视频</span>
+              </button>
+            )}
+
             {/* 顶栏快速画面校准按钮 */}
             <button
               type="button"
@@ -376,6 +496,53 @@ export function OfflinePlayerModal({
         {/* Video Player Area with ArtPlayer */}
         <div className="relative aspect-video w-full bg-black flex items-center justify-center overflow-hidden">
           <div ref={containerRef} className="w-full h-full" />
+
+          {/* 异常防护与优雅提示浮层 (彻底遏制无限重试卡顿) */}
+          {playbackError && (
+            <div className="absolute inset-0 z-30 bg-dark-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center text-gray-200">
+              <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-3.5 shadow-lg shadow-rose-950/40">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <h4 className="text-base font-bold text-white mb-1.5">{playbackError.message}</h4>
+              <p className="text-xs text-gray-400 max-w-md leading-relaxed mb-5">
+                {playbackError.detail}
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2.5">
+                {onExport && (
+                  <button
+                    type="button"
+                    onClick={onExport}
+                    className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-dark-950 font-bold text-xs flex items-center gap-1.5 transition active:scale-95 shadow-md shadow-cyan-500/20 cursor-pointer"
+                  >
+                    <ArrowDownToLine className="w-4 h-4" />
+                    <span>导出视频 (保存到相册/文件)</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlaybackError(null);
+                    calibrationCountRef.current = 0;
+                    if (artRef.current && artRef.current.video) {
+                      artRef.current.video.load();
+                      artRef.current.video.play().catch(() => {});
+                    }
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-gray-200 font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>重新加载</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white font-medium text-xs transition cursor-pointer"
+                >
+                  退出播放
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer info */}
@@ -386,12 +553,22 @@ export function OfflinePlayerModal({
           </span>
 
           <div className="flex items-center gap-2">
+            {onExport && (
+              <button
+                type="button"
+                onClick={onExport}
+                className="text-emerald-400/90 hover:text-emerald-300 underline underline-offset-2 transition cursor-pointer flex items-center gap-1"
+              >
+                <ArrowDownToLine className="w-3 h-3" />
+                <span>导出到本地相册</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => performCalibration(true)}
               className="text-amber-400/90 hover:text-amber-300 underline underline-offset-2 transition cursor-pointer"
             >
-              音画不同步？点击画面校准
+              音画不同步？画面校准
             </button>
             <button
               onClick={onClose}
