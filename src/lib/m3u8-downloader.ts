@@ -471,15 +471,21 @@ export async function downloadAndSaveM3U8({
       // This fixes the famous 13:15:21 duration bug in Windows and 00:00/no-seek bug in QuickTime/iOS
       const targetDuration = parsed.totalDuration > 0 ? parsed.totalDuration : 0;
       const patchedInit = patchMp4InitSegment(initSegment, targetDuration);
-      outputBlob = new Blob([patchedInit as unknown as BlobPart, ...mp4Chunks as unknown as BlobPart[]], { type: "video/mp4" });
+      const blobParts: BlobPart[] = [patchedInit as unknown as BlobPart];
+      for (let p = 0; p < mp4Chunks.length; p++) {
+        blobParts.push(mp4Chunks[p] as unknown as BlobPart);
+      }
+      outputBlob = new Blob(blobParts, { type: "video/mp4" });
     } else {
       // Fallback: if transmux produced empty output, fallback to valid MPEG-TS
       console.warn("Remux produced no MP4 tracks, falling back to MPEG-TS blob");
-      outputBlob = new Blob(segmentBuffers as unknown as BlobPart[], { type: "video/mp2t" });
+      const validSegments = segmentBuffers.filter((b): b is Uint8Array => b !== null);
+      outputBlob = new Blob(validSegments as unknown as BlobPart[], { type: "video/mp2t" });
     }
   } else {
     // Pure MPEG-TS concatenation
-    outputBlob = new Blob(segmentBuffers as unknown as BlobPart[], { type: "video/mp2t" });
+    const validSegments = segmentBuffers.filter((b): b is Uint8Array => b !== null);
+    outputBlob = new Blob(validSegments as unknown as BlobPart[], { type: "video/mp2t" });
   }
 
   // Trigger browser file download

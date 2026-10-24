@@ -155,12 +155,12 @@ export function OfflinePlayerModal({
       moreVideoAttr: {
         crossOrigin: "anonymous",
         preload: "auto",
-        playsinline: "true",
+        playsInline: true,
         "webkit-playsinline": "true",
         "x5-video-player-type": "h5",
         "x5-video-player-fullscreen": "true",
         "x5-playsinline": "true",
-      },
+      } as any,
       controls: [
         {
           name: "offlineTag",

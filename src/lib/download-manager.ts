@@ -8,8 +8,10 @@ import {
   deleteTask as dbDeleteTask,
   saveSegment,
   getSegment,
+  getSegmentBatch,
   getDownloadedSegmentIndices,
   deleteSegmentsForTask,
+  saveCompletedChunk,
   saveCompletedVideo,
   getCompletedVideo,
   deleteCompletedVideo,
@@ -328,22 +330,53 @@ class DownloadManager {
         return;
       }
 
-      // 4. Remux or assemble to MP4 / TS
+      // 4. Remux or assemble to MP4 / TS with Low-Memory Chunked Streaming (iOS PWA optimized)
       task.status = "remuxing";
       task.speed = 0;
       task.percent = 95;
       await saveTask(task);
       this.notify();
 
-      let outputBlob: Blob;
       let finalExt = task.format === "mp4" ? ".mp4" : ".ts";
+      const filename = `${task.vodName} - ${task.episodeName}${finalExt}`;
+      const CHUNK_FLUSH_THRESHOLD = 8 * 1024 * 1024; // 8MB per chunk in IndexedDB (prevents iOS OOM & WebKit IPC crashes)
+
+      let totalOutputBytes = 0;
+      let chunkCounter = 0;
+      let currentChunkBuffer: Uint8Array[] = [];
+      let currentChunkSize = 0;
+
+      const flushBuffer = async (prependBytes?: Uint8Array | null) => {
+        if (currentChunkBuffer.length === 0 && !prependBytes) return;
+
+        let totalLen = currentChunkSize;
+        if (prependBytes) totalLen += prependBytes.byteLength;
+
+        const combined = new Uint8Array(totalLen);
+        let offset = 0;
+        if (prependBytes) {
+          combined.set(prependBytes, 0);
+          offset += prependBytes.byteLength;
+        }
+
+        for (let b = 0; b < currentChunkBuffer.length; b++) {
+          combined.set(currentChunkBuffer[b], offset);
+          offset += currentChunkBuffer[b].byteLength;
+        }
+
+        await saveCompletedChunk(taskId, chunkCounter++, combined);
+        totalOutputBytes += combined.byteLength;
+
+        // Reset buffer and allow immediate garbage collection
+        currentChunkBuffer = [];
+        currentChunkSize = 0;
+      };
 
       if (task.format === "mp4") {
         let initSegment: Uint8Array | null = null;
-        const mp4Chunks: Uint8Array[] = [];
+        let isInitDispatched = false;
 
         try {
-          // Set keepOriginalTimestamps: false to normalize PTS to 0
           const transmuxer = new muxjs.mp4.Transmuxer({
             remux: true,
             keepOriginalTimestamps: false,
@@ -354,74 +387,161 @@ class DownloadManager {
               initSegment = segment.initSegment;
             }
             if (segment.data && segment.data.byteLength > 0) {
-              mp4Chunks.push(segment.data);
+              currentChunkBuffer.push(segment.data);
+              currentChunkSize += segment.data.byteLength;
             }
           });
 
-          // Read all segments sequentially from IndexedDB to avoid holding all in memory
-          for (let i = 0; i < total; i++) {
-            const buf = await getSegment(taskId, i);
-            if (buf) {
-              try {
-                transmuxer.push(buf);
-                transmuxer.flush();
-              } catch (segErr) {
-                console.warn(`[DownloadManager] 切片 #${i} 转封装跳过:`, segErr);
+          const BATCH_SIZE = 16;
+          for (let batchStart = 0; batchStart < total; batchStart += BATCH_SIZE) {
+            if (controller.signal.aborted) throw new Error("任务已暂停");
+
+            const count = Math.min(BATCH_SIZE, total - batchStart);
+            const batch = await getSegmentBatch(taskId, batchStart, count);
+
+            for (let j = 0; j < count; j++) {
+              const buf = batch[j];
+              if (buf) {
+                try {
+                  transmuxer.push(buf);
+                  transmuxer.flush();
+                } catch (segErr) {
+                  console.warn(`[DownloadManager] 切片 #${batchStart + j} 转封装跳过:`, segErr);
+                }
               }
             }
 
-            // 移动端防冻结核心：每处理 8 个切片让出一次微任务调度队列，避免阻塞主线程及被系统杀进程
-            if (i % 8 === 0) {
-              await new Promise((resolve) => setTimeout(resolve, 0));
-              task.percent = Math.min(99, Math.floor(95 + (i / total) * 4));
-              this.notify();
+            // Flush chunk if threshold reached and initSegment is ready
+            if (currentChunkSize >= CHUNK_FLUSH_THRESHOLD) {
+              if (!isInitDispatched && initSegment) {
+                const patchedInit = patchMp4InitSegment(initSegment, task.totalDuration);
+                await flushBuffer(patchedInit);
+                isInitDispatched = true;
+              } else if (isInitDispatched) {
+                await flushBuffer();
+              }
+            }
+
+            // Yield to browser event loop (15ms sleep on iOS ensures GC runs and UI stays 60fps responsive)
+            await new Promise((r) => setTimeout(r, 15));
+            task.percent = Math.min(99, Math.floor(95 + ((batchStart + count) / total) * 4));
+            this.notify();
+          }
+
+          // Final flush of remaining buffer
+          if (initSegment && !isInitDispatched) {
+            const patchedInit = patchMp4InitSegment(initSegment, task.totalDuration);
+            await flushBuffer(patchedInit);
+            isInitDispatched = true;
+          } else if (currentChunkSize > 0) {
+            await flushBuffer();
+          }
+
+          if (!isInitDispatched || chunkCounter === 0) {
+            throw new Error("转封装未产生有效 MP4 音视频轨道");
+          }
+
+          // Save completed video metadata
+          await saveCompletedVideo(taskId, {
+            filename,
+            mimeType: "video/mp4",
+            duration: task.totalDuration,
+            size: totalOutputBytes,
+            isChunked: true,
+            chunkCount: chunkCounter,
+          });
+          finalExt = ".mp4";
+        } catch (remuxErr: any) {
+          console.warn("[DownloadManager] MP4 封装降级或遇到异常，执行低内存 TS 兼容打包:", remuxErr);
+          // Fallback to low-memory TS chunking
+          chunkCounter = 0;
+          totalOutputBytes = 0;
+          currentChunkBuffer = [];
+          currentChunkSize = 0;
+
+          const TS_BATCH_SIZE = 16;
+          for (let batchStart = 0; batchStart < total; batchStart += TS_BATCH_SIZE) {
+            if (controller.signal.aborted) throw new Error("任务已暂停");
+            const count = Math.min(TS_BATCH_SIZE, total - batchStart);
+            const batch = await getSegmentBatch(taskId, batchStart, count);
+
+            for (let j = 0; j < count; j++) {
+              const buf = batch[j];
+              if (buf) {
+                currentChunkBuffer.push(buf);
+                currentChunkSize += buf.byteLength;
+              }
+            }
+
+            if (currentChunkSize >= CHUNK_FLUSH_THRESHOLD) {
+              await flushBuffer();
+            }
+
+            await new Promise((r) => setTimeout(r, 10));
+          }
+
+          if (currentChunkSize > 0) {
+            await flushBuffer();
+          }
+
+          task.format = "ts";
+          finalExt = ".ts";
+          const fallbackFilename = `${task.vodName} - ${task.episodeName}.ts`;
+
+          await saveCompletedVideo(taskId, {
+            filename: fallbackFilename,
+            mimeType: "video/mp2t",
+            duration: task.totalDuration,
+            size: totalOutputBytes,
+            isChunked: true,
+            chunkCount: chunkCounter,
+          });
+        }
+      } else {
+        // Pure TS format requested
+        const TS_BATCH_SIZE = 16;
+        for (let batchStart = 0; batchStart < total; batchStart += TS_BATCH_SIZE) {
+          if (controller.signal.aborted) throw new Error("任务已暂停");
+          const count = Math.min(TS_BATCH_SIZE, total - batchStart);
+          const batch = await getSegmentBatch(taskId, batchStart, count);
+
+          for (let j = 0; j < count; j++) {
+            const buf = batch[j];
+            if (buf) {
+              currentChunkBuffer.push(buf);
+              currentChunkSize += buf.byteLength;
             }
           }
 
-          if (initSegment && mp4Chunks.length > 0) {
-            const patchedInit = patchMp4InitSegment(initSegment, task.totalDuration);
-            outputBlob = new Blob([patchedInit as unknown as BlobPart, ...mp4Chunks as unknown as BlobPart[]], {
-              type: "video/mp4",
-            });
-            finalExt = ".mp4";
-          } else {
-            throw new Error("转封装未产生有效 MP4 音视频轨道");
+          if (currentChunkSize >= CHUNK_FLUSH_THRESHOLD) {
+            await flushBuffer();
           }
-        } catch (remuxErr: any) {
-          console.warn("[DownloadManager] MP4 合成受限或内存溢出，平滑降级为原生 MPEG-TS 容器储存:", remuxErr);
-          // 移动端内存不足或转封装异常时的平滑降级方案：合并为原始 TS 格式存储
-          const rawChunks: Uint8Array[] = [];
-          for (let i = 0; i < total; i++) {
-            const buf = await getSegment(taskId, i);
-            if (buf) rawChunks.push(buf);
-            if (i % 25 === 0) await new Promise((r) => setTimeout(r, 0));
-          }
-          outputBlob = new Blob(rawChunks as unknown as BlobPart[], { type: "video/mp2t" });
-          task.format = "ts";
-          finalExt = ".ts";
+
+          await new Promise((r) => setTimeout(r, 10));
         }
-      } else {
-        const rawChunks: Uint8Array[] = [];
-        for (let i = 0; i < total; i++) {
-          const buf = await getSegment(taskId, i);
-          if (buf) rawChunks.push(buf);
-          if (i % 25 === 0) await new Promise((r) => setTimeout(r, 0));
+
+        if (currentChunkSize > 0) {
+          await flushBuffer();
         }
-        outputBlob = new Blob(rawChunks as unknown as BlobPart[], { type: "video/mp2t" });
+
         finalExt = ".ts";
+        await saveCompletedVideo(taskId, {
+          filename,
+          mimeType: "video/mp2t",
+          duration: task.totalDuration,
+          size: totalOutputBytes,
+          isChunked: true,
+          chunkCount: chunkCounter,
+        });
       }
 
-      // 5. Save the finished video into IndexedDB for in-app offline playback
-      const filename = `${task.vodName} - ${task.episodeName}${finalExt}`;
-      await saveCompletedVideo(taskId, outputBlob, filename, outputBlob.type, task.totalDuration);
-
-      // Clean up intermediate raw chunk segments to save disk space
+      // 5. Clean up intermediate raw chunk segments to save disk space
       await deleteSegmentsForTask(taskId);
 
       task.status = "completed";
       task.percent = 100;
       task.speed = 0;
-      task.completedSize = outputBlob.size;
+      task.completedSize = totalOutputBytes;
       await saveTask(task);
       this.notify();
     } catch (err: any) {
@@ -588,7 +708,7 @@ class DownloadManager {
    */
   public async exportVideo(taskId: string): Promise<void> {
     const record = await getCompletedVideo(taskId);
-    if (!record) {
+    if (!record || !record.blob) {
       throw new Error("本地未找到已完成的视频文件");
     }
 
@@ -610,7 +730,7 @@ class DownloadManager {
    */
   public async getOfflinePlaybackUrl(taskId: string): Promise<string> {
     const record = await getCompletedVideo(taskId);
-    if (!record) {
+    if (!record || !record.blob) {
       throw new Error("本地未找到可离线播放的视频");
     }
     return URL.createObjectURL(record.blob);

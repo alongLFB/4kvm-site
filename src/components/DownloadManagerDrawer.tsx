@@ -28,7 +28,7 @@ import {
   Check,
 } from "lucide-react";
 import { useDownloadManager } from "@/contexts/DownloadContext";
-import { DownloadTaskRecord } from "@/lib/download-store";
+import { DownloadTaskRecord, StorageQuotaInfo } from "@/lib/download-store";
 import { OfflinePlayerModal } from "@/components/OfflinePlayerModal";
 
 function formatBytes(bytes?: number) {
