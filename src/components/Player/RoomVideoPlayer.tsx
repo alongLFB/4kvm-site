@@ -98,10 +98,11 @@ export default function RoomVideoPlayer({
       moreVideoAttr: {
         crossOrigin: "anonymous",
         preload: "auto",
+        playsInline: true,
         "x5-video-player-type": "h5",
         "x5-video-player-fullscreen": "true",
         "x5-playsinline": "true",
-      },
+      } as any,
       customType: {
         m3u8: function (video: HTMLMediaElement, targetUrl: string, artInstance: Artplayer) {
           const updateRes = (w: number, h: number) => {
@@ -117,6 +118,9 @@ export default function RoomVideoPlayer({
             if (el) el.innerText = label;
           };
 
+          const isM3U8 = targetUrl.includes(".m3u8") || !targetUrl.includes(".");
+          const cleanSourceUrl = isM3U8 ? `/api/clean-m3u8?url=${encodeURIComponent(targetUrl)}` : targetUrl;
+
           if (Hls.isSupported()) {
             if (hlsRef.current) {
               hlsRef.current.destroy();
@@ -130,7 +134,7 @@ export default function RoomVideoPlayer({
             hlsRef.current = hls;
             artInstance.hls = hls;
 
-            hls.loadSource(targetUrl);
+            hls.loadSource(cleanSourceUrl);
             hls.attachMedia(video);
 
             hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
@@ -150,12 +154,40 @@ export default function RoomVideoPlayer({
               }
             });
 
+            // Fallback to targetUrl on network error
+            hls.on(Hls.Events.ERROR, (event, data) => {
+              if (data.fatal) {
+                switch (data.type) {
+                  case Hls.ErrorTypes.NETWORK_ERROR:
+                    if (hls.url === cleanSourceUrl && cleanSourceUrl !== targetUrl) {
+                      console.warn("[RoomPlayer] 纯净流异常，平滑切换至原画直连:", data);
+                      hls.loadSource(targetUrl);
+                      hls.startLoad();
+                      return;
+                    }
+                    hls.startLoad();
+                    break;
+                  case Hls.ErrorTypes.MEDIA_ERROR:
+                    hls.recoverMediaError();
+                    break;
+                  default:
+                    hls.destroy();
+                    break;
+                }
+              }
+            });
+
             artInstance.on("destroy", () => {
               hls.destroy();
               hlsRef.current = null;
             });
           } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-            video.src = targetUrl;
+            video.src = cleanSourceUrl;
+            video.onerror = () => {
+              if (video.src.includes("/api/clean-m3u8")) {
+                video.src = targetUrl;
+              }
+            };
             if (initialTime > 0) {
               artInstance.currentTime = initialTime;
             }
@@ -169,13 +201,21 @@ export default function RoomVideoPlayer({
           }
 
           video.addEventListener("loadedmetadata", () => {
-            if (video.videoWidth && video.videoHeight) {
-              updateRes(video.videoWidth, video.videoHeight);
+            const v = video as HTMLVideoElement;
+            if (v.videoWidth && v.videoHeight) {
+              updateRes(v.videoWidth, v.videoHeight);
             }
           });
         },
       },
       controls: [
+        {
+          name: "cleanModeBadge",
+          position: "left",
+          index: 6,
+          tooltip: "纯净去广告模式：房间同步播放已自动剔除切片插播广告",
+          html: `<span class="flex items-center gap-1.5 text-[11px] font-bold text-cyan-400 bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 rounded-full select-none cursor-default"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>纯净正片</span>`,
+        },
         {
           name: "resolution",
           position: "right",

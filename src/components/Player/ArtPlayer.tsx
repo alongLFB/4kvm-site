@@ -484,14 +484,18 @@ export default function VideoPlayer({
             if (el) el.innerText = label;
           };
 
+          // Route through clean M3U8 API to automatically strip casino / injected ad segments
+          const isM3U8 = url.includes(".m3u8") || !url.includes(".");
+          const cleanSourceUrl = isM3U8 ? `/api/clean-m3u8?url=${encodeURIComponent(url)}` : url;
+
           if (Hls.isSupported()) {
-            if (art.hls) art.hls.destroy();
+            if (art.hls) (art.hls as any).destroy();
             const hls = new Hls({
               maxBufferLength: 60,
               maxMaxBufferLength: 120,
               startFragPrefetch: true,
             });
-            hls.loadSource(url);
+            hls.loadSource(cleanSourceUrl);
             hls.attachMedia(video);
 
             hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
@@ -503,22 +507,59 @@ export default function VideoPlayer({
               }
             });
 
+            // Error recovery with automatic fallback to direct raw URL
+            hls.on(Hls.Events.ERROR, (event, data) => {
+              if (data.fatal) {
+                switch (data.type) {
+                  case Hls.ErrorTypes.NETWORK_ERROR:
+                    if (hls.url === cleanSourceUrl && cleanSourceUrl !== url) {
+                      console.warn("[ArtPlayer] 纯净流加载受阻，平滑切换至原画直连:", data);
+                      hls.loadSource(url);
+                      hls.startLoad();
+                      return;
+                    }
+                    hls.startLoad();
+                    break;
+                  case Hls.ErrorTypes.MEDIA_ERROR:
+                    hls.recoverMediaError();
+                    break;
+                  default:
+                    hls.destroy();
+                    break;
+                }
+              }
+            });
+
             art.hls = hls;
             art.on("destroy", () => hls.destroy());
           } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-            video.src = url;
+            video.src = cleanSourceUrl;
+            video.onerror = () => {
+              if (video.src.includes("/api/clean-m3u8")) {
+                console.warn("[ArtPlayer] Safari 纯净流错误，回退至原生直连");
+                video.src = url;
+              }
+            };
           } else {
             art.notice.show = "当前浏览器不支持播放此格式";
           }
 
           video.addEventListener("loadedmetadata", () => {
-            if (video.videoWidth && video.videoHeight) {
-              updateRes(video.videoWidth, video.videoHeight);
+            const v = video as HTMLVideoElement;
+            if (v.videoWidth && v.videoHeight) {
+              updateRes(v.videoWidth, v.videoHeight);
             }
           });
         },
       },
       controls: [
+        {
+          name: "cleanModeBadge",
+          position: "left",
+          index: 6,
+          tooltip: "纯净去广告模式：已自动过滤切片插播广告，纯享高清正片",
+          html: `<span class="flex items-center gap-1.5 text-[11px] font-bold text-cyan-400 bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 rounded-full select-none cursor-default"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>纯净正片</span>`,
+        },
         {
           name: "resolution",
           position: "right",
