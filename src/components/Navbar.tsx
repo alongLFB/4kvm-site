@@ -75,7 +75,7 @@ function NavbarContent() {
   return (
     <>
       {/* Top Main Navbar with iOS PWA Safe Area support */}
-      <nav className="sticky top-0 z-50 bg-dark-950/90 backdrop-blur-md border-b border-white/10 pt-[env(safe-area-inset-top,0px)]">
+      <nav className="sticky top-0 z-50 bg-[#06070a]/80 backdrop-blur-2xl border-b border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.5)] pt-[env(safe-area-inset-top,0px)] transition-all">
         <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 gap-3">
             {/* 1. Left: Brand Logo */}
@@ -83,15 +83,15 @@ function NavbarContent() {
               <Link
                 href="/"
                 onClick={handleLogoClick}
-                className="flex items-center gap-2 group cursor-pointer active:scale-95 transition select-none shrink-0"
+                className="flex items-center gap-2.5 group cursor-pointer active:scale-95 transition-all select-none shrink-0"
                 title="返回4KVM影视首页"
               >
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-cyan-500/20 group-hover:scale-105 group-hover:shadow-cyan-500/40 transition">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-400 via-cyan-500 to-blue-600 flex items-center justify-center text-dark-950 font-black text-xl shadow-[0_0_20px_rgba(6,182,212,0.4)] group-hover:scale-105 group-hover:shadow-[0_0_30px_rgba(6,182,212,0.6)] transition-all duration-300">
                   4K
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-lg font-black tracking-wider text-white flex items-center gap-1">
-                    4KVM<span className="text-cyan-400 text-xs font-semibold px-1.5 py-0.5 bg-cyan-400/10 rounded">影视</span>
+                  <span className="font-display text-lg font-black tracking-wider text-white flex items-center gap-1.5">
+                    4KVM<span className="text-cyan-400 text-[10px] font-bold px-1.5 py-0.5 bg-cyan-400/10 border border-cyan-400/20 rounded-md tracking-widest uppercase">PRO</span>
                   </span>
                 </div>
               </Link>
@@ -99,51 +99,51 @@ function NavbarContent() {
 
             {/* 2. Center: Centered Desktop Navigation Dock */}
             <div className="hidden md:flex items-center justify-center flex-1 px-4 min-w-0">
-              <div className="flex items-center space-x-1 lg:space-x-1.5 px-3 py-1 rounded-2xl bg-white/[0.03] border border-white/[0.06] backdrop-blur-xs shadow-inner shrink-0">
+              <div className="flex items-center space-x-1 lg:space-x-1.5 p-1 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-xl shadow-inner shrink-0">
                 <Link
                   href="/"
-                  className={`px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium transition whitespace-nowrap shrink-0 ${
-                    isHome ? "text-cyan-400 bg-white/10 font-bold shadow-xs" : "text-gray-300 hover:text-white hover:bg-white/5"
+                  className={`px-3.5 py-1.5 rounded-xl text-xs lg:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
+                    isHome ? "text-cyan-300 bg-cyan-500/20 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.2)] font-bold" : "text-gray-300 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   首页
                 </Link>
                 <Link
                   href="/category?type=电影"
-                  className={`px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium transition whitespace-nowrap shrink-0 ${
-                    isMovie ? "text-cyan-400 bg-white/10 font-bold shadow-xs" : "text-gray-300 hover:text-white hover:bg-white/5"
+                  className={`px-3.5 py-1.5 rounded-xl text-xs lg:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
+                    isMovie ? "text-cyan-300 bg-cyan-500/20 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.2)] font-bold" : "text-gray-300 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   电影
                 </Link>
                 <Link
                   href="/category?type=电视剧"
-                  className={`px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium transition whitespace-nowrap shrink-0 ${
-                    isTv ? "text-cyan-400 bg-white/10 font-bold shadow-xs" : "text-gray-300 hover:text-white hover:bg-white/5"
+                  className={`px-3.5 py-1.5 rounded-xl text-xs lg:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
+                    isTv ? "text-cyan-300 bg-cyan-500/20 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.2)] font-bold" : "text-gray-300 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   电视剧
                 </Link>
                 <Link
                   href="/category?type=动漫"
-                  className={`hidden lg:flex px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium transition whitespace-nowrap shrink-0 ${
-                    isAnime ? "text-cyan-400 bg-white/10 font-bold shadow-xs" : "text-gray-300 hover:text-white hover:bg-white/5"
+                  className={`hidden lg:flex px-3.5 py-1.5 rounded-xl text-xs lg:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
+                    isAnime ? "text-cyan-300 bg-cyan-500/20 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.2)] font-bold" : "text-gray-300 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   动漫
                 </Link>
                 <Link
                   href="/category?type=综艺"
-                  className={`hidden xl:flex px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium transition whitespace-nowrap shrink-0 ${
-                    isVariety ? "text-cyan-400 bg-white/10 font-bold shadow-xs" : "text-gray-300 hover:text-white hover:bg-white/5"
+                  className={`hidden xl:flex px-3.5 py-1.5 rounded-xl text-xs lg:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
+                    isVariety ? "text-cyan-300 bg-cyan-500/20 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.2)] font-bold" : "text-gray-300 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   综艺
                 </Link>
                 <Link
                   href="/category?type=体育"
-                  className={`hidden 2xl:flex px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium transition items-center gap-1 whitespace-nowrap shrink-0 ${
-                    isSports ? "text-cyan-400 bg-white/10 font-bold shadow-xs" : "text-gray-300 hover:text-white hover:bg-white/5"
+                  className={`hidden 2xl:flex px-3.5 py-1.5 rounded-xl text-xs lg:text-sm font-semibold transition-all items-center gap-1 whitespace-nowrap shrink-0 ${
+                    isSports ? "text-cyan-300 bg-cyan-500/20 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.2)] font-bold" : "text-gray-300 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   体育
@@ -153,9 +153,9 @@ function NavbarContent() {
                 </Link>
                 <Link
                   href="/category"
-                  className={`px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium transition whitespace-nowrap shrink-0 ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs lg:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
                     isAllCategory
-                      ? "text-cyan-400 bg-white/10 font-bold shadow-xs"
+                      ? "text-cyan-300 bg-cyan-500/20 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.2)] font-bold"
                       : "text-gray-300 hover:text-white hover:bg-white/5"
                   }`}
                 >
@@ -163,10 +163,10 @@ function NavbarContent() {
                 </Link>
                 <Link
                   href="/hall"
-                  className={`px-3 py-1.5 rounded-xl text-xs lg:text-sm font-medium transition whitespace-nowrap shrink-0 ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs lg:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
                     isHall
-                      ? "text-cyan-400 bg-cyan-500/15 font-bold border border-cyan-500/30 shadow-sm"
-                      : "text-gray-300 hover:text-cyan-400 hover:bg-white/5"
+                      ? "text-cyan-300 bg-cyan-500/25 font-bold border border-cyan-400/40 shadow-[0_0_20px_rgba(6,182,212,0.3)]"
+                      : "text-gray-300 hover:text-cyan-300 hover:bg-white/5"
                   }`}
                 >
                   🎪 放映广场

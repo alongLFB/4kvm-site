@@ -57,7 +57,7 @@ export function rowToVodItem(row: any): VodItem {
     id: String(row.id || ""),
     name: String(row.name || ""),
     type_id: Number(row.type_id || 0),
-    type_name: String(row.type_name || ""),
+    type_name: String(row.type_name || "") as any,
     sub_type: String(row.sub_type || ""),
     pic: String(row.pic || ""),
     banner: String(row.banner || ""),

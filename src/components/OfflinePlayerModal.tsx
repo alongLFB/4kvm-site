@@ -401,20 +401,23 @@ export function OfflinePlayerModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100000] overscroll-contain bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-5 animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100000] overscroll-contain bg-black/90 backdrop-blur-xl flex items-center justify-center p-2 sm:p-5 animate-in fade-in duration-300"
       onClick={onClose}
     >
+      {/* Ambient Theater Backlight Glow */}
+      <div className="absolute w-[80vw] max-w-4xl h-[400px] bg-gradient-to-r from-emerald-500/15 via-cyan-500/15 to-blue-500/10 filter blur-[100px] pointer-events-none -z-10 opacity-70" />
+
       <div
-        className="bg-dark-900 border border-white/10 rounded-2xl sm:rounded-3xl w-full max-w-5xl flex flex-col shadow-2xl overflow-hidden overscroll-contain"
+        className="bg-[#0a0d16]/95 border border-white/[0.08] rounded-3xl w-full max-w-5xl flex flex-col shadow-[0_30px_90px_-20px_rgba(0,0,0,0.9)] overflow-hidden overscroll-contain relative"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-3.5 sm:p-4 pt-[max(0.75rem,env(safe-area-inset-top))] border-b border-white/10 flex items-center justify-between bg-dark-950/90 gap-2">
-          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+        <div className="p-4 sm:p-5 pt-[max(1rem,env(safe-area-inset-top))] border-b border-white/[0.08] flex items-center justify-between bg-[#06080e]/95 backdrop-blur-xl gap-2">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             {/* 移动端专享返回按钮 */}
             <button
               onClick={onClose}
-              className="p-1.5 -ml-1 text-gray-300 hover:text-white rounded-xl bg-white/5 hover:bg-white/10 flex items-center gap-0.5 transition cursor-pointer shrink-0"
+              className="p-1.5 -ml-1 text-gray-300 hover:text-white rounded-xl bg-white/5 hover:bg-white/10 active:scale-95 flex items-center gap-1 transition cursor-pointer shrink-0"
               title="返回下载中心"
               aria-label="返回下载中心"
             >
@@ -422,23 +425,23 @@ export function OfflinePlayerModal({
               <span className="text-xs font-bold text-gray-200">返回</span>
             </button>
 
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-              <Play className="w-4 h-4 fill-current" />
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.2)] shrink-0">
+              <Play className="w-4 h-4 fill-current ml-0.5" />
             </div>
 
             <div className="min-w-0">
-              <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2 truncate">
-                {vodName}
-                <span className="text-xs font-normal text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shrink-0">
+              <h3 className="font-display text-sm sm:text-base font-black text-white flex items-center gap-2 truncate">
+                <span>{vodName}</span>
+                <span className="text-xs font-bold text-emerald-400 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 shrink-0 shadow-sm">
                   {episodeName}
                 </span>
-                <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-300 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-bold text-emerald-300 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
                   <HardDrive className="w-3 h-3" />
-                  本地离线播放 · 0流量
+                  本地 0 流量离线播
                 </span>
-                <span className="hidden lg:inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-300 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
+                <span className="hidden lg:inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-300 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
                   <ShieldCheck className="w-3 h-3 text-cyan-400" />
-                  防卡顿看门狗保护中
+                  防定格看门狗守护
                 </span>
               </h3>
             </div>
@@ -450,11 +453,11 @@ export function OfflinePlayerModal({
               <button
                 type="button"
                 onClick={onExport}
-                className="px-2.5 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 active:scale-95 text-xs font-bold text-emerald-300 hover:text-emerald-200 flex items-center gap-1.5 transition border border-emerald-500/30 shadow-sm cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 active:scale-95 text-xs font-bold text-emerald-300 hover:text-emerald-200 flex items-center gap-1.5 transition border border-emerald-500/35 shadow-sm cursor-pointer"
                 title="导出视频至本地文件或直接存入 iOS 相册"
               >
                 <ArrowDownToLine className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">导出视频</span>
+                <span className="hidden sm:inline">导出到相册</span>
               </button>
             )}
 
@@ -463,11 +466,11 @@ export function OfflinePlayerModal({
               type="button"
               onClick={() => performCalibration(true, false)}
               disabled={calibrating}
-              className="px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 text-xs font-bold text-amber-300 hover:text-amber-200 flex items-center gap-1.5 transition border border-amber-500/30 shadow-sm cursor-pointer disabled:opacity-50"
+              className="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 text-xs font-bold text-amber-300 hover:text-amber-200 flex items-center gap-1.5 transition border border-amber-500/30 shadow-sm cursor-pointer disabled:opacity-50"
               title="若拖拽进度条后画面定格不动，点击此处立即微调对齐关键帧"
             >
               <Zap className={`w-3.5 h-3.5 ${calibrating ? "animate-spin" : ""}`} />
-              <span className="hidden sm:inline">画面校准</span>
+              <span className="hidden sm:inline">对齐关键帧</span>
             </button>
 
             {/* 顶栏跳过卡顿/广告按钮 */}
@@ -475,16 +478,16 @@ export function OfflinePlayerModal({
               type="button"
               onClick={() => performCalibration(true, true)}
               disabled={calibrating}
-              className="px-2.5 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 active:scale-95 text-xs font-bold text-cyan-300 hover:text-cyan-200 flex items-center gap-1.5 transition border border-cyan-500/30 shadow-sm cursor-pointer disabled:opacity-50"
+              className="px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 active:scale-95 text-xs font-bold text-cyan-300 hover:text-cyan-200 flex items-center gap-1.5 transition border border-cyan-500/30 shadow-sm cursor-pointer disabled:opacity-50"
               title="若画面卡在广告页面或严重黑屏，点击直接快进 5 秒跳过"
             >
               <FastForward className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">跳过卡顿 (+5s)</span>
+              <span className="hidden sm:inline">跨越 (+5s)</span>
             </button>
 
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-white/5 transition cursor-pointer flex items-center gap-1 shrink-0"
+              className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-white/10 active:scale-90 transition cursor-pointer flex items-center gap-1 shrink-0"
               title="关闭播放器"
             >
               <span className="text-xs text-gray-400 hidden sm:inline">关闭</span>
@@ -499,23 +502,23 @@ export function OfflinePlayerModal({
 
           {/* 异常防护与优雅提示浮层 (彻底遏制无限重试卡顿) */}
           {playbackError && (
-            <div className="absolute inset-0 z-30 bg-dark-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center text-gray-200">
-              <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-3.5 shadow-lg shadow-rose-950/40">
-                <AlertTriangle className="w-7 h-7" />
+            <div className="absolute inset-0 z-30 bg-[#06080e]/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6 text-center text-gray-200">
+              <div className="w-16 h-16 rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-4 shadow-[0_0_30px_rgba(244,63,94,0.25)]">
+                <AlertTriangle className="w-8 h-8" />
               </div>
-              <h4 className="text-base font-bold text-white mb-1.5">{playbackError.message}</h4>
-              <p className="text-xs text-gray-400 max-w-md leading-relaxed mb-5">
+              <h4 className="font-display text-lg font-black text-white mb-2">{playbackError.message}</h4>
+              <p className="text-xs sm:text-sm text-gray-400 max-w-md leading-relaxed mb-6 font-normal">
                 {playbackError.detail}
               </p>
-              <div className="flex flex-wrap items-center justify-center gap-2.5">
+              <div className="flex flex-wrap items-center justify-center gap-3">
                 {onExport && (
                   <button
                     type="button"
                     onClick={onExport}
-                    className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-dark-950 font-bold text-xs flex items-center gap-1.5 transition active:scale-95 shadow-md shadow-cyan-500/20 cursor-pointer"
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-300 hover:to-teal-400 text-dark-950 font-black text-xs sm:text-sm flex items-center gap-2 transition active:scale-95 shadow-[0_4px_25px_rgba(16,185,129,0.35)] cursor-pointer"
                   >
                     <ArrowDownToLine className="w-4 h-4" />
-                    <span>导出视频 (保存到相册/文件)</span>
+                    <span>立即导出视频 (存入相册/文件)</span>
                   </button>
                 )}
                 <button
@@ -528,7 +531,7 @@ export function OfflinePlayerModal({
                       artRef.current.video.play().catch(() => {});
                     }
                   }}
-                  className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-gray-200 font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-gray-200 font-bold text-xs sm:text-sm flex items-center gap-1.5 transition active:scale-95 cursor-pointer border border-white/10"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   <span>重新加载</span>
@@ -536,7 +539,7 @@ export function OfflinePlayerModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white font-medium text-xs transition cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/10 text-gray-400 hover:text-white font-medium text-xs sm:text-sm transition cursor-pointer"
                 >
                   退出播放
                 </button>
@@ -546,33 +549,26 @@ export function OfflinePlayerModal({
         </div>
 
         {/* Footer info */}
-        <div className="p-3 sm:p-3.5 bg-dark-950/95 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
-          <span className="flex items-center gap-1.5 text-emerald-400">
-            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-            <span>已启用关键帧防卡顿校准机制 · 如拖动后画面停顿可点击【画面校准】即刻同步</span>
+        <div className="p-3.5 sm:p-4 bg-[#06080e]/95 border-t border-white/[0.08] flex flex-wrap items-center justify-between gap-3 text-xs text-gray-400">
+          <span className="flex items-center gap-2 text-emerald-400 font-medium">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+            <span>PWA 本地沙盒极速免流 · 防卡顿守护已开启 · 拖拽进度若定格可点击【对齐关键帧】</span>
           </span>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {onExport && (
               <button
                 type="button"
                 onClick={onExport}
-                className="text-emerald-400/90 hover:text-emerald-300 underline underline-offset-2 transition cursor-pointer flex items-center gap-1"
+                className="text-emerald-400 hover:text-emerald-300 font-bold underline underline-offset-4 transition cursor-pointer flex items-center gap-1.5"
               >
-                <ArrowDownToLine className="w-3 h-3" />
+                <ArrowDownToLine className="w-3.5 h-3.5" />
                 <span>导出到本地相册</span>
               </button>
             )}
             <button
-              type="button"
-              onClick={() => performCalibration(true)}
-              className="text-amber-400/90 hover:text-amber-300 underline underline-offset-2 transition cursor-pointer"
-            >
-              音画不同步？画面校准
-            </button>
-            <button
               onClick={onClose}
-              className="px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 font-medium transition cursor-pointer"
+              className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-gray-200 font-bold transition cursor-pointer active:scale-95"
             >
               退出播放
             </button>

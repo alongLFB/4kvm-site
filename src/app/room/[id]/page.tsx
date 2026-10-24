@@ -1197,7 +1197,11 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
                           <span className={`font-mono ${isHost && showFullIp ? "text-amber-400 font-bold" : "text-gray-400"}`}>
                             {displayIp || "127.0.0.*"}
                           </span>
-                          {!isHost && <Lock className="w-2.5 h-2.5 text-gray-600" title="仅房主可看完整IP" />}
+                          {!isHost && (
+                            <span title="仅房主可看完整IP">
+                              <Lock className="w-2.5 h-2.5 text-gray-600" />
+                            </span>
+                          )}
                         </div>
                       </div>
 

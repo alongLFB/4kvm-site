@@ -338,7 +338,7 @@ export function DownloadModal({
 
   return (
     <div
-      className="fixed inset-0 z-[99999] overscroll-contain bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
+      className="fixed inset-0 z-[99999] overscroll-contain bg-black/80 backdrop-blur-xl flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-300"
       onClick={() => {
         if (isDownloading) {
           if (!confirm("当前正在下载切片中，关闭将中止任务，确定退出吗？")) return;
@@ -348,12 +348,16 @@ export function DownloadModal({
       }}
     >
       <div
-        className="bg-dark-900 border border-white/10 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden overscroll-contain"
+        className="bg-[#0a0d18]/95 backdrop-blur-3xl border border-white/10 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-[0_0_80px_rgba(0,0,0,0.9)] relative overflow-hidden overscroll-contain animate-in zoom-in-95 duration-200 ease-spring"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Ambient background glow inside modal */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-cyan-500/[0.08] rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-500/[0.05] rounded-full blur-3xl pointer-events-none -ml-20 -mb-20" />
+
         {/* 顶部标题区 */}
-        <div className="p-4 sm:p-5 pt-[max(1rem,env(safe-area-inset-top))] border-b border-white/10 flex items-center justify-between bg-dark-950/80 gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
+        <div className="p-4 sm:p-5 pt-[max(1.25rem,env(safe-area-inset-top))] border-b border-white/[0.08] flex items-center justify-between bg-[#06080e]/90 backdrop-blur-2xl gap-3 relative z-10">
+          <div className="flex items-center gap-3 min-w-0">
             {/* 移动端专享返回按钮 */}
             <button
               onClick={() => {
@@ -363,25 +367,25 @@ export function DownloadModal({
                 }
                 onClose();
               }}
-              className="p-1.5 -ml-1 text-gray-300 hover:text-white rounded-xl bg-white/5 hover:bg-white/10 flex items-center gap-0.5 transition cursor-pointer shrink-0"
+              className="p-2 -ml-1 text-gray-300 hover:text-white rounded-xl bg-white/[0.04] hover:bg-white/[0.08] active:scale-95 border border-white/[0.06] flex items-center gap-1 transition-all duration-200 cursor-pointer shrink-0"
               title="返回观影"
               aria-label="返回或关闭下载窗口"
             >
-              <ChevronLeft className="w-5 h-5 text-cyan-400" />
-              <span className="text-xs font-bold text-gray-200">返回</span>
+              <ChevronLeft className="w-4 h-4 text-cyan-400" />
+              <span className="text-xs font-semibold text-gray-200 font-sans">返回</span>
             </button>
 
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-lg shadow-cyan-500/10 shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-600/10 border border-cyan-400/30 flex items-center justify-center text-cyan-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] shrink-0">
               <Download className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-sm sm:text-lg font-bold text-white flex items-center gap-2 truncate">
+              <h3 className="font-display text-sm sm:text-lg font-bold text-white flex items-center gap-2 truncate tracking-wide">
                 离线视频下载中心
-                <span className="text-xs font-normal text-cyan-400 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 shrink-0">
+                <span className="text-xs font-mono font-bold text-cyan-300 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/25 shrink-0 shadow-sm">
                   {currentEpisode.name}
                 </span>
               </h3>
-              <p className="text-xs text-gray-400 truncate max-w-[200px] sm:max-w-md mt-0.5">
+              <p className="text-xs text-gray-400 truncate max-w-[200px] sm:max-w-md mt-0.5 font-normal">
                 {vodName} · 线路：{currentSource.sourceName}
               </p>
             </div>
@@ -395,18 +399,18 @@ export function DownloadModal({
               }
               onClose();
             }}
-            className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-white/5 transition cursor-pointer flex items-center gap-1 shrink-0"
+            className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-white/[0.08] active:scale-90 transition-all duration-200 cursor-pointer flex items-center gap-1 shrink-0 border border-transparent hover:border-white/10"
             title="关闭窗口"
           >
-            <span className="text-xs text-gray-400 hidden sm:inline">关闭</span>
+            <span className="text-xs text-gray-400 hidden sm:inline font-sans">关闭</span>
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* 选集快速切换条（针对多集连续剧/动漫） */}
         {currentSource.episodes && currentSource.episodes.length > 1 && (
-          <div className="px-5 py-2.5 bg-dark-850/80 border-b border-white/5 flex items-center gap-2 overflow-x-auto overscroll-contain no-scrollbar">
-            <span className="text-xs text-gray-400 shrink-0 flex items-center gap-1">
+          <div className="px-5 py-2.5 bg-[#06080e]/60 border-b border-white/[0.06] flex items-center gap-2 overflow-x-auto overscroll-contain no-scrollbar relative z-10">
+            <span className="text-xs text-gray-400 shrink-0 flex items-center gap-1.5 font-display font-medium">
               <ListOrdered className="w-3.5 h-3.5 text-cyan-400" />
               当前下载集：
             </span>
@@ -430,10 +434,10 @@ export function DownloadModal({
                       percent: 0,
                     });
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition cursor-pointer ${
+                  className={`px-3 py-1 rounded-xl text-xs font-mono font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer active:scale-95 ${
                     idx === currentEpIndex
-                      ? "bg-cyan-500 text-dark-950 font-bold shadow-md shadow-cyan-500/20"
-                      : "bg-white/5 hover:bg-white/10 text-gray-300"
+                      ? "bg-gradient-to-r from-cyan-400 to-teal-400 text-dark-950 font-bold shadow-[0_2px_12px_rgba(34,211,238,0.35)]"
+                      : "bg-white/[0.04] hover:bg-white/[0.08] text-gray-300 border border-white/[0.05]"
                   }`}
                 >
                   {ep.name}
@@ -444,72 +448,72 @@ export function DownloadModal({
         )}
 
         {/* 选项卡导航 */}
-        <div className="flex border-b border-white/10 bg-dark-950/40 px-5 pt-3 gap-2 overflow-x-auto no-scrollbar">
+        <div className="flex border-b border-white/[0.08] bg-[#06080e]/60 px-5 pt-3 gap-3 overflow-x-auto no-scrollbar relative z-10">
           <button
             onClick={() => setActiveTab("browser")}
-            className={`pb-2.5 px-3 text-xs sm:text-sm font-semibold flex items-center gap-1.5 border-b-2 transition whitespace-nowrap cursor-pointer ${
+            className={`pb-3 px-3 text-xs sm:text-sm font-display font-bold flex items-center gap-2 border-b-2 transition-all duration-200 whitespace-nowrap cursor-pointer relative ${
               activeTab === "browser"
-                ? "border-cyan-400 text-cyan-400"
+                ? "border-cyan-400 text-cyan-300 shadow-[0_2px_12px_rgba(34,211,238,0.3)]"
                 : "border-transparent text-gray-400 hover:text-gray-200"
             }`}
           >
-            <Zap className="w-4 h-4" />
-            浏览器直下 (MP4)
+            <Zap className="w-4 h-4 text-cyan-400 fill-current" />
+            <span>极速免流直下 (MP4)</span>
           </button>
 
           <button
             onClick={() => setActiveTab("external")}
-            className={`pb-2.5 px-3 text-xs sm:text-sm font-semibold flex items-center gap-1.5 border-b-2 transition whitespace-nowrap cursor-pointer ${
+            className={`pb-3 px-3 text-xs sm:text-sm font-display font-bold flex items-center gap-2 border-b-2 transition-all duration-200 whitespace-nowrap cursor-pointer relative ${
               activeTab === "external"
-                ? "border-cyan-400 text-cyan-400"
+                ? "border-cyan-400 text-cyan-300 shadow-[0_2px_12px_rgba(34,211,238,0.3)]"
                 : "border-transparent text-gray-400 hover:text-gray-200"
             }`}
           >
-            <HardDrive className="w-4 h-4" />
-            迅雷 / IDM / Motrix
+            <HardDrive className="w-4 h-4 text-cyan-400" />
+            <span>迅雷 / IDM / Motrix</span>
           </button>
 
           <button
             onClick={() => setActiveTab("cmd")}
-            className={`pb-2.5 px-3 text-xs sm:text-sm font-semibold flex items-center gap-1.5 border-b-2 transition whitespace-nowrap cursor-pointer ${
+            className={`pb-3 px-3 text-xs sm:text-sm font-display font-bold flex items-center gap-2 border-b-2 transition-all duration-200 whitespace-nowrap cursor-pointer relative ${
               activeTab === "cmd"
-                ? "border-cyan-400 text-cyan-400"
+                ? "border-cyan-400 text-cyan-300 shadow-[0_2px_12px_rgba(34,211,238,0.3)]"
                 : "border-transparent text-gray-400 hover:text-gray-200"
             }`}
           >
-            <Terminal className="w-4 h-4" />
-            FFmpeg 命令行
+            <Terminal className="w-4 h-4 text-amber-400" />
+            <span>FFmpeg 命令行</span>
           </button>
 
           {currentSource.episodes && currentSource.episodes.length > 1 && (
             <button
               onClick={() => setActiveTab("batch")}
-              className={`pb-2.5 px-3 text-xs sm:text-sm font-semibold flex items-center gap-1.5 border-b-2 transition whitespace-nowrap cursor-pointer ${
+              className={`pb-3 px-3 text-xs sm:text-sm font-display font-bold flex items-center gap-2 border-b-2 transition-all duration-200 whitespace-nowrap cursor-pointer relative ${
                 activeTab === "batch"
-                  ? "border-cyan-400 text-cyan-400"
+                  ? "border-cyan-400 text-cyan-300 shadow-[0_2px_12px_rgba(34,211,238,0.3)]"
                   : "border-transparent text-gray-400 hover:text-gray-200"
               }`}
             >
-              <FileVideo className="w-4 h-4" />
-              整季批量复制
+              <FileVideo className="w-4 h-4 text-emerald-400" />
+              <span>整季批量复制</span>
             </button>
           )}
         </div>
 
         {/* 内容主体区 */}
-        <div className="p-5 overflow-y-auto overscroll-contain space-y-5 flex-1">
+        <div className="p-5 sm:p-6 overflow-y-auto overscroll-contain space-y-5 flex-1 relative z-10">
           {/* TAB 1: 浏览器直接下载 */}
           {activeTab === "browser" && (
             <div className="space-y-4">
               {/* 多集资源展示：单集下载 vs 批量多选切换 */}
               {currentSource.episodes && currentSource.episodes.length > 1 && (
-                <div className="flex items-center justify-between p-1 bg-dark-950/60 rounded-xl border border-white/5">
+                <div className="flex items-center justify-between p-1 bg-[#06080e]/80 rounded-2xl border border-white/[0.06] gap-1">
                   <button
                     type="button"
                     onClick={() => setDownloadMode("single")}
-                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-display font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 ${
                       downloadMode === "single"
-                        ? "bg-cyan-500 text-dark-950 shadow-md shadow-cyan-500/20"
+                        ? "bg-gradient-to-r from-cyan-400 to-teal-400 text-dark-950 shadow-[0_2px_12px_rgba(34,211,238,0.35)]"
                         : "text-gray-400 hover:text-white"
                     }`}
                   >
@@ -518,9 +522,9 @@ export function DownloadModal({
                   <button
                     type="button"
                     onClick={() => setDownloadMode("batch")}
-                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-display font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 ${
                       downloadMode === "batch"
-                        ? "bg-cyan-500 text-dark-950 shadow-md shadow-cyan-500/20"
+                        ? "bg-gradient-to-r from-cyan-400 to-teal-400 text-dark-950 shadow-[0_2px_12px_rgba(34,211,238,0.35)]"
                         : "text-gray-400 hover:text-white"
                     }`}
                   >
@@ -531,34 +535,34 @@ export function DownloadModal({
               )}
 
               {downloadMode === "batch" ? (
-                <div className="bg-dark-800/90 border border-white/10 rounded-2xl p-4 sm:p-5 space-y-4 shadow-inner">
+                <div className="bg-[#0c101c]/80 backdrop-blur-xl border border-white/[0.08] rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl">
                   {/* 快捷批量选择工具条 */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/10 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.08] text-xs">
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
                         onClick={handleSelectAllEps}
-                        className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/30 transition cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 active:scale-95 text-cyan-300 font-display font-bold border border-cyan-500/30 transition-all duration-200 cursor-pointer shadow-sm"
                       >
                         全选整季 ({currentSource.episodes.length} 集)
                       </button>
                       <button
                         type="button"
                         onClick={handleInvertSelectEps}
-                        className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 font-medium transition cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] active:scale-95 text-gray-300 font-medium transition-all duration-200 cursor-pointer border border-white/[0.06]"
                       >
                         反选
                       </button>
                       <button
                         type="button"
                         onClick={handleClearSelectEps}
-                        className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-gray-200 transition cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] active:scale-95 text-gray-400 hover:text-gray-200 transition-all duration-200 cursor-pointer border border-white/[0.06]"
                       >
                         重置选中
                       </button>
                     </div>
                     <div className="text-gray-400 font-mono text-xs">
-                      已选择 <strong className="text-cyan-400 font-bold text-sm">{selectedEpIndices.size}</strong> / {currentSource.episodes.length} 集
+                      已选择 <strong className="text-cyan-300 font-bold text-sm">{selectedEpIndices.size}</strong> / {currentSource.episodes.length} 集
                     </div>
                   </div>
 
@@ -572,16 +576,16 @@ export function DownloadModal({
                           key={idx}
                           type="button"
                           onClick={() => handleToggleSelectEp(idx)}
-                          className={`relative p-2.5 rounded-xl text-xs font-semibold flex flex-col items-center justify-center gap-1 transition cursor-pointer border ${
+                          className={`relative p-2.5 rounded-2xl text-xs font-semibold flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer border active:scale-95 ${
                             isSelected
-                              ? "bg-cyan-500 text-dark-950 font-bold border-cyan-400 shadow-md shadow-cyan-500/20"
-                              : "bg-white/5 hover:bg-white/10 text-gray-300 border-white/5 hover:border-white/10"
+                              ? "bg-gradient-to-r from-cyan-400 to-teal-400 text-dark-950 font-bold border-cyan-300 shadow-[0_2px_12px_rgba(34,211,238,0.35)]"
+                              : "bg-white/[0.04] hover:bg-white/[0.08] text-gray-300 border-white/[0.06] hover:border-white/10"
                           }`}
                         >
-                          <span className="truncate w-full text-center">{ep.name}</span>
+                          <span className="truncate w-full text-center font-mono">{ep.name}</span>
                           {isCurrent && (
                             <span
-                              className={`text-[9px] px-1 rounded-sm leading-tight ${
+                              className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono font-bold leading-tight ${
                                 isSelected ? "bg-dark-950 text-cyan-300" : "bg-cyan-500/20 text-cyan-400"
                               }`}
                             >
@@ -594,21 +598,21 @@ export function DownloadModal({
                   </div>
 
                   {/* 格式选择与并发线程配置 */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                     {/* 格式选择 */}
-                    <div className="p-3 rounded-xl bg-dark-950/60 border border-white/5 space-y-2">
-                      <span className="text-gray-300 font-semibold flex items-center gap-1.5">
+                    <div className="p-3.5 rounded-2xl bg-[#06080e]/60 border border-white/[0.06] space-y-2">
+                      <span className="text-gray-300 font-display font-semibold flex items-center gap-1.5">
                         <FileVideo className="w-3.5 h-3.5 text-cyan-400" />
                         批量文件格式：
                       </span>
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => setFormat("mp4")}
-                          className={`py-1.5 px-2 rounded-lg font-bold text-center transition cursor-pointer ${
+                          className={`py-2 px-2 rounded-xl font-bold text-center transition-all duration-200 cursor-pointer active:scale-95 ${
                             format === "mp4"
-                              ? "bg-cyan-500 text-dark-950 shadow-sm"
-                              : "bg-white/5 text-gray-300 hover:bg-white/10"
+                              ? "bg-gradient-to-r from-cyan-400 to-teal-400 text-dark-950 shadow-sm font-display"
+                              : "bg-white/[0.04] text-gray-300 hover:bg-white/[0.08] border border-white/[0.05]"
                           }`}
                         >
                           MP4 格式
@@ -616,10 +620,10 @@ export function DownloadModal({
                         <button
                           type="button"
                           onClick={() => setFormat("ts")}
-                          className={`py-1.5 px-2 rounded-lg font-bold text-center transition cursor-pointer ${
+                          className={`py-2 px-2 rounded-xl font-bold text-center transition-all duration-200 cursor-pointer active:scale-95 ${
                             format === "ts"
-                              ? "bg-cyan-500 text-dark-950 shadow-sm"
-                              : "bg-white/5 text-gray-300 hover:bg-white/10"
+                              ? "bg-gradient-to-r from-cyan-400 to-teal-400 text-dark-950 shadow-sm font-display"
+                              : "bg-white/[0.04] text-gray-300 hover:bg-white/[0.08] border border-white/[0.05]"
                           }`}
                         >
                           TS 原始流
@@ -628,15 +632,15 @@ export function DownloadModal({
                     </div>
 
                     {/* 切片拉取线程 */}
-                    <div className="p-3 rounded-xl bg-dark-950/60 border border-white/5 space-y-2">
+                    <div className="p-3.5 rounded-2xl bg-[#06080e]/60 border border-white/[0.06] space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-300 font-semibold flex items-center gap-1.5">
-                          <Zap className="w-3.5 h-3.5 text-amber-400" />
+                        <span className="text-gray-300 font-display font-semibold flex items-center gap-1.5">
+                          <Zap className="w-3.5 h-3.5 text-amber-400 fill-current" />
                           分片并发拉取：
                         </span>
-                        <span className="text-[10px] text-amber-400 font-mono">{concurrency} 线程</span>
+                        <span className="text-xs text-amber-300 font-mono font-bold">{concurrency} 线程</span>
                       </div>
-                      <div className="grid grid-cols-4 gap-1">
+                      <div className="grid grid-cols-4 gap-1.5">
                         {[
                           { val: 4, label: "4" },
                           { val: 8, label: "8" },
@@ -650,10 +654,10 @@ export function DownloadModal({
                               setConcurrency(item.val);
                               updateSettings({ concurrency: item.val });
                             }}
-                            className={`py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                            className={`py-2 rounded-xl text-xs font-mono font-bold transition-all duration-200 cursor-pointer active:scale-95 ${
                               concurrency === item.val
-                                ? "bg-amber-400 text-dark-950 shadow-sm"
-                                : "bg-white/5 hover:bg-white/10 text-gray-300"
+                                ? "bg-gradient-to-r from-amber-400 to-amber-300 text-dark-950 shadow-[0_2px_10px_rgba(251,191,36,0.3)]"
+                                : "bg-white/[0.04] hover:bg-white/[0.08] text-gray-300 border border-white/[0.05]"
                             }`}
                             title={`${item.val} 线程并发拉取切片`}
                           >
@@ -664,15 +668,15 @@ export function DownloadModal({
                     </div>
 
                     {/* 同时排队下载集数 */}
-                    <div className="p-3 rounded-xl bg-dark-950/60 border border-white/5 space-y-2">
+                    <div className="p-3.5 rounded-2xl bg-[#06080e]/60 border border-white/[0.06] space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-300 font-semibold flex items-center gap-1.5">
+                        <span className="text-gray-300 font-display font-semibold flex items-center gap-1.5">
                           <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
                           同时排队下载：
                         </span>
-                        <span className="text-[10px] text-cyan-400 font-mono">{maxTasks} 集</span>
+                        <span className="text-xs text-cyan-300 font-mono font-bold">{maxTasks} 集</span>
                       </div>
-                      <div className="grid grid-cols-4 gap-1">
+                      <div className="grid grid-cols-4 gap-1.5">
                         {[
                           { val: 1, label: "1 集" },
                           { val: 2, label: "2 集" },
@@ -686,10 +690,10 @@ export function DownloadModal({
                               setMaxTasks(item.val);
                               updateSettings({ maxConcurrentTasks: item.val });
                             }}
-                            className={`py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                            className={`py-2 rounded-xl text-xs font-mono font-bold transition-all duration-200 cursor-pointer active:scale-95 ${
                               maxTasks === item.val
-                                ? "bg-cyan-500 text-dark-950 shadow-sm"
-                                : "bg-white/5 hover:bg-white/10 text-gray-300"
+                                ? "bg-gradient-to-r from-cyan-400 to-teal-400 text-dark-950 shadow-[0_2px_10px_rgba(34,211,238,0.3)]"
+                                : "bg-white/[0.04] hover:bg-white/[0.08] text-gray-300 border border-white/[0.05]"
                             }`}
                             title={`同时排队启动 ${item.val} 集`}
                           >
@@ -704,7 +708,7 @@ export function DownloadModal({
                   <button
                     type="button"
                     onClick={handleStartBatchQueue}
-                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-dark-950 font-bold text-sm shadow-xl shadow-cyan-500/25 transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-dark-950 font-display font-bold text-sm shadow-[0_4px_30px_rgba(34,211,238,0.35)] transition-all duration-200 active:scale-98 cursor-pointer flex items-center justify-center gap-2"
                   >
                     <Sparkles className="w-4 h-4" />
                     <span>
@@ -716,8 +720,8 @@ export function DownloadModal({
                 <>
               {/* 参数选择卡片 */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="bg-dark-800/80 border border-white/5 p-3.5 rounded-xl space-y-2">
-                  <span className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
+                <div className="bg-[#0c101c]/80 backdrop-blur-xl border border-white/[0.08] p-4 rounded-2xl space-y-2.5">
+                  <span className="text-xs font-display font-semibold text-gray-300 flex items-center gap-1.5">
                     <FileVideo className="w-3.5 h-3.5 text-cyan-400" />
                     保存文件格式：
                   </span>
@@ -726,38 +730,38 @@ export function DownloadModal({
                       type="button"
                       disabled={isDownloading}
                       onClick={() => setFormat("mp4")}
-                      className={`px-3 py-2 rounded-lg text-xs font-bold transition flex flex-col items-center gap-0.5 cursor-pointer ${
+                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex flex-col items-center gap-0.5 cursor-pointer active:scale-95 ${
                         format === "mp4"
-                          ? "bg-cyan-500 text-dark-950 shadow-md shadow-cyan-500/20"
-                          : "bg-white/5 hover:bg-white/10 text-gray-300"
+                          ? "bg-gradient-to-r from-cyan-400 to-teal-400 text-dark-950 font-display shadow-[0_2px_12px_rgba(34,211,238,0.35)]"
+                          : "bg-white/[0.04] hover:bg-white/[0.08] text-gray-300 border border-white/[0.05]"
                       } disabled:opacity-50`}
                     >
-                      <span>MP4 格式</span>
+                      <span className="font-display">MP4 格式</span>
                       <span className="text-[10px] font-normal opacity-80">全兼容 · 推荐</span>
                     </button>
                     <button
                       type="button"
                       disabled={isDownloading}
                       onClick={() => setFormat("ts")}
-                      className={`px-3 py-2 rounded-lg text-xs font-bold transition flex flex-col items-center gap-0.5 cursor-pointer ${
+                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex flex-col items-center gap-0.5 cursor-pointer active:scale-95 ${
                         format === "ts"
-                          ? "bg-cyan-500 text-dark-950 shadow-md shadow-cyan-500/20"
-                          : "bg-white/5 hover:bg-white/10 text-gray-300"
+                          ? "bg-gradient-to-r from-cyan-400 to-teal-400 text-dark-950 font-display shadow-[0_2px_12px_rgba(34,211,238,0.35)]"
+                          : "bg-white/[0.04] hover:bg-white/[0.08] text-gray-300 border border-white/[0.05]"
                       } disabled:opacity-50`}
                     >
-                      <span>TS 原始流</span>
+                      <span className="font-display">TS 原始流</span>
                       <span className="text-[10px] font-normal opacity-80">极速合并 · 省内存</span>
                     </button>
                   </div>
                 </div>
 
-                <div className="bg-dark-800/80 border border-white/5 p-3.5 rounded-xl space-y-2">
+                <div className="bg-[#0c101c]/80 backdrop-blur-xl border border-white/[0.08] p-4 rounded-2xl space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="text-xs font-display font-semibold text-gray-300 flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-amber-400 fill-current" />
                       下载并发线程：
                     </span>
-                    <span className="text-[10px] text-amber-400 font-mono font-bold">{concurrency} 线程</span>
+                    <span className="text-xs text-amber-300 font-mono font-bold">{concurrency} 线程</span>
                   </div>
                   <div className="grid grid-cols-4 gap-1.5">
                     {[
@@ -774,15 +778,15 @@ export function DownloadModal({
                           setConcurrency(item.val);
                           updateSettings({ concurrency: item.val });
                         }}
-                        className={`px-1.5 py-2 rounded-lg text-xs font-bold transition flex flex-col items-center gap-0.5 cursor-pointer ${
+                        className={`px-1.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex flex-col items-center gap-0.5 cursor-pointer active:scale-95 ${
                           concurrency === item.val
-                            ? "bg-amber-400 text-dark-950 shadow-md shadow-amber-400/20"
-                            : "bg-white/5 hover:bg-white/10 text-gray-300"
+                            ? "bg-gradient-to-r from-amber-400 to-amber-300 text-dark-950 font-bold border border-amber-300 shadow-[0_2px_10px_rgba(251,191,36,0.35)]"
+                            : "bg-white/[0.04] hover:bg-white/[0.08] text-gray-300 border border-white/[0.05]"
                         } disabled:opacity-50`}
                         title={item.tip}
                       >
-                        <span className="text-xs">{item.label}</span>
-                        <span className="text-[9px] font-normal opacity-75">{item.tip}</span>
+                        <span className="text-xs font-mono">{item.label}</span>
+                        <span className="text-[9px] font-normal opacity-80">{item.tip}</span>
                       </button>
                     ))}
                   </div>
@@ -790,21 +794,21 @@ export function DownloadModal({
               </div>
 
               {/* 核心状态与进度监控卡片 */}
-              <div className="bg-dark-800/90 border border-white/10 rounded-2xl p-5 space-y-4 shadow-inner">
+              <div className="bg-[#0c101c]/80 backdrop-blur-xl border border-white/[0.08] rounded-3xl p-6 space-y-4 shadow-xl">
                 {progress.phase === "idle" && (
-                  <div className="text-center py-4 space-y-3">
-                    <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center mx-auto shadow-lg shadow-cyan-500/5">
-                      <Download className="w-6 h-6" />
+                  <div className="text-center py-4 space-y-3.5">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-600/10 border border-cyan-400/30 text-cyan-300 flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(34,211,238,0.2)]">
+                      <Download className="w-7 h-7" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-white">
+                      <h4 className="font-display text-base font-bold text-white">
                         准备下载【{currentEpisode.name}】
                       </h4>
-                      <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto">
+                      <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto leading-relaxed">
                         视频切片将直接在浏览器本地后台并发拉取并自动无损拼接，不占用网站服务器带宽。
                       </p>
                     </div>
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-1 max-w-lg mx-auto">
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 max-w-lg mx-auto">
                       <button
                         type="button"
                         onClick={async () => {
@@ -820,7 +824,7 @@ export function DownloadModal({
                           });
                           onClose();
                         }}
-                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-dark-950 font-bold text-xs sm:text-sm shadow-xl shadow-cyan-500/25 transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                        className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-dark-950 font-display font-bold text-xs sm:text-sm shadow-[0_4px_25px_rgba(34,211,238,0.35)] transition-all duration-200 active:scale-95 cursor-pointer flex items-center justify-center gap-2"
                         title="添加到后台下载管理中心，支持切片断点续传，关闭窗口也不受影响"
                       >
                         <Sparkles className="w-4 h-4" />
@@ -830,10 +834,10 @@ export function DownloadModal({
                       <button
                         type="button"
                         onClick={handleStartDownload}
-                        className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white font-medium text-xs sm:text-sm transition cursor-pointer flex items-center justify-center gap-1.5"
+                        className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-gray-300 hover:text-white font-semibold text-xs sm:text-sm transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 border border-white/[0.08] active:scale-95"
                         title="在此弹窗中执行单次立即下载"
                       >
-                        <Download className="w-4 h-4" />
+                        <Download className="w-4 h-4 text-cyan-400" />
                         单次直接下载
                       </button>
                     </div>

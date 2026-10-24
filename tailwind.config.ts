@@ -8,14 +8,21 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["'Plus Jakarta Sans'", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+        display: ["'Outfit'", "'Plus Jakarta Sans'", "sans-serif"],
+      },
+      transitionTimingFunction: {
+        spring: "cubic-bezier(0.16, 1, 0.3, 1)",
+      },
       colors: {
         dark: {
-          950: "#09090b",
-          900: "#101014",
-          850: "#15151a",
-          800: "#1c1c22",
-          700: "#282830",
-          600: "#3b3b47",
+          950: "#06070a",
+          900: "#0d0f15",
+          850: "#131620",
+          800: "#1a1e2b",
+          700: "#272d3f",
+          600: "#384157",
         },
         gold: {
           400: "#fbbf24",

@@ -46,12 +46,21 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="4KVM影视" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap"
+          rel="stylesheet"
+        />
       </head>
-      <body className="bg-dark-950 text-gray-100 min-h-screen flex flex-col antialiased selection:bg-cyan-500/30 selection:text-cyan-300" suppressHydrationWarning>
+      <body className="bg-[#06070a] text-gray-100 min-h-screen flex flex-col antialiased selection:bg-cyan-500/30 selection:text-cyan-300 relative overflow-x-hidden" suppressHydrationWarning>
+        {/* Subtle Ambient Cosmic Glow at top of viewport */}
+        <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[360px] bg-gradient-to-b from-cyan-500/10 via-indigo-500/5 to-transparent blur-[120px] pointer-events-none -z-10" />
+
         <DownloadProvider>
           <PwaRegister />
           <Navbar />
-          <main className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-4 sm:py-6 pb-6 sm:pb-8">
+          <main className="flex-1 max-w-[1600px] w-full mx-auto px-3.5 sm:px-6 lg:px-10 py-4 sm:py-7 pb-10 sm:pb-16">
             {children}
           </main>
           <FloatingActions />

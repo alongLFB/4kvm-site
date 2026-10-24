@@ -427,14 +427,14 @@ export default function PlayPage() {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-4">
+    <div className="space-y-8 sm:space-y-12">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+        <div className="lg:col-span-2 space-y-5">
           {historyPrompt && (
-            <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-xs text-cyan-300 shadow-md">
+            <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-xs text-cyan-300 shadow-[0_0_25px_rgba(6,182,212,0.15)] backdrop-blur-md">
               <span className="flex items-center gap-2">
-                <span>⏱️</span>
-                <span>已为您自动定位至上次观看的【{historyPrompt.epName}】({historyPrompt.timeText})</span>
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                <span>已为您自动定位至上次观看的【<strong className="text-white font-bold">{historyPrompt.epName}</strong>】({historyPrompt.timeText})</span>
               </span>
               <div className="flex items-center gap-3">
                 <button
@@ -459,7 +459,7 @@ export default function PlayPage() {
                 <button
                   type="button"
                   onClick={() => setHistoryPrompt(null)}
-                  className="text-gray-400 hover:text-white cursor-pointer"
+                  className="text-gray-400 hover:text-white cursor-pointer px-1.5 py-0.5 rounded-md hover:bg-white/10"
                 >
                   ✕
                 </button>
@@ -467,41 +467,48 @@ export default function PlayPage() {
             </div>
           )}
 
-          <VideoPlayer
-            url={currentEpisode.url}
-            title={`${item.name} - ${currentEpisode.name}`}
-            poster={item.banner || item.pic}
-            initialTime={initialTime}
-            getInstance={(art) => {
-              playerRef.current = art;
-            }}
-            onEnded={() => {
-              if (currentEpIndex < currentSource.episodes.length - 1) {
-                handleEpisodeChange(currentEpIndex + 1);
-              }
-            }}
-            onTimeUpdate={handleTimeUpdate}
-          />
+          {/* Video Player Container with Ambient Backlight Reflection */}
+          <div className="relative rounded-2xl sm:rounded-3xl overflow-visible group/player">
+            <div className="ambient-backlight" />
+            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-white/10 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.9)] bg-black z-10">
+              <VideoPlayer
+                url={currentEpisode.url}
+                title={`${item.name} - ${currentEpisode.name}`}
+                poster={item.banner || item.pic}
+                initialTime={initialTime}
+                getInstance={(art) => {
+                  playerRef.current = art;
+                }}
+                onEnded={() => {
+                  if (currentEpIndex < currentSource.episodes.length - 1) {
+                    handleEpisodeChange(currentEpIndex + 1);
+                  }
+                }}
+                onTimeUpdate={handleTimeUpdate}
+              />
+            </div>
+          </div>
 
-          <div className="p-6 rounded-2xl bg-dark-900 border border-white/10 space-y-4">
+          {/* Main Info Glass Panel */}
+          <div className="p-6 sm:p-8 rounded-3xl bg-[#0c0f18]/80 backdrop-blur-2xl border border-white/[0.08] shadow-2xl space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-black text-white flex items-center gap-3">
-                  {item.name}
-                  <span className="text-sm font-normal text-cyan-400 px-2.5 py-0.5 rounded-full bg-cyan-400/10 border border-cyan-400/20">
+              <div className="min-w-0">
+                <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight flex flex-wrap items-center gap-2.5 sm:gap-3">
+                  <span>{item.name}</span>
+                  <span className="text-xs sm:text-sm font-bold text-cyan-400 px-3 py-1 rounded-full bg-cyan-400/10 border border-cyan-400/25 shrink-0 shadow-sm">
                     {currentEpisode.name}
                   </span>
                 </h1>
-                <p className="text-xs text-gray-400 mt-1">
-                  {item.year} · {item.area} · {item.lang} · {item.type_name} · 当前播放：{currentSource.sourceName}
+                <p className="text-xs text-gray-400 mt-2 font-medium">
+                  {item.year} · {item.area} · {item.lang} · {item.type_name} · 当前线路：<span className="text-gray-200 font-semibold">{currentSource.sourceName}</span>
                 </p>
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-xs text-cyan-300 shadow-sm select-none">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                <div className="flex items-center gap-2 mt-2.5">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-xs text-cyan-300 shadow-sm select-none">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                     <span className="font-bold text-white">
                       🔥 {onlineStats.currentTargetOnline}
                     </span>
-                    <span className="text-cyan-400/90">人正在看</span>
+                    <span className="text-cyan-400/90 font-medium">人正在观影</span>
                     <span className="text-white/20 mx-0.5">·</span>
                     <span className="text-gray-400">
                       全站 <strong className="text-white font-semibold">{onlineStats.totalOnline}</strong> 人在线
@@ -510,40 +517,41 @@ export default function PlayPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2.5">
+              {/* Action Buttons with Tactile Elevation */}
+              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
                 {/* Download Button */}
                 <button
                   type="button"
                   onClick={handleOpenDownloadModal}
-                  className="px-3.5 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 transition border border-cyan-500/30 hover:border-cyan-500/50 shadow-sm cursor-pointer active:scale-95"
-                  title="离线下载当前视频"
+                  className="px-4 py-2.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-xs font-bold text-cyan-300 hover:text-cyan-200 flex items-center gap-1.5 transition-all border border-cyan-500/35 hover:border-cyan-500/50 shadow-sm cursor-pointer active:scale-95"
+                  title="离线下载当前视频或全集"
                 >
                   <Download className="w-4 h-4 text-cyan-400" />
-                  下载
+                  <span>下载</span>
                 </button>
 
-                {/* Watch Party Button with auto pause/resume lifecycle */}
+                {/* Watch Party Button */}
                 <button
                   onClick={handleOpenCreateRoom}
-                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500/15 to-blue-500/15 hover:from-cyan-500 hover:to-blue-600 text-xs font-bold text-cyan-400 hover:text-dark-950 flex items-center gap-1.5 transition border border-cyan-500/40 shadow-lg shadow-cyan-500/10"
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-xs font-black text-dark-950 flex items-center gap-1.5 transition-all shadow-[0_4px_20px_rgba(6,182,212,0.3)] active:scale-95 cursor-pointer"
                 >
                   <Users className="w-4 h-4" />
-                  👥 邀请好友一起看
+                  <span>邀请好友一起看</span>
                 </button>
 
                 <button
                   onClick={handleShare}
-                  className="px-3.5 py-2 rounded-xl bg-dark-800 hover:bg-dark-700 text-xs font-semibold text-gray-200 flex items-center gap-1.5 transition border border-white/5"
+                  className="px-3.5 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-xs font-semibold text-gray-200 flex items-center gap-1.5 transition border border-white/10 active:scale-95 cursor-pointer"
                 >
                   <Share2 className="w-4 h-4 text-cyan-400" />
-                  {copied ? "已复制链接" : "分享"}
+                  <span>{copied ? "已复制链接" : "分享"}</span>
                 </button>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
+            <div className="flex flex-wrap gap-2 pt-3 border-t border-white/[0.06]">
               {item.tags.map((t, idx) => (
-                <span key={idx} className="px-2.5 py-1 rounded-md bg-dark-800 text-xs text-gray-300 border border-white/5">
+                <span key={idx} className="px-3 py-1 rounded-lg bg-white/[0.04] text-xs text-gray-300 border border-white/[0.06] font-medium">
                   #{t}
                 </span>
               ))}
@@ -556,16 +564,16 @@ export default function PlayPage() {
                 : "暂无剧情简介";
               const isLongContent = cleanContent.length > 130;
               return (
-                <div className="text-sm text-gray-300 leading-relaxed bg-dark-850 p-4 rounded-xl border border-white/5 space-y-2">
+                <div className="text-sm text-gray-300/90 leading-relaxed bg-[#07090f]/60 p-4 sm:p-5 rounded-2xl border border-white/[0.05] space-y-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-gray-400">剧情简介：</p>
+                    <p className="text-xs font-bold text-gray-400">剧情故事梗概：</p>
                     {isLongContent && (
                       <button
                         type="button"
                         onClick={() => setIsContentExpanded((prev) => !prev)}
-                        className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition cursor-pointer select-none"
+                        className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition cursor-pointer select-none font-semibold"
                       >
-                        <span>{isContentExpanded ? "收起简介" : "展开全部介绍"}</span>
+                        <span>{isContentExpanded ? "收起简介" : "展开全部"}</span>
                         <ChevronDown
                           className={`w-3.5 h-3.5 transition-transform duration-200 ${
                             isContentExpanded ? "rotate-180" : ""
@@ -574,79 +582,84 @@ export default function PlayPage() {
                       </button>
                     )}
                   </div>
-                  <p className={`transition-all duration-200 ${!isContentExpanded && isLongContent ? "line-clamp-3" : ""}`}>
+                  <p className={`transition-all duration-300 ${!isContentExpanded && isLongContent ? "line-clamp-3" : ""}`}>
                     {cleanContent}
                   </p>
                 </div>
               );
             })()}
 
-            {/* 导演与主演：点击直接跳转至人名作品搜索 */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-400 pt-2">
-              <div className="flex items-start gap-1">
-                <span className="text-gray-500 shrink-0">导演：</span>
+            {/* 导演与主演 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-400 pt-2 border-t border-white/[0.06]">
+              <div className="flex items-start gap-1.5">
+                <span className="text-gray-500 font-medium shrink-0">导演：</span>
                 {renderPersonLinks(item.director)}
               </div>
-              <div className="flex items-start gap-1">
-                <span className="text-gray-500 shrink-0">主演：</span>
+              <div className="flex items-start gap-1.5">
+                <span className="text-gray-500 font-medium shrink-0">主演：</span>
                 {renderPersonLinks(item.actor)}
               </div>
             </div>
           </div>
         </div>
 
+        {/* Right Rail: Cyber-Console Episode Selector & Source Switcher */}
         <div className="space-y-6">
-          <div className="p-6 rounded-2xl bg-dark-900 border border-white/10 space-y-4">
+          <div className="p-6 rounded-3xl bg-[#0c0f18]/80 backdrop-blur-2xl border border-white/[0.08] shadow-2xl space-y-5">
             <div>
-              <div className="flex items-center gap-2 text-xs font-bold text-gray-400 mb-2.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-gray-400 mb-3">
                 <Radio className="w-3.5 h-3.5 text-cyan-400" />
-                切换播放源线路
+                <span>切换播放源专线</span>
               </div>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-2">
                 {item.sources.map((src, idx) => {
                   const isCurrent = idx === currentSourceIndex;
                   return (
                     <button
                       key={idx}
                       onClick={() => handleSourceChange(idx)}
-                      className={`w-full py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                      className={`w-full py-2.5 px-3.5 rounded-xl text-xs font-bold flex items-center justify-between transition-all duration-200 cursor-pointer active:scale-98 ${
                         isCurrent
-                          ? "bg-cyan-500/15 border border-cyan-500/40 text-cyan-400 shadow-sm"
-                          : "bg-dark-800 hover:bg-dark-700 text-gray-300 border border-white/5"
+                          ? "bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.2)]"
+                          : "bg-white/[0.04] hover:bg-white/[0.08] text-gray-300 border border-white/[0.06]"
                       }`}
                     >
-                      <span>{src.sourceName}</span>
-                      <span className="text-[11px] opacity-70">共 {src.episodes.length} 集</span>
+                      <span className="flex items-center gap-2">
+                        {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />}
+                        {src.sourceName}
+                      </span>
+                      <span className="text-[11px] opacity-70 font-mono">共 {src.episodes.length} 集</span>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-white/10">
-              <h2 className="text-sm font-bold text-white flex items-center gap-1.5">
+            <div className="flex items-center justify-between pt-4 border-t border-white/[0.08]">
+              <h2 className="font-display text-sm font-black text-white flex items-center gap-2">
                 <Film className="w-4 h-4 text-cyan-400" />
-                选集列表
+                <span>剧集全集选集</span>
               </h2>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">
-                  共 {currentSource.episodes.length} 集
+                <span className="text-xs text-gray-400 font-mono">
+                  {currentSource.episodes.length} 集
                 </span>
                 {currentSource.episodes.length > 1 && (
                   <button
                     type="button"
                     onClick={() => setIsEpReversed((prev) => !prev)}
-                    className="px-2 py-0.5 rounded-lg bg-white/5 hover:bg-cyan-500/20 text-xs text-gray-300 hover:text-cyan-400 flex items-center gap-1 transition border border-white/5 cursor-pointer"
+                    className="px-2.5 py-1 rounded-lg bg-white/[0.05] hover:bg-cyan-500/20 text-xs text-gray-300 hover:text-cyan-300 flex items-center gap-1 transition border border-white/[0.06] cursor-pointer active:scale-95"
                     title={isEpReversed ? "当前倒序，点击切换为正序" : "当前正序，点击切换为倒序"}
                   >
                     <ArrowUpDown className="w-3 h-3 text-cyan-400" />
-                    <span>{isEpReversed ? "倒序" : "正序"}</span>
+                    <span className="font-bold">{isEpReversed ? "倒序" : "正序"}</span>
                   </button>
                 )}
               </div>
             </div>
 
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-3 gap-2.5 max-h-[360px] overflow-y-auto pr-1">
+            {/* Episode Selector Buttons */}
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-3 gap-2.5 max-h-[380px] overflow-y-auto pr-1">
               {(isEpReversed
                 ? currentSource.episodes.map((ep, idx) => ({ ep, idx })).reverse()
                 : currentSource.episodes.map((ep, idx) => ({ ep, idx }))
@@ -656,10 +669,10 @@ export default function PlayPage() {
                   <button
                     key={idx}
                     onClick={() => handleEpisodeChange(idx)}
-                    className={`py-2.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center text-center ${
+                    className={`py-3 px-2 rounded-xl text-xs font-black transition-all duration-200 flex items-center justify-center text-center cursor-pointer active:scale-95 ${
                       isActive
-                        ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-dark-950 shadow-lg shadow-cyan-500/20 scale-[1.02]"
-                        : "bg-dark-800 hover:bg-dark-700 text-gray-300 hover:text-white border border-white/5"
+                        ? "bg-gradient-to-r from-cyan-400 via-cyan-500 to-blue-500 text-dark-950 shadow-[0_0_20px_rgba(6,182,212,0.4)] scale-[1.03]"
+                        : "bg-white/[0.04] hover:bg-white/[0.08] text-gray-300 hover:text-white border border-white/[0.06] hover:border-cyan-500/30"
                     }`}
                   >
                     {ep.name}

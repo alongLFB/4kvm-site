@@ -143,7 +143,7 @@ export default function VideoPlayer({
 
     if (instanceRef.current) {
       instanceRef.current.emit("resize");
-      instanceRef.current.resize();
+      (instanceRef.current as any).resize?.();
     }
 
     updateFullscreenIcon(true);
@@ -171,7 +171,7 @@ export default function VideoPlayer({
     if (instanceRef.current) {
       (instanceRef.current as any).isRotate = false;
       instanceRef.current.emit("resize");
-      instanceRef.current.resize();
+      (instanceRef.current as any).resize?.();
     }
 
     updateFullscreenIcon(false);
@@ -395,7 +395,7 @@ export default function VideoPlayer({
 
       if (instanceRef.current) {
         instanceRef.current.emit("resize");
-        instanceRef.current.resize();
+        (instanceRef.current as any).resize?.();
       }
     };
 
@@ -463,12 +463,12 @@ export default function VideoPlayer({
       moreVideoAttr: {
         crossOrigin: "anonymous",
         preload: "auto",
-        playsinline: "true",
+        playsInline: true,
         "webkit-playsinline": "true",
         "x5-video-player-type": "h5",
         "x5-video-player-fullscreen": "true",
         "x5-playsinline": "true",
-      },
+      } as any,
       customType: {
         m3u8: function (video: HTMLMediaElement, url: string, art: Artplayer) {
           const updateRes = (w: number, h: number) => {
@@ -629,9 +629,9 @@ export default function VideoPlayer({
           art.video.removeAttribute("src");
           art.video.load();
         }
-        if (art.hls) {
-          art.hls.destroy();
-          art.hls = null;
+        if ((art as any).hls) {
+          (art as any).hls.destroy?.();
+          (art as any).hls = null;
         }
         if (art && art.destroy) {
           art.destroy(true);
@@ -700,23 +700,22 @@ export default function VideoPlayer({
 
       {/* 手势调节沉浸式 HUD 悬浮框 */}
       {hud && (
-        <div className="absolute inset-0 z-[70] flex items-center justify-center pointer-events-none transition-opacity duration-150">
-          <div className="flex flex-col items-center gap-2.5 bg-black/85 backdrop-blur-xl border border-white/25 px-6 py-4 rounded-2xl text-white shadow-2xl min-w-[170px]">
+        <div className="absolute inset-0 z-[70] flex items-center justify-center pointer-events-none transition-opacity duration-200 animate-in zoom-in-95 ease-spring">
+          <div className="flex flex-col items-center gap-3 bg-[#080b14]/90 backdrop-blur-2xl border border-white/20 px-7 py-5 rounded-3xl text-white shadow-[0_15px_50px_rgba(0,0,0,0.8)] min-w-[200px]">
             {hud.type === "brightness" && (
               <>
-                <div className="flex items-center gap-2 text-amber-400 font-semibold text-base">
+                <div className="flex items-center gap-2 text-amber-400 font-display font-bold text-base">
                   <svg
-                    className="w-6 h-6"
-                    fill="currentColor"
+                    className="w-6 h-6 fill-current"
                     viewBox="0 0 24 24"
                   >
                     <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0s-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0s-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z" />
                   </svg>
-                  <span>亮度 {hud.value}%</span>
+                  <span>亮度 <span className="font-mono">{hud.value}%</span></span>
                 </div>
-                <div className="w-32 h-2 bg-white/20 rounded-full overflow-hidden">
+                <div className="w-36 h-2 bg-white/15 rounded-full overflow-hidden border border-white/10">
                   <div
-                    className="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all duration-75 shadow-sm"
+                    className="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all duration-75 shadow-[0_0_10px_rgba(251,191,36,0.6)]"
                     style={{ width: `${hud.value}%` }}
                   />
                 </div>
@@ -724,29 +723,27 @@ export default function VideoPlayer({
             )}
             {hud.type === "volume" && (
               <>
-                <div className="flex items-center gap-2 text-cyan-400 font-semibold text-base">
+                <div className="flex items-center gap-2 text-cyan-400 font-display font-bold text-base">
                   {hud.value !== undefined && hud.value > 0 ? (
                     <svg
-                      className="w-6 h-6"
-                      fill="currentColor"
+                      className="w-6 h-6 fill-current"
                       viewBox="0 0 24 24"
                     >
                       <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
                     </svg>
                   ) : (
                     <svg
-                      className="w-6 h-6"
-                      fill="currentColor"
+                      className="w-6 h-6 fill-current"
                       viewBox="0 0 24 24"
                     >
                       <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
                     </svg>
                   )}
-                  <span>音量 {hud.value}%</span>
+                  <span>音量 <span className="font-mono">{hud.value}%</span></span>
                 </div>
-                <div className="w-32 h-2 bg-white/20 rounded-full overflow-hidden">
+                <div className="w-36 h-2 bg-white/15 rounded-full overflow-hidden border border-white/10">
                   <div
-                    className="h-full bg-gradient-to-r from-cyan-500 to-cyan-300 rounded-full transition-all duration-75 shadow-sm"
+                    className="h-full bg-gradient-to-r from-cyan-400 to-teal-300 rounded-full transition-all duration-75 shadow-[0_0_10px_rgba(34,211,238,0.6)]"
                     style={{ width: `${hud.value}%` }}
                   />
                 </div>
@@ -754,13 +751,13 @@ export default function VideoPlayer({
             )}
             {hud.type === "seek" && (
               <>
-                <div className="flex items-center gap-2 text-emerald-400 font-semibold text-base">
+                <div className="flex items-center gap-2 text-emerald-400 font-display font-bold text-base">
                   <span>{hud.delta !== undefined && hud.delta >= 0 ? "⏩ 快进" : "⏪ 快退"}</span>
-                  <span className="text-xs text-white/70">
+                  <span className="text-xs text-white/80 font-mono font-bold">
                     ({hud.delta !== undefined && hud.delta >= 0 ? `+${hud.delta}s` : `${hud.delta}s`})
                   </span>
                 </div>
-                <div className="text-sm font-mono tracking-wider text-white/90">
+                <div className="text-sm font-mono tracking-wider text-white/95 font-semibold">
                   {formatTime(hud.targetTime || 0)} / {formatTime(hud.duration || 0)}
                 </div>
               </>
