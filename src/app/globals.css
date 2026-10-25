@@ -127,6 +127,7 @@ body.landscape-locked {
   height: 100dvh !important;
   position: fixed !important;
   inset: 0 !important;
+  background-color: #000 !important;
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
 }
@@ -137,6 +138,38 @@ body.landscape-locked::-webkit-scrollbar,
   display: none !important;
   width: 0 !important;
   height: 0 !important;
+}
+
+/* Hide all top navigation, mobile bottom tab bar, footer, and floating tools in landscape mode */
+html.landscape-locked nav,
+body.landscape-locked nav,
+html.landscape-locked footer,
+body.landscape-locked footer,
+html.landscape-locked [data-mobile-bottom-bar],
+body.landscape-locked [data-mobile-bottom-bar],
+html.landscape-locked [data-floating-actions],
+body.landscape-locked [data-floating-actions] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Elevate and reset player container in landscape mode */
+html.landscape-locked .player-container-wrapper,
+body.landscape-locked .player-container-wrapper {
+  overflow: visible !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  z-index: 9999999 !important;
+  background-color: #000 !important;
+}
+
+html.landscape-locked .ambient-backlight,
+body.landscape-locked .ambient-backlight {
+  display: none !important;
+  opacity: 0 !important;
 }
 
 /* Mobile Fullscreen Landscape CSS Mode */
@@ -164,6 +197,10 @@ body.landscape-locked::-webkit-scrollbar,
 }
 
 .mobile-landscape-active.in-real-landscape {
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
   width: 100vw !important;
   width: 100dvw !important;
   height: 100vh !important;

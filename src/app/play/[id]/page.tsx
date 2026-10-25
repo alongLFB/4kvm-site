@@ -470,7 +470,7 @@ export default function PlayPage() {
           {/* Video Player Container with Ambient Backlight Reflection */}
           <div className="relative rounded-2xl sm:rounded-3xl overflow-visible group/player">
             <div className="ambient-backlight" />
-            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-white/10 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.9)] bg-black z-10">
+            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-white/10 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.9)] bg-black z-10 player-container-wrapper">
               <VideoPlayer
                 url={currentEpisode.url}
                 title={`${item.name} - ${currentEpisode.name}`}

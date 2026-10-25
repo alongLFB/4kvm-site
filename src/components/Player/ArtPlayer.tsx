@@ -67,6 +67,7 @@ export default function VideoPlayer({
   const isLandscapeRef = useRef(false);
   const hudTimerRef = useRef<NodeJS.Timeout | null>(null);
   const brightnessRef = useRef<number>(1.0);
+  const scrollPosRef = useRef<number>(0);
 
   // 手势触摸状态变量
   const touchStateRef = useRef<{
@@ -118,6 +119,9 @@ export default function VideoPlayer({
 
   // 移动端进入横屏伪全屏模式
   const enterLandscape = () => {
+    if (typeof window !== "undefined") {
+      scrollPosRef.current = window.scrollY || window.pageYOffset || 0;
+    }
     isLandscapeRef.current = true;
     setIsLandscape(true);
     setShowLandscapeHeader(true);
@@ -175,6 +179,11 @@ export default function VideoPlayer({
     }
 
     updateFullscreenIcon(false);
+
+    // 恢复进入全屏前的页面滚动条位置
+    if (typeof window !== "undefined") {
+      window.scrollTo(0, scrollPosRef.current);
+    }
 
     if (
       needPop &&
