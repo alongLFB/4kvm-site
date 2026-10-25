@@ -52,9 +52,24 @@ export function MovieCard({ item, onCreateRoom }: MovieCardProps) {
           <h3 className="text-xs sm:text-sm font-bold text-white group-hover/link:text-cyan-400 transition-colors line-clamp-1 tracking-tight">
             {item.name}
           </h3>
-          <p className="text-[11px] text-gray-400 mt-1 line-clamp-1 font-medium">
-            {item.actor || `${item.year} · ${item.type_name}`}
-          </p>
+          <div className="flex items-center gap-1.5 text-[11px] text-gray-400 mt-1 font-medium truncate">
+            {item.year && (
+              <span className="text-cyan-400/90 font-semibold">{item.year}</span>
+            )}
+            {item.year && item.type_name && <span className="text-gray-600">·</span>}
+            {item.type_name && <span>{item.type_name}</span>}
+            {item.area && (
+              <>
+                <span className="text-gray-600">·</span>
+                <span className="text-gray-400 truncate">{item.area}</span>
+              </>
+            )}
+          </div>
+          {item.actor && (
+            <p className="text-[10px] sm:text-[11px] text-gray-500 mt-0.5 line-clamp-1 font-normal">
+              {item.actor}
+            </p>
+          )}
         </Link>
 
         {onCreateRoom && (
