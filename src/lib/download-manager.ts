@@ -14,6 +14,7 @@ import {
   saveCompletedChunk,
   saveCompletedVideo,
   getCompletedVideo,
+  getCompletedVideoMeta,
   deleteCompletedVideo,
   requestPersistentStorage,
   getStorageQuota,
@@ -343,6 +344,7 @@ class DownloadManager {
 
       let totalOutputBytes = 0;
       let chunkCounter = 0;
+      const chunkSizes: number[] = [];
       let currentChunkBuffer: Uint8Array[] = [];
       let currentChunkSize = 0;
 
@@ -365,6 +367,7 @@ class DownloadManager {
         }
 
         await saveCompletedChunk(taskId, chunkCounter++, combined);
+        chunkSizes.push(combined.byteLength);
         totalOutputBytes += combined.byteLength;
 
         // Reset buffer and allow immediate garbage collection
@@ -449,12 +452,14 @@ class DownloadManager {
             size: totalOutputBytes,
             isChunked: true,
             chunkCount: chunkCounter,
+            chunkSizes,
           });
           finalExt = ".mp4";
         } catch (remuxErr: any) {
           console.warn("[DownloadManager] MP4 封装降级或遇到异常，执行低内存 TS 兼容打包:", remuxErr);
           // Fallback to low-memory TS chunking
           chunkCounter = 0;
+          chunkSizes.length = 0;
           totalOutputBytes = 0;
           currentChunkBuffer = [];
           currentChunkSize = 0;
@@ -495,6 +500,7 @@ class DownloadManager {
             size: totalOutputBytes,
             isChunked: true,
             chunkCount: chunkCounter,
+            chunkSizes,
           });
         }
       } else {
@@ -532,6 +538,7 @@ class DownloadManager {
           size: totalOutputBytes,
           isChunked: true,
           chunkCount: chunkCounter,
+          chunkSizes,
         });
       }
 
@@ -707,39 +714,85 @@ class DownloadManager {
    * Export the completed video to user's device Downloads folder or iOS Photos/Files
    */
   public async exportVideo(taskId: string): Promise<void> {
-    const record = await getCompletedVideo(taskId);
-    if (!record || !record.blob) {
+    const meta = await getCompletedVideoMeta(taskId);
+    if (!meta) {
       throw new Error("本地未找到已完成的视频文件");
     }
 
-    const mime = record.mimeType || "video/mp4";
-    const filename = record.filename || "video.mp4";
+    const filename = meta.filename || "video.mp4";
+    const mime = meta.mimeType || "video/mp4";
 
-    // 优先尝试 Web Share API (在 iOS Safari / PWA 上可直接唤起原生面板“存储视频到相册”或“存储到文件”)
-    if (typeof navigator !== "undefined" && typeof (navigator as any).share === "function") {
-      try {
-        const file = new File([record.blob], filename, { type: mime });
-        if (
-          typeof (navigator as any).canShare === "function" &&
-          (navigator as any).canShare({ files: [file] })
-        ) {
-          await (navigator as any).share({
-            files: [file],
-            title: filename,
-            text: `离线视频导出: ${filename}`,
-          });
-          return;
-        }
-      } catch (shareErr: any) {
-        // 用户主动取消分享则无需再弹窗报错
-        if (shareErr.name === "AbortError") {
-          return;
-        }
-        console.warn("[DownloadManager] Web Share 导出异常，降级至标准下载链接:", shareErr);
+    // 检查 Service Worker 是否已就绪
+    let isSwActive = false;
+    if (typeof navigator !== "undefined" && navigator.serviceWorker) {
+      if (navigator.serviceWorker.controller) {
+        isSwActive = true;
+      } else {
+        try {
+          await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((r) => setTimeout(r, 500)),
+          ]);
+          if (navigator.serviceWorker.controller) {
+            isSwActive = true;
+          }
+        } catch {}
       }
     }
 
-    // 桌面端及不支持 Web Share 的浏览器降级走标准 a 标签下载
+    const isMobile =
+      typeof navigator !== "undefined" &&
+      /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    // 1. 移动端优先尝试原生系统分享 (可直接存储至 iOS 相册或“文件”App)
+    if (
+      isMobile &&
+      typeof navigator !== "undefined" &&
+      typeof (navigator as any).share === "function" &&
+      typeof (navigator as any).canShare === "function"
+    ) {
+      try {
+        const record = await getCompletedVideo(taskId);
+        if (record && record.blob) {
+          const file = new File([record.blob], filename, { type: mime });
+          if ((navigator as any).canShare({ files: [file] })) {
+            await (navigator as any).share({
+              files: [file],
+              title: filename,
+              text: `4KVM 离线视频: ${filename}`,
+            });
+            return;
+          }
+        }
+      } catch (shareErr: any) {
+        if (shareErr.name === "AbortError") {
+          return; // 用户主动取消
+        }
+        console.warn("[DownloadManager] Web Share 导出异常，平滑降级至流式附件下载:", shareErr);
+      }
+    }
+
+    // 2. Service Worker 流式附件下载 (彻底解决 iOS/移动端 a download 无法下载 blob 且白屏/无响应的问题)
+    if (isSwActive) {
+      const isTs = meta.mimeType === "video/mp2t" || filename.endsWith(".ts");
+      const streamFilename = isTs ? "video.ts" : "video.mp4";
+      const downloadUrl = `/offline-media/${encodeURIComponent(taskId)}/${streamFilename}?download=1&filename=${encodeURIComponent(filename)}`;
+
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+
+    // 3. 兜底回退：组装标准 Blob 下载
+    const record = await getCompletedVideo(taskId);
+    if (!record || !record.blob) {
+      throw new Error("本地未找到已完成的视频文件数据");
+    }
+
     const blobUrl = URL.createObjectURL(record.blob);
     const a = document.createElement("a");
     a.href = blobUrl;
@@ -750,34 +803,48 @@ class DownloadManager {
 
     setTimeout(() => {
       URL.revokeObjectURL(blobUrl);
-    }, 30000);
+    }, 60000);
   }
 
   /**
    * Retrieve URL for in-app offline video playback.
    * Prefers Service Worker virtual stream endpoint (/offline-media/:taskId/video.mp4 or playlist.m3u8),
    * providing native HTTP 206 Partial Content (Range Requests) essential for iOS AVPlayer.
-   * Falls back to Blob URL if Service Worker is not available.
+   * Uses getCompletedVideoMeta to prevent loading gigabytes of chunks into main-thread RAM.
    */
   public async getOfflinePlaybackUrl(taskId: string): Promise<string> {
-    const record = await getCompletedVideo(taskId);
-    if (!record) {
+    const meta = await getCompletedVideoMeta(taskId);
+    if (!meta) {
       throw new Error("本地未找到可离线播放的视频");
     }
 
-    // 检查 Service Worker 是否已就绪或处于安全上下文控制中
-    const hasServiceWorker =
-      typeof navigator !== "undefined" &&
-      navigator.serviceWorker &&
-      (navigator.serviceWorker.controller || window.isSecureContext);
+    // 严格检查 Service Worker 是否已就绪并控制页面
+    let isSwActive = false;
+    if (typeof navigator !== "undefined" && navigator.serviceWorker) {
+      if (navigator.serviceWorker.controller) {
+        isSwActive = true;
+      } else {
+        try {
+          await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((r) => setTimeout(r, 600)),
+          ]);
+          if (navigator.serviceWorker.controller) {
+            isSwActive = true;
+          }
+        } catch {}
+      }
+    }
 
-    if (hasServiceWorker) {
-      const isTs = record.mimeType === "video/mp2t" || record.filename.endsWith(".ts");
+    if (isSwActive) {
+      const isTs = meta.mimeType === "video/mp2t" || meta.filename.endsWith(".ts");
       const streamFilename = isTs ? "playlist.m3u8" : "video.mp4";
       return `/offline-media/${encodeURIComponent(taskId)}/${streamFilename}`;
     }
 
-    if (!record.blob) {
+    // 仅当没有 Service Worker 控制时，才作为备选组装 Blob (桌面端/无 SW 环境)
+    const record = await getCompletedVideo(taskId);
+    if (!record || !record.blob) {
       throw new Error("本地未找到可离线播放的视频数据");
     }
     return URL.createObjectURL(record.blob);

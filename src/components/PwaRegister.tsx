@@ -39,7 +39,7 @@ export function PwaRegister() {
   useEffect(() => {
     // 1. 注册 Service Worker
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
+      const registerSW = () => {
         navigator.serviceWorker
           .register("/sw.js")
           .then((reg) => {
@@ -48,7 +48,13 @@ export function PwaRegister() {
           .catch((err) => {
             console.error("PWA ServiceWorker registration failed:", err);
           });
-      });
+      };
+
+      if (document.readyState === "complete") {
+        registerSW();
+      } else {
+        window.addEventListener("load", registerSW);
+      }
     }
 
     let delayTimer: NodeJS.Timeout | null = null;

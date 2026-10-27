@@ -1,4 +1,4 @@
-const CACHE_NAME = '4kvm-pwa-v4';
+const CACHE_NAME = '4kvm-pwa-v5';
 const PRECACHE_URLS = [
   '/',
   '/manifest.json',
@@ -30,16 +30,54 @@ function getStoredVideoMeta(db, taskId) {
   });
 }
 
-function getStoredChunks(db, taskId) {
+function getStoredChunkByIndex(db, taskId, chunkIndex) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('completed_chunks', 'readonly');
+    const store = tx.objectStore('completed_chunks');
+    const req = store.get(`${taskId}_${chunkIndex}`);
+    req.onsuccess = () => resolve(req.result ? req.result.data : null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getChunkOffsets(db, taskId, meta) {
+  if (Array.isArray(meta.chunkSizes) && meta.chunkSizes.length > 0) {
+    let offset = 0;
+    return meta.chunkSizes.map((size, idx) => {
+      const start = offset;
+      const end = offset + size - 1;
+      offset += size;
+      return { index: idx, start, end, size };
+    });
+  }
+
+  // 兼容老版本未记录 chunkSizes 的历史任务 (仅扫描 index 与尺寸，不拷贝巨大二进制体)
   return new Promise((resolve, reject) => {
     const tx = db.transaction('completed_chunks', 'readonly');
     const store = tx.objectStore('completed_chunks');
     const index = store.index('taskId');
-    const req = index.getAll(IDBKeyRange.only(taskId));
-    req.onsuccess = () => {
-      const records = req.result || [];
-      records.sort((a, b) => a.chunkIndex - b.chunkIndex);
-      resolve(records);
+    const req = index.openCursor(IDBKeyRange.only(taskId));
+    const items = [];
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) {
+        const val = cursor.value;
+        items.push({
+          index: val.chunkIndex,
+          size: val.size || (val.data ? val.data.byteLength : 0),
+        });
+        cursor.continue();
+      } else {
+        items.sort((a, b) => a.index - b.index);
+        let offset = 0;
+        const result = items.map((item) => {
+          const start = offset;
+          const end = offset + item.size - 1;
+          offset += item.size;
+          return { index: item.index, start, end, size: item.size };
+        });
+        resolve(result);
+      }
     };
     req.onerror = () => reject(req.error);
   });
@@ -49,7 +87,8 @@ function getStoredChunks(db, taskId) {
  * Handle /offline-media/:taskId/:filename
  * Supports:
  * 1. Virtual HLS playlist: playlist.m3u8 & segment_:idx.(ts|mp4)
- * 2. Virtual MP4/TS with HTTP 206 Partial Content (Range Requests) for iOS AVPlayer
+ * 2. Virtual MP4/TS with zero-OOM chunk-level HTTP 206 Partial Content (Range Requests)
+ * 3. Direct streamed file attachment download (?download=1)
  */
 async function handleOfflineMedia(event, url) {
   const match = url.pathname.match(/^\/offline-media\/([^/]+)\/(.+)$/);
@@ -59,6 +98,7 @@ async function handleOfflineMedia(event, url) {
 
   const taskId = decodeURIComponent(match[1]);
   const filename = match[2];
+  const isDownload = url.searchParams.has('download');
 
   let db;
   try {
@@ -74,14 +114,14 @@ async function handleOfflineMedia(event, url) {
 
   // 1. Virtual HLS playlist (/offline-media/:taskId/playlist.m3u8)
   if (filename === 'playlist.m3u8') {
-    const chunks = await getStoredChunks(db, taskId);
-    if (!chunks || chunks.length === 0) {
+    const chunkOffsets = await getChunkOffsets(db, taskId, meta);
+    if (!chunkOffsets || chunkOffsets.length === 0) {
       return new Response('No offline video chunks found', { status: 404 });
     }
 
     const duration = meta.duration || 0;
-    const avgChunkDur = chunks.length > 0 && duration > 0
-      ? (duration / chunks.length).toFixed(3)
+    const avgChunkDur = chunkOffsets.length > 0 && duration > 0
+      ? (duration / chunkOffsets.length).toFixed(3)
       : '5.000';
     const targetDur = Math.ceil(parseFloat(avgChunkDur) || 6);
     const isTs = meta.mimeType === 'video/mp2t' || meta.filename.endsWith('.ts');
@@ -94,8 +134,8 @@ async function handleOfflineMedia(event, url) {
       '#EXT-X-MEDIA-SEQUENCE:0\n' +
       '#EXT-X-PLAYLIST-TYPE:VOD\n';
 
-    for (let i = 0; i < chunks.length; i++) {
-      manifest += `#EXTINF:${avgChunkDur},\nsegment_${i}.${ext}\n`;
+    for (let i = 0; i < chunkOffsets.length; i++) {
+      manifest += `#EXTINF:${avgChunkDur},\nsegment_${chunkOffsets[i].index}.${ext}\n`;
     }
     manifest += '#EXT-X-ENDLIST\n';
 
@@ -113,20 +153,19 @@ async function handleOfflineMedia(event, url) {
   const segMatch = filename.match(/^segment_(\d+)\.(ts|mp4|m4s)$/);
   if (segMatch) {
     const chunkIdx = parseInt(segMatch[1], 10);
-    const chunks = await getStoredChunks(db, taskId);
-    const chunk = chunks.find((c) => c.chunkIndex === chunkIdx);
-    if (!chunk || !chunk.data) {
+    const chunkData = await getStoredChunkByIndex(db, taskId, chunkIdx);
+    if (!chunkData) {
       return new Response('Segment not found', { status: 404 });
     }
 
     const isTs = segMatch[2] === 'ts' || meta.mimeType === 'video/mp2t';
     const mime = isTs ? 'video/mp2t' : 'video/mp4';
 
-    return new Response(chunk.data, {
+    return new Response(chunkData, {
       status: 200,
       headers: {
         'Content-Type': mime,
-        'Content-Length': `${chunk.data.byteLength}`,
+        'Content-Length': `${chunkData.byteLength}`,
         'Accept-Ranges': 'bytes',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Access-Control-Allow-Origin': '*',
@@ -134,61 +173,144 @@ async function handleOfflineMedia(event, url) {
     });
   }
 
-  // 3. Regular Video File request (e.g. video.mp4) with HTTP 206 Range Request handling
-  let fullBlob = meta.blob;
-  if (!fullBlob) {
-    const chunks = await getStoredChunks(db, taskId);
-    if (!chunks || chunks.length === 0) {
-      return new Response('No video content available', { status: 404 });
-    }
-    fullBlob = new Blob(chunks.map((c) => c.data), {
-      type: meta.mimeType || 'video/mp4',
-    });
-  }
-
-  const totalSize = fullBlob.size || meta.size || 0;
+  // 3. Regular Video File request (e.g. video.mp4, video.ts) with zero-OOM chunked Range Request handling
+  const totalSize = meta.size || (meta.blob ? meta.blob.size : 0);
   const rangeHeader = event.request.headers.get('range');
 
-  if (!rangeHeader) {
-    return new Response(fullBlob, {
-      status: 200,
-      headers: {
+  // 如果存有单体旧版 Blob，直接走 Blob 逻辑
+  if (meta.blob) {
+    if (!rangeHeader) {
+      const headers = {
         'Content-Type': meta.mimeType || 'video/mp4',
         'Content-Length': `${totalSize}`,
         'Accept-Ranges': 'bytes',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Access-Control-Allow-Origin': '*',
+      };
+      if (isDownload) {
+        const downloadName = url.searchParams.get('filename') || meta.filename || 'video.mp4';
+        headers['Content-Disposition'] = `attachment; filename="${encodeURIComponent(downloadName)}"`;
+      }
+      return new Response(meta.blob, { status: 200, headers });
+    }
+
+    const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+    if (!rangeMatch) return new Response('Malformed Range Header', { status: 400 });
+
+    const start = parseInt(rangeMatch[1], 10);
+    const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : totalSize - 1;
+    if (isNaN(start) || start >= totalSize || end < start) {
+      return new Response('Range Not Satisfiable', {
+        status: 416,
+        headers: { 'Content-Range': `bytes */${totalSize}` },
+      });
+    }
+
+    const boundedEnd = Math.min(end, totalSize - 1);
+    const sliced = meta.blob.slice(start, boundedEnd + 1);
+    return new Response(sliced, {
+      status: 206,
+      statusText: 'Partial Content',
+      headers: {
+        'Content-Type': meta.mimeType || 'video/mp4',
+        'Content-Range': `bytes ${start}-${boundedEnd}/${totalSize}`,
+        'Content-Length': `${boundedEnd - start + 1}`,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Access-Control-Allow-Origin': '*',
       },
     });
   }
 
+  // 现代化分块架构：按需读取切片，彻底根除手机端 OOM 白屏崩溃
+  const chunkOffsets = await getChunkOffsets(db, taskId, meta);
+  if (!chunkOffsets || chunkOffsets.length === 0) {
+    return new Response('No video chunks available in storage', { status: 404 });
+  }
+
+  const computedTotal = totalSize || chunkOffsets.reduce((acc, c) => acc + c.size, 0);
+
+  // 3.1 完整下载请求 (例如点击【下载到本地】或无 Range 头的直接拉取)
+  if (!rangeHeader) {
+    const downloadHeaders = {
+      'Content-Type': meta.mimeType || 'video/mp4',
+      'Content-Length': `${computedTotal}`,
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Access-Control-Allow-Origin': '*',
+    };
+    if (isDownload) {
+      const downloadName = url.searchParams.get('filename') || meta.filename || 'video.mp4';
+      downloadHeaders['Content-Disposition'] = `attachment; filename="${encodeURIComponent(downloadName)}"`;
+    }
+
+    // 采用 ReadableStream 逐块推送，内存峰值恒定在单个切片大小 (8MB)，轻松下载数 GB 巨幅蓝光影片
+    let currentIdx = 0;
+    const stream = new ReadableStream({
+      async pull(controller) {
+        if (currentIdx >= chunkOffsets.length) {
+          controller.close();
+          return;
+        }
+        const info = chunkOffsets[currentIdx++];
+        const data = await getStoredChunkByIndex(db, taskId, info.index);
+        if (data) {
+          controller.enqueue(data);
+        }
+      },
+    });
+
+    return new Response(stream, { status: 200, headers: downloadHeaders });
+  }
+
+  // 3.2 播放器 Range 局部请求 (iOS AVPlayer / Artplayer 视频解码 seek)
   const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
   if (!rangeMatch) {
     return new Response('Malformed Range Header', { status: 400 });
   }
 
   const start = parseInt(rangeMatch[1], 10);
-  const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : totalSize - 1;
+  const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : computedTotal - 1;
 
-  if (isNaN(start) || start >= totalSize || end < start) {
+  if (isNaN(start) || start >= computedTotal || end < start) {
     return new Response('Range Not Satisfiable', {
       status: 416,
-      headers: {
-        'Content-Range': `bytes */${totalSize}`,
-      },
+      headers: { 'Content-Range': `bytes */${computedTotal}` },
     });
   }
 
-  const boundedEnd = Math.min(end, totalSize - 1);
+  const boundedEnd = Math.min(end, computedTotal - 1);
   const chunkLength = boundedEnd - start + 1;
-  const slicedBlob = fullBlob.slice(start, boundedEnd + 1);
+
+  // 准确定位相交的分块 (通常仅命中 1 个分块，跨边界时至多命中 2 个分块)
+  const overlapping = chunkOffsets.filter(
+    (c) => c.start <= boundedEnd && c.end >= start
+  );
+
+  if (overlapping.length === 0) {
+    return new Response('Range out of bounds', { status: 416 });
+  }
+
+  const slices = [];
+  for (const chunkInfo of overlapping) {
+    const chunkData = await getStoredChunkByIndex(db, taskId, chunkInfo.index);
+    if (!chunkData) continue;
+
+    const chunkStart = chunkInfo.start;
+    const sliceStart = Math.max(0, start - chunkStart);
+    const sliceEnd = Math.min(chunkInfo.size, boundedEnd - chunkStart + 1);
+
+    slices.push(chunkData.subarray(sliceStart, sliceEnd));
+  }
+
+  const slicedBlob = new Blob(slices, { type: meta.mimeType || 'video/mp4' });
 
   return new Response(slicedBlob, {
     status: 206,
     statusText: 'Partial Content',
     headers: {
       'Content-Type': meta.mimeType || 'video/mp4',
-      'Content-Range': `bytes ${start}-${boundedEnd}/${totalSize}`,
+      'Content-Range': `bytes ${start}-${boundedEnd}/${computedTotal}`,
       'Content-Length': `${chunkLength}`,
       'Accept-Ranges': 'bytes',
       'Cache-Control': 'no-cache, no-store, must-revalidate',

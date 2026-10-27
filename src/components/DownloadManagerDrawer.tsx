@@ -184,6 +184,8 @@ export function DownloadManagerDrawer() {
     resumeAll,
     deleteTask,
     exportVideo,
+    isExporting,
+    exportingTaskId,
     playOfflineVideo,
     storageQuota,
     settings,
@@ -638,6 +640,7 @@ export function DownloadManagerDrawer() {
                           <CompletedTaskItem
                             key={task.id}
                             task={task}
+                            isExporting={isExporting && exportingTaskId === task.id}
                             onPlay={() => playOfflineVideo(task.id)}
                             onExport={() => exportVideo(task.id)}
                             onDelete={() => {
@@ -659,6 +662,7 @@ export function DownloadManagerDrawer() {
                           onDeleteGroup={() => handleDeleteGroup(group)}
                           onPlayTask={playOfflineVideo}
                           onExportTask={exportVideo}
+                          exportingTaskId={exportingTaskId}
                           onDeleteTask={deleteTask}
                         />
                       );
@@ -669,6 +673,7 @@ export function DownloadManagerDrawer() {
                       <CompletedTaskItem
                         key={task.id}
                         task={task}
+                        isExporting={isExporting && exportingTaskId === task.id}
                         onPlay={() => playOfflineVideo(task.id)}
                         onExport={() => exportVideo(task.id)}
                         onDelete={() => {
@@ -1169,6 +1174,7 @@ function CompletedVodGroupCard({
   onDeleteGroup,
   onPlayTask,
   onExportTask,
+  exportingTaskId,
   onDeleteTask,
 }: {
   group: VodTaskGroup;
@@ -1177,6 +1183,7 @@ function CompletedVodGroupCard({
   onDeleteGroup: () => void;
   onPlayTask: (id: string) => void;
   onExportTask: (id: string) => void;
+  exportingTaskId?: string | null;
   onDeleteTask: (id: string) => void;
 }) {
   return (
@@ -1261,6 +1268,7 @@ function CompletedVodGroupCard({
                 key={task.id}
                 task={task}
                 compact
+                isExporting={exportingTaskId === task.id}
                 onPlay={() => onPlayTask(task.id)}
                 onExport={() => onExportTask(task.id)}
                 onDelete={() => {
@@ -1418,12 +1426,14 @@ function DownloadingTaskItem({
 function CompletedTaskItem({
   task,
   compact = false,
+  isExporting = false,
   onPlay,
   onExport,
   onDelete,
 }: {
   task: DownloadTaskRecord;
   compact?: boolean;
+  isExporting?: boolean;
   onPlay: () => void;
   onExport: () => void;
   onDelete: () => void;
@@ -1481,10 +1491,15 @@ function CompletedTaskItem({
 
         <button
           onClick={onExport}
-          className="p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] active:scale-90 text-gray-300 hover:text-white transition-all duration-150 cursor-pointer border border-white/[0.06]"
-          title="导出保存为本地相册/文件"
+          disabled={isExporting}
+          className="p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] active:scale-90 text-gray-300 hover:text-white transition-all duration-150 cursor-pointer border border-white/[0.06] disabled:opacity-50 disabled:cursor-wait"
+          title={isExporting ? "正在准备导出视频..." : "导出保存为本地相册/文件"}
         >
-          <ArrowDownToLine className="w-4 h-4" />
+          {isExporting ? (
+            <Loader2 className="w-4 h-4 text-emerald-400 animate-spin" />
+          ) : (
+            <ArrowDownToLine className="w-4 h-4" />
+          )}
         </button>
 
         <button

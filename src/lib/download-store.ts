@@ -93,6 +93,7 @@ export interface CompletedVideoRecord {
   savedAt: number;
   isChunked?: boolean;
   chunkCount?: number;
+  chunkSizes?: number[];
 }
 
 export interface StorageQuotaInfo {
@@ -465,6 +466,7 @@ export type SaveCompletedVideoInput =
       size: number;
       isChunked: boolean;
       chunkCount: number;
+      chunkSizes?: number[];
       blob?: Blob;
     };
 
@@ -504,6 +506,7 @@ export async function saveCompletedVideo(
           savedAt: Date.now(),
           isChunked: blobOrMeta.isChunked,
           chunkCount: blobOrMeta.chunkCount,
+          chunkSizes: blobOrMeta.chunkSizes,
           blob: !blobOrMeta.isChunked && blobOrMeta.blob ? blobOrMeta.blob : undefined,
         };
       }
@@ -515,8 +518,12 @@ export async function saveCompletedVideo(
   });
 }
 
-export async function getCompletedVideo(taskId: string): Promise<CompletedVideoRecord | null> {
-  const meta = await safeIdbOperation(async (db) => {
+/**
+ * Retrieve ONLY the metadata record of a completed video from IndexedDB (instant, zero memory allocation).
+ * Use this for checking stream URLs, task info, and exports without loading gigabytes of binary chunks into RAM.
+ */
+export async function getCompletedVideoMeta(taskId: string): Promise<CompletedVideoRecord | null> {
+  return safeIdbOperation(async (db) => {
     return new Promise<CompletedVideoRecord | null>((resolve, reject) => {
       const tx = db.transaction("completed_videos", "readonly");
       const store = tx.objectStore("completed_videos");
@@ -525,6 +532,10 @@ export async function getCompletedVideo(taskId: string): Promise<CompletedVideoR
       req.onerror = () => reject(req.error);
     });
   });
+}
+
+export async function getCompletedVideo(taskId: string): Promise<CompletedVideoRecord | null> {
+  const meta = await getCompletedVideoMeta(taskId);
 
   if (!meta) return null;
 

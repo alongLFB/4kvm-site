@@ -27,7 +27,7 @@ interface OfflinePlayerModalProps {
   onExport?: () => void;
 }
 
-export function OfflinePlayerModal({
+function OfflinePlayerModalInner({
   isOpen,
   onClose,
   taskId,
@@ -130,31 +130,19 @@ export function OfflinePlayerModal({
     };
   }, [isOpen]);
 
-  // 监听浏览器/手机手势返回 (popstate) 与 ESC 键
+  // 监听 ESC 键关闭
   useEffect(() => {
     if (!isOpen) return;
 
-    window.history.pushState({ modal: "offline-player" }, "");
-
-    const handlePopState = () => {
-      onClose();
-    };
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
+      if (e.key === "Escape") {
         onClose();
       }
     };
 
-    window.addEventListener("popstate", handlePopState);
     window.addEventListener("keydown", handleKeyDown);
-
     return () => {
-      window.removeEventListener("popstate", handlePopState);
       window.removeEventListener("keydown", handleKeyDown);
-      if (window.history.state?.modal === "offline-player") {
-        window.history.back();
-      }
     };
   }, [isOpen, onClose]);
 
@@ -171,40 +159,41 @@ export function OfflinePlayerModal({
     if (watchdogTimerRef.current) clearTimeout(watchdogTimerRef.current);
     if (secondaryTimerRef.current) clearTimeout(secondaryTimerRef.current);
 
-    const art = new Artplayer({
-      container: containerRef.current,
-      url: videoUrl,
-      volume: 0.85,
-      autoplay: true,
-      pip: true,
-      autoSize: false,
-      autoMini: false,
-      screenshot: true,
-      setting: true,
-      loop: false,
-      flip: true,
-      playbackRate: true,
-      aspectRatio: true,
-      hotkey: true,
-      fullscreen: true,
-      fullscreenWeb: true,
-      autoOrientation: true,
-      playsInline: true,
-      lock: true,
-      fastForward: true,
-      airplay: false,
-      mutex: true,
-      theme: "#10b981", // 离线下载专属翠绿主题色
-      lang: "zh-cn",
-      moreVideoAttr: {
-        crossOrigin: "anonymous",
-        preload: "auto",
+    let art: Artplayer;
+    try {
+      art = new Artplayer({
+        container: containerRef.current,
+        url: videoUrl,
+        volume: 0.85,
+        autoplay: true,
+        pip: true,
+        autoSize: false,
+        autoMini: false,
+        screenshot: true,
+        setting: true,
+        loop: false,
+        flip: true,
+        playbackRate: true,
+        aspectRatio: true,
+        hotkey: true,
+        fullscreen: true,
+        fullscreenWeb: true,
+        autoOrientation: false,
         playsInline: true,
-        "webkit-playsinline": "true",
-        "x5-video-player-type": "h5",
-        "x5-video-player-fullscreen": "true",
-        "x5-playsinline": "true",
-      } as any,
+        lock: true,
+        fastForward: true,
+        airplay: false,
+        mutex: true,
+        theme: "#10b981", // 离线下载专属翠绿主题色
+        lang: "zh-cn",
+        moreVideoAttr: {
+          preload: "auto",
+          playsInline: true,
+          "webkit-playsinline": "true",
+          "x5-video-player-type": "h5",
+          "x5-video-player-fullscreen": "true",
+          "x5-playsinline": "true",
+        } as any,
       customType: {
         m3u8: function (video: HTMLMediaElement, url: string, artInstance: Artplayer) {
           if (Hls.isSupported()) {
@@ -255,6 +244,14 @@ export function OfflinePlayerModal({
         },
       ],
     });
+    } catch (initErr: any) {
+      console.error("[OfflinePlayer] 播放器初始化异常:", initErr);
+      setPlaybackError({
+        message: "离线播放器初始化受限",
+        detail: "您的浏览器未能初始化图形播放器组件，建议点击下方【导出视频】保存到系统相册或本地文件中观看。",
+      });
+      return;
+    }
 
     artRef.current = art;
     const vid = art.video;
@@ -576,5 +573,69 @@ export function OfflinePlayerModal({
         </div>
       </div>
     </div>
+  );
+}
+
+class OfflinePlayerErrorBoundary extends React.Component<
+  { children: React.ReactNode; onClose: () => void; onExport?: () => void },
+  { hasError: boolean; errorText: string }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, errorText: "" };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, errorText: error?.message || "播放组件内部渲染异常" };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("[OfflinePlayer] 异常拦截，避免 PWA 白屏:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 z-[100000] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4">
+          <div className="bg-[#0a0d16] border border-white/10 rounded-2xl max-w-md w-full p-6 text-center text-gray-200 shadow-2xl">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-3">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h4 className="text-base font-bold text-white mb-2">离线播放器载入遇到异常</h4>
+            <p className="text-xs text-gray-400 leading-relaxed mb-6">
+              底层视频图形引擎异常，应用已自动保护并阻止白屏崩溃。建议点击下方导出视频到本地相册或系统相册中播放。
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              {this.props.onExport && (
+                <button
+                  type="button"
+                  onClick={this.props.onExport}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 text-dark-950 font-bold text-xs shadow-md cursor-pointer"
+                >
+                  导出视频到本地
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={this.props.onClose}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs cursor-pointer border border-white/10"
+              >
+                退出播放
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export function OfflinePlayerModal(props: OfflinePlayerModalProps) {
+  if (!props.isOpen) return null;
+  return (
+    <OfflinePlayerErrorBoundary onClose={props.onClose} onExport={props.onExport}>
+      <OfflinePlayerModalInner {...props} />
+    </OfflinePlayerErrorBoundary>
   );
 }

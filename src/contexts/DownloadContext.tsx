@@ -60,6 +60,8 @@ interface DownloadContextType {
   resumeAll: () => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
   exportVideo: (taskId: string) => Promise<void>;
+  isExporting: boolean;
+  exportingTaskId: string | null;
   playOfflineVideo: (taskId: string) => Promise<void>;
   currentOfflineVideo: OfflinePlaybackState | null;
   closeOfflinePlayer: () => void;
@@ -213,8 +215,21 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     [refreshStorageQuota]
   );
 
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportingTaskId, setExportingTaskId] = useState<string | null>(null);
+
   const exportVideo = useCallback(async (taskId: string) => {
-    await downloadManager.exportVideo(taskId);
+    setIsExporting(true);
+    setExportingTaskId(taskId);
+    try {
+      await downloadManager.exportVideo(taskId);
+    } catch (err: any) {
+      console.error("[DownloadContext] 导出视频失败:", err);
+      alert(err?.message || "导出视频异常，请稍后重试");
+    } finally {
+      setIsExporting(false);
+      setExportingTaskId(null);
+    }
   }, []);
 
   const playOfflineVideo = useCallback(
@@ -222,13 +237,18 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       pauseActivePagePlayers();
       const task = tasks.find((t) => t.id === taskId);
       if (!task) return;
-      const blobUrl = await downloadManager.getOfflinePlaybackUrl(taskId);
-      setCurrentOfflineVideo({
-        taskId,
-        vodName: task.vodName,
-        episodeName: task.episodeName,
-        blobUrl,
-      });
+      try {
+        const blobUrl = await downloadManager.getOfflinePlaybackUrl(taskId);
+        setCurrentOfflineVideo({
+          taskId,
+          vodName: task.vodName,
+          episodeName: task.episodeName,
+          blobUrl,
+        });
+      } catch (err: any) {
+        console.error("[DownloadContext] 离线播放失败:", err);
+        alert(err?.message || "离线播放失败，未找到该视频本地缓存");
+      }
     },
     [pauseActivePagePlayers, tasks]
   );
@@ -260,6 +280,8 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     resumeAll,
     deleteTask,
     exportVideo,
+    isExporting,
+    exportingTaskId,
     playOfflineVideo,
     currentOfflineVideo,
     closeOfflinePlayer,
