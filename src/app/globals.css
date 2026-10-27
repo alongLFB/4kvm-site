@@ -231,7 +231,7 @@ body.landscape-locked .ambient-backlight {
 .mobile-landscape-active:not(.in-real-landscape) .art-bottom {
   padding-left: max(32px, env(safe-area-inset-top, 32px)) !important;
   padding-right: max(28px, env(safe-area-inset-bottom, 28px)) !important;
-  padding-bottom: max(14px, env(safe-area-inset-left, 14px)) !important;
+  padding-bottom: 6px !important;
 }
 
 /* Real Landscape (iPhone physically turned horizontal by user):
@@ -243,17 +243,47 @@ body.landscape-locked .ambient-backlight {
 .mobile-landscape-active.in-real-landscape .art-bottom {
   padding-left: max(24px, env(safe-area-inset-left, 24px)) !important;
   padding-right: max(24px, env(safe-area-inset-right, 24px)) !important;
-  padding-bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
+  padding-bottom: max(8px, env(safe-area-inset-bottom, 8px)) !important;
+}
+
+/* Tighten Progress Bar spacing - no more floating gap above controls */
+.mobile-landscape-active .art-bottom .art-progress {
+  padding-top: 6px !important;
+  padding-bottom: 2px !important;
+  margin: 0 !important;
+  width: 100% !important;
+}
+
+.mobile-landscape-active .art-bottom .art-progress .art-control-progress {
+  height: 6px !important;
+}
+
+/* Align Controls horizontally with Progress Bar and normalize heights */
+.mobile-landscape-active .art-video-player .art-controls {
+  height: 38px !important;
+  margin: 0 !important;
+  width: 100% !important;
+}
+
+.mobile-landscape-active .art-video-player.art-mobile .art-controls-left,
+.mobile-landscape-active .art-video-player.art-mobile .art-controls-right {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+.mobile-landscape-active .art-controls .art-control {
+  min-width: 36px !important;
+  height: 38px !important;
 }
 
 /* Lock button position & safe-area adaptation in landscape mode */
 .mobile-landscape-active:not(.in-real-landscape) .art-layer-lock {
-  left: max(56px, calc(env(safe-area-inset-top, 50px) + 16px)) !important;
+  left: max(44px, calc(env(safe-area-inset-top, 40px) + 12px)) !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
   z-index: 60 !important;
-  width: 40px !important;
-  height: 40px !important;
+  width: 38px !important;
+  height: 38px !important;
   background: rgba(0, 0, 0, 0.65) !important;
   border: 1px solid rgba(255, 255, 255, 0.25) !important;
   backdrop-filter: blur(8px) !important;
@@ -262,17 +292,50 @@ body.landscape-locked .ambient-backlight {
 }
 
 .mobile-landscape-active.in-real-landscape .art-layer-lock {
-  left: max(24px, calc(env(safe-area-inset-left, 24px) + 16px)) !important;
+  left: max(24px, calc(env(safe-area-inset-left, 24px) + 12px)) !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
   z-index: 60 !important;
-  width: 40px !important;
-  height: 40px !important;
+  width: 38px !important;
+  height: 38px !important;
   background: rgba(0, 0, 0, 0.65) !important;
   border: 1px solid rgba(255, 255, 255, 0.25) !important;
   backdrop-filter: blur(8px) !important;
   -webkit-backdrop-filter: blur(8px) !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Safe-area insets for Notice toast, Settings panel, and Auto-playback prompts */
+.mobile-landscape-active:not(.in-real-landscape) .art-notice {
+  padding-left: max(32px, calc(env(safe-area-inset-top, 32px) + 12px)) !important;
+  padding-top: max(16px, env(safe-area-inset-right, 16px)) !important;
+}
+
+.mobile-landscape-active.in-real-landscape .art-notice {
+  padding-left: max(24px, calc(env(safe-area-inset-left, 24px) + 12px)) !important;
+  padding-top: max(16px, env(safe-area-inset-top, 16px)) !important;
+}
+
+.mobile-landscape-active:not(.in-real-landscape) .art-settings {
+  right: max(28px, calc(env(safe-area-inset-bottom, 28px) + 10px)) !important;
+  bottom: 48px !important;
+  max-height: 220px !important;
+}
+
+.mobile-landscape-active.in-real-landscape .art-settings {
+  right: max(24px, calc(env(safe-area-inset-right, 24px) + 10px)) !important;
+  bottom: 48px !important;
+  max-height: 220px !important;
+}
+
+.mobile-landscape-active:not(.in-real-landscape) .art-layer-auto-playback {
+  left: max(32px, calc(env(safe-area-inset-top, 32px) + 12px)) !important;
+  bottom: 50px !important;
+}
+
+.mobile-landscape-active.in-real-landscape .art-layer-auto-playback {
+  left: max(24px, calc(env(safe-area-inset-left, 24px) + 12px)) !important;
+  bottom: 50px !important;
 }
 
 /* Video Player Proportions & Perfect Centering (Canvas MUST have 0 padding) */

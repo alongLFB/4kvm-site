@@ -138,11 +138,10 @@ export default function VideoPlayer({
 
       if (isPort) {
         wrapper.classList.remove("in-real-landscape");
-        if (instanceRef.current) (instanceRef.current as any).isRotate = true;
       } else {
         wrapper.classList.add("in-real-landscape");
-        if (instanceRef.current) (instanceRef.current as any).isRotate = false;
       }
+      if (instanceRef.current) (instanceRef.current as any).isRotate = false;
     }
 
     const triggerResize = () => {
@@ -213,6 +212,10 @@ export default function VideoPlayer({
   };
 
   // 统一全屏触发逻辑
+  useEffect(() => {
+    updateFullscreenIcon(isLandscape);
+  }, [isLandscape]);
+
   const handleFullscreenToggle = () => {
     if (isMobileDevice()) {
       if (isLandscapeRef.current) {
@@ -414,11 +417,10 @@ export default function VideoPlayer({
 
       if (isPort) {
         wrapper.classList.remove("in-real-landscape");
-        if (instanceRef.current) (instanceRef.current as any).isRotate = true;
       } else {
         wrapper.classList.add("in-real-landscape");
-        if (instanceRef.current) (instanceRef.current as any).isRotate = false;
       }
+      if (instanceRef.current) (instanceRef.current as any).isRotate = false;
 
       const triggerResize = () => {
         if (instanceRef.current) {
@@ -591,7 +593,7 @@ export default function VideoPlayer({
         {
           name: "cleanModeBadge",
           position: "left",
-          index: 6,
+          index: 35,
           tooltip: "纯净去广告模式：已自动过滤切片插播广告，纯享高清正片",
           html: `<span class="flex items-center gap-1.5 text-[11px] font-bold text-cyan-400 bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 rounded-full select-none cursor-default"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>纯净正片</span>`,
         },
@@ -622,12 +624,116 @@ export default function VideoPlayer({
           },
           mounted: ($control: HTMLElement) => {
             fsControlRef.current = $control;
+            updateFullscreenIcon(isLandscapeRef.current);
           },
         },
       ],
     });
 
     instanceRef.current = art;
+
+    // 移动端/横屏进度条精准交互处理，彻底解决旋转导致的触控坐标偏移与跳度 Bug
+    const $progress = art.template?.$progress;
+    let cleanupProgressListeners: (() => void) | null = null;
+
+    if ($progress) {
+      let isSeeking = false;
+
+      const calcSeekPercentage = (e: TouchEvent | MouseEvent) => {
+        const rect = $progress.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+
+        const isPort = window.innerHeight > window.innerWidth;
+        const isRotated = isLandscapeRef.current && isPort;
+
+        let percentage = 0;
+        if (isRotated) {
+          // 手机竖屏模拟横屏（CSS旋转90度）：进度轴映射在屏幕垂直Y轴上（顶部 rect.top -> 底部 rect.bottom）
+          const clientY = "touches" in e && e.touches.length > 0 ? e.touches[0].clientY : (e as MouseEvent).clientY;
+          percentage = (clientY - rect.top) / rect.height;
+        } else {
+          // 普通水平模式或真横屏：进度轴在屏幕水平X轴上（左侧 rect.left -> 右侧 rect.right）
+          const clientX = "touches" in e && e.touches.length > 0 ? e.touches[0].clientX : (e as MouseEvent).clientX;
+          percentage = (clientX - rect.left) / rect.width;
+        }
+
+        return Math.max(0, Math.min(1, percentage));
+      };
+
+      const handleSeek = (e: TouchEvent | MouseEvent) => {
+        const percentage = calcSeekPercentage(e);
+        if (percentage === null) return;
+
+        const duration = art.duration || 0;
+        const targetTime = percentage * duration;
+
+        art.seek = targetTime;
+        art.emit("setBar", "played", percentage);
+
+        const $tip = $progress.querySelector(".art-progress-tip") as HTMLElement | null;
+        if ($tip) {
+          $tip.textContent = formatTime(targetTime);
+          $tip.style.left = `${percentage * 100}%`;
+        }
+
+        art.template?.$player?.classList.add("art-progress-hover");
+
+        showHudMessage({
+          type: "seek",
+          targetTime,
+          duration,
+          delta: 0,
+        });
+      };
+
+      const onTouchStart = (e: TouchEvent) => {
+        if ((art as any).isLock) return;
+        if (e.touches.length !== 1) return;
+        isSeeking = true;
+        handleSeek(e);
+        e.stopPropagation();
+      };
+
+      const onTouchMove = (e: TouchEvent) => {
+        if (!isSeeking || (art as any).isLock) return;
+        if (e.touches.length !== 1) return;
+        handleSeek(e);
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+      };
+
+      const onTouchEnd = (e: TouchEvent) => {
+        if (isSeeking) {
+          isSeeking = false;
+          art.template?.$player?.classList.remove("art-progress-hover");
+          e.stopPropagation();
+        }
+      };
+
+      const onClick = (e: MouseEvent) => {
+        if ((art as any).isLock) return;
+        const isPort = window.innerHeight > window.innerWidth;
+        const isRotated = isLandscapeRef.current && isPort;
+        if (isRotated) {
+          handleSeek(e);
+          e.stopPropagation();
+        }
+      };
+
+      $progress.addEventListener("touchstart", onTouchStart, { passive: false, capture: true });
+      $progress.addEventListener("touchmove", onTouchMove, { passive: false, capture: true });
+      $progress.addEventListener("touchend", onTouchEnd, { passive: true, capture: true });
+      $progress.addEventListener("touchcancel", onTouchEnd, { passive: true, capture: true });
+      $progress.addEventListener("click", onClick, { capture: true });
+
+      cleanupProgressListeners = () => {
+        $progress.removeEventListener("touchstart", onTouchStart, { capture: true } as any);
+        $progress.removeEventListener("touchmove", onTouchMove, { capture: true } as any);
+        $progress.removeEventListener("touchend", onTouchEnd, { capture: true } as any);
+        $progress.removeEventListener("touchcancel", onTouchEnd, { capture: true } as any);
+        $progress.removeEventListener("click", onClick, { capture: true } as any);
+      };
+    }
 
     if (getInstance) {
       getInstance(art);
@@ -658,6 +764,9 @@ export default function VideoPlayer({
     });
 
     return () => {
+      if (cleanupProgressListeners) {
+        cleanupProgressListeners();
+      }
       try {
         if (art.video) {
           art.video.pause();
