@@ -145,10 +145,19 @@ export default function VideoPlayer({
       }
     }
 
-    if (instanceRef.current) {
-      instanceRef.current.emit("resize");
-      (instanceRef.current as any).resize?.();
-    }
+    const triggerResize = () => {
+      if (instanceRef.current) {
+        instanceRef.current.emit("resize");
+        (instanceRef.current as any).resize?.();
+      }
+    };
+
+    triggerResize();
+    requestAnimationFrame(() => {
+      triggerResize();
+      setTimeout(triggerResize, 80);
+      setTimeout(triggerResize, 250);
+    });
 
     updateFullscreenIcon(true);
 
@@ -172,11 +181,20 @@ export default function VideoPlayer({
       wrapper.classList.remove("mobile-landscape-active", "in-real-landscape");
     }
 
-    if (instanceRef.current) {
-      (instanceRef.current as any).isRotate = false;
-      instanceRef.current.emit("resize");
-      (instanceRef.current as any).resize?.();
-    }
+    const triggerResize = () => {
+      if (instanceRef.current) {
+        (instanceRef.current as any).isRotate = false;
+        instanceRef.current.emit("resize");
+        (instanceRef.current as any).resize?.();
+      }
+    };
+
+    triggerResize();
+    requestAnimationFrame(() => {
+      triggerResize();
+      setTimeout(triggerResize, 80);
+      setTimeout(triggerResize, 250);
+    });
 
     updateFullscreenIcon(false);
 
@@ -402,10 +420,18 @@ export default function VideoPlayer({
         if (instanceRef.current) (instanceRef.current as any).isRotate = false;
       }
 
-      if (instanceRef.current) {
-        instanceRef.current.emit("resize");
-        (instanceRef.current as any).resize?.();
-      }
+      const triggerResize = () => {
+        if (instanceRef.current) {
+          instanceRef.current.emit("resize");
+          (instanceRef.current as any).resize?.();
+        }
+      };
+
+      triggerResize();
+      requestAnimationFrame(() => {
+        triggerResize();
+        setTimeout(triggerResize, 100);
+      });
     };
 
     // 监听历史记录后退（如 iOS 屏幕边缘左滑返回）

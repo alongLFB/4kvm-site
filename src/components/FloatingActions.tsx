@@ -54,7 +54,7 @@ export function FloatingActions() {
       {/* 1. 右下角悬浮操作按钮组 */}
       <div
         data-floating-actions="true"
-        className={`fixed bottom-20 right-4 md:bottom-8 md:right-8 z-40 flex flex-col items-center gap-3 transition-all duration-300 ${
+        className={`fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,1rem))] md:bottom-8 md:right-8 z-40 flex flex-col items-center gap-3 transition-all duration-300 ${
           visible
             ? "opacity-100 translate-y-0 pointer-events-auto"
             : "opacity-0 translate-y-8 pointer-events-none"

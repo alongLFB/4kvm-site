@@ -9,8 +9,8 @@ export const viewport: Viewport = {
   themeColor: "#050811",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 5,
-  userScalable: true,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
 };
 
@@ -60,7 +60,7 @@ export default function RootLayout({
         <DownloadProvider>
           <PwaRegister />
           <Navbar />
-          <main className="flex-1 max-w-[1600px] w-full mx-auto px-3.5 sm:px-6 lg:px-10 py-4 sm:py-7 pb-10 sm:pb-16">
+          <main className="flex-1 max-w-[1600px] w-full mx-auto px-3.5 sm:px-6 lg:px-10 py-4 sm:py-7 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-16 pl-[max(0.875rem,env(safe-area-inset-left,0.875rem))] pr-[max(0.875rem,env(safe-area-inset-right,0.875rem))]">
             {children}
           </main>
           <FloatingActions />

@@ -76,7 +76,7 @@ function NavbarContent() {
     <>
       {/* Top Main Navbar with iOS PWA Safe Area support */}
       <nav className="sticky top-0 z-50 bg-[#06070a]/80 backdrop-blur-2xl border-b border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.5)] pt-[env(safe-area-inset-top,0px)] transition-all">
-        <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 pl-[max(1rem,env(safe-area-inset-left,1rem))] pr-[max(1rem,env(safe-area-inset-right,1rem))]">
           <div className="flex items-center justify-between h-16 gap-3">
             {/* 1. Left: Brand Logo */}
             <div className="flex items-center shrink-0">
@@ -395,7 +395,7 @@ function NavbarContent() {
       {/* Mobile Sticky Bottom Tab Bar (Streamlined to 4 core tabs) */}
       <div
         data-mobile-bottom-bar="true"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-dark-950/95 backdrop-blur-xl border-t border-white/10 px-3 py-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex items-center justify-around shadow-2xl"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-dark-950/95 backdrop-blur-xl border-t border-white/10 px-3 py-1.5 pl-[max(0.75rem,env(safe-area-inset-left,0.75rem))] pr-[max(0.75rem,env(safe-area-inset-right,0.75rem))] pb-[max(0.75rem,env(safe-area-inset-bottom,0.75rem))] flex items-center justify-around shadow-2xl"
       >
         <Link
           href="/"
@@ -440,7 +440,13 @@ function NavbarContent() {
 
 export function Navbar() {
   return (
-    <Suspense fallback={<nav className="sticky top-0 z-50 bg-dark-950/90 backdrop-blur-md border-b border-white/10 h-16 pt-[env(safe-area-inset-top,0px)]" />}>
+    <Suspense
+      fallback={
+        <nav className="sticky top-0 z-50 bg-[#06070a]/80 backdrop-blur-2xl border-b border-white/[0.08] pt-[env(safe-area-inset-top,0px)]">
+          <div className="h-16" />
+        </nav>
+      }
+    >
       <NavbarContent />
     </Suspense>
   );

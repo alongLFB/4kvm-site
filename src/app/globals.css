@@ -8,6 +8,13 @@
   --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+html,
+body {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
@@ -214,7 +221,7 @@ body.landscape-locked .ambient-backlight {
   background-color: #000 !important;
 }
 
-/* Safe Area Insets for iOS Notch / Dynamic Island & Home Indicator */
+/* Safe Area Insets for iOS Notch / Dynamic Island & Home Indicator (Controls & Overlays only) */
 /* Rotated Landscape (iPhone in portrait, rotated 90deg clockwise):
    Physical top (Notch/Island) -> Video Left
    Physical bottom (Home indicator) -> Video Right
@@ -222,14 +229,9 @@ body.landscape-locked .ambient-backlight {
    Physical right -> Video Top
 */
 .mobile-landscape-active:not(.in-real-landscape) .art-bottom {
-  padding-left: max(28px, env(safe-area-inset-top, 28px)) !important;
+  padding-left: max(32px, env(safe-area-inset-top, 32px)) !important;
   padding-right: max(28px, env(safe-area-inset-bottom, 28px)) !important;
   padding-bottom: max(14px, env(safe-area-inset-left, 14px)) !important;
-}
-
-.mobile-landscape-active:not(.in-real-landscape) .art-video {
-  padding-left: max(20px, env(safe-area-inset-top, 20px)) !important;
-  padding-right: max(20px, env(safe-area-inset-bottom, 20px)) !important;
 }
 
 /* Real Landscape (iPhone physically turned horizontal by user):
@@ -242,11 +244,6 @@ body.landscape-locked .ambient-backlight {
   padding-left: max(24px, env(safe-area-inset-left, 24px)) !important;
   padding-right: max(24px, env(safe-area-inset-right, 24px)) !important;
   padding-bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
-}
-
-.mobile-landscape-active.in-real-landscape .art-video {
-  padding-left: max(16px, env(safe-area-inset-left, 16px)) !important;
-  padding-right: max(16px, env(safe-area-inset-right, 16px)) !important;
 }
 
 /* Lock button position & safe-area adaptation in landscape mode */
@@ -278,11 +275,13 @@ body.landscape-locked .ambient-backlight {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
 }
 
-/* Video Player Proportions & Perfect Centering */
+/* Video Player Proportions & Perfect Centering (Canvas MUST have 0 padding) */
 .art-video-player {
   width: 100% !important;
   height: 100% !important;
   background-color: #000 !important;
+  position: relative !important;
+  overflow: hidden !important;
 }
 
 .art-video-player .art-video {
@@ -291,9 +290,19 @@ body.landscape-locked .ambient-backlight {
   justify-content: center !important;
   width: 100% !important;
   height: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  position: absolute !important;
+  inset: 0 !important;
+  background-color: #000 !important;
+  overflow: hidden !important;
 }
 
 .art-video-player video {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
   object-fit: contain !important;
   object-position: center center !important;
   margin: auto !important;

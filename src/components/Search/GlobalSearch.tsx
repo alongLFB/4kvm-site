@@ -513,7 +513,7 @@ export function MobileSearchModal({
       </div>
 
       {/* 内容区域 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-5">
+      <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-[max(1.5rem,env(safe-area-inset-bottom,1.5rem))] pl-[max(1rem,env(safe-area-inset-left,1rem))] pr-[max(1rem,env(safe-area-inset-right,1rem))]">
         {!query.trim() ? (
           <>
             {history.length > 0 && (
