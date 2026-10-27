@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
-import { getDatabase } from "./db";
+import { getDatabase, cleanField } from "./db";
 import { pinyin } from "pinyin-pro";
 import { isItemGated } from "@/config/gated-sections";
 
@@ -52,7 +52,7 @@ export function getSearchIndex(): SearchIndexItem[] {
     ).all() as any[];
 
     searchCache = rows.map((r) => {
-      const name = r.name || "";
+      const name = cleanField(r.name);
       const nameLower = name.toLowerCase();
       const fullPinyin = pinyin(name, {
         toneType: "none",
@@ -67,13 +67,13 @@ export function getSearchIndex(): SearchIndexItem[] {
 
       return {
         id: r.id,
-        name: r.name,
+        name,
         type_id: Number(r.type_id || 0),
-        type_name: r.type_name,
-        year: r.year,
+        type_name: cleanField(r.type_name),
+        year: cleanField(r.year),
         pic: r.pic,
-        actor: r.actor || "",
-        remarks: r.remarks || "",
+        actor: cleanField(r.actor),
+        remarks: cleanField(r.remarks),
         hits: Number(r.hits || 0),
         nameLower,
         pinyin: fullPinyin,

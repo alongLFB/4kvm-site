@@ -75,6 +75,10 @@ jobs:
               docker compose run --rm -T -e IKUN_API_BASE="$IKUN_URL" 4kvm-app node scripts/ingest-ikun-full.mjs --hours "${HOURS}"
             fi
 
+            # 4. 自动净化历史及增量同步可能存在的 HTML 实体
+            echo "==> Running entity cleaning and verification..."
+            docker compose exec -T 4kvm-app node scripts/repair-entities-and-metadata.mjs 2>/dev/null || true
+
             echo "==> Upstream VODs Synced Successfully into 4kvm.db!"
 
       - name: Fetch UPDATE_LOG.md from Remote Server

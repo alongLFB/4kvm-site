@@ -141,8 +141,15 @@ jobs:
                 echo "Waiting for app to become healthy ($i/15)..."
                 sleep 2
               done
+
+              # 自动净化数据库中的 HTML 实体 (如 &amp; &quot; &#39;)
+              echo "==> Running automated entity repair on production database..."
+              docker compose exec -T 4kvm-app node scripts/repair-entities-and-metadata.mjs 2>/dev/null || true
+
               echo "==> 4kvm-site deployment completed successfully!"
             else
               echo "==> ⚡ 本次仅改动了 scripts 脚本、文档或辅助配置，无需重建镜像！"
               echo "==> 远端代码已秒级同步至最新版本 ($NEW_HEAD)，旧容器保持零中断运行！"
+              # 同样执行一次实体修复以保证数据纯净
+              docker compose exec -T 4kvm-app node scripts/repair-entities-and-metadata.mjs 2>/dev/null || true
             fi

@@ -24,6 +24,29 @@ export function getDatabase(): DatabaseSync {
   return db;
 }
 
+export function cleanField(str: any): string {
+  if (!str) return "";
+  return String(str)
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#(\d+);/g, (_, code) => {
+      const num = parseInt(code, 10);
+      return !isNaN(num) ? String.fromCharCode(num) : _;
+    })
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => {
+      const num = parseInt(code, 16);
+      return !isNaN(num) ? String.fromCharCode(num) : _;
+    })
+    .replace(/&amp;/g, "&") // 兜底双重实体转义 (如 &amp;amp;)
+    .trim();
+}
+
 export function rowToVodItem(row: any): VodItem {
   if (!row) return null as any;
   let tags: string[] = [];
@@ -41,36 +64,25 @@ export function rowToVodItem(row: any): VodItem {
     sources = [];
   }
 
-  // Strip any raw HTML tags (e.g. <p>, </p>, <br>) and unescape entities from upstream data
-  const rawContent = String(row.content || "");
-  const cleanContent = rawContent
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&#39;/g, "'")
-    .trim();
-
   return {
     id: String(row.id || ""),
-    name: String(row.name || ""),
+    name: cleanField(row.name),
     type_id: Number(row.type_id || 0),
-    type_name: String(row.type_name || "") as any,
-    sub_type: String(row.sub_type || ""),
-    pic: String(row.pic || ""),
-    banner: String(row.banner || ""),
-    lang: String(row.lang || ""),
-    area: String(row.area || ""),
-    year: String(row.year || ""),
-    remarks: String(row.remarks || ""),
-    actor: String(row.actor || ""),
-    director: String(row.director || ""),
+    type_name: cleanField(row.type_name) as any,
+    sub_type: cleanField(row.sub_type),
+    pic: String(row.pic || "").trim(),
+    banner: String(row.banner || "").trim(),
+    lang: cleanField(row.lang),
+    area: cleanField(row.area),
+    year: cleanField(row.year),
+    remarks: cleanField(row.remarks),
+    actor: cleanField(row.actor),
+    director: cleanField(row.director),
     rating: Number(row.rating || 0),
     hits: Number(row.hits || 0),
-    tags,
-    content: cleanContent,
+    tags: Array.isArray(tags) ? tags.map(cleanField).filter(Boolean) : [],
+    content: cleanField(row.content),
     sources,
   };
 }
+

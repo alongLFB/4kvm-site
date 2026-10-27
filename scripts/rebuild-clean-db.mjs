@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import fs from "node:fs";
+import { cleanText } from "./ingest-ikun-full.mjs";
 
 try {
   process.loadEnvFile();
@@ -193,7 +194,7 @@ async function main() {
 
       db.exec("BEGIN TRANSACTION;");
       for (const item of data.list) {
-        const rawName = String(item.vod_name || "").trim();
+        const rawName = cleanText(item.vod_name);
         if (!rawName) continue;
 
         const episodes = parseEpisodes(item.vod_play_url || "");
@@ -201,18 +202,18 @@ async function main() {
 
         const id = `${src.prefix}_${item.vod_id}`;
         const typeName = mapTypeName(item.type_name || "", item.vod_sub || "");
-        const subType = String(item.type_name || "热门");
-        const pic = String(item.vod_pic || "");
+        const subType = cleanText(item.type_name || "热门");
+        const pic = String(item.vod_pic || "").trim();
         const banner = pic;
-        const lang = String(item.vod_lang || "国语");
-        const area = String(item.vod_area || "华语");
-        const year = String(item.vod_year || "2026");
-        const remarks = String(item.vod_remarks || "1080P原画");
-        const actor = String(item.vod_actor || "优秀演员阵容");
-        const director = String(item.vod_director || "知名导演");
+        const lang = cleanText(item.vod_lang) || "国语";
+        const area = cleanText(item.vod_area) || "华语";
+        const year = String(item.vod_year || "2026").match(/\d{4}/)?.[0] || "2026";
+        const remarks = cleanText(item.vod_remarks) || "1080P原画";
+        const actor = cleanText(item.vod_actor) || "优秀演员阵容";
+        const director = cleanText(item.vod_director) || "知名导演";
         const rating = parseFloat(item.vod_score || "9.0") || 9.0;
         const hits = parseInt(item.vod_hits || "1200", 10) || 1200;
-        const content = String(item.vod_content || "剧情精彩，敬请观看。");
+        const content = cleanText(item.vod_content) || "剧情精彩，敬请观看。";
         const tags = [typeName, subType, year, "1080P超清", area].filter(Boolean);
 
         const sources = [
