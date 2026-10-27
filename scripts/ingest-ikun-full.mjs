@@ -115,17 +115,73 @@ function parseEpisodes(playUrlStr) {
   return episodes;
 }
 
-function cleanText(str) {
+export function decodeHtmlEntities(str) {
   if (!str) return "";
   return String(str)
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&quot;/g, '"')
     .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/&#39;/g, "'")
-    .trim();
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#(\d+);/g, (_, code) => {
+      const num = parseInt(code, 10);
+      return !isNaN(num) ? String.fromCharCode(num) : _;
+    })
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => {
+      const num = parseInt(code, 16);
+      return !isNaN(num) ? String.fromCharCode(num) : _;
+    })
+    .replace(/&amp;/g, "&"); // 兜底多次实体转义
+}
+
+export function cleanText(str) {
+  if (!str) return "";
+  return decodeHtmlEntities(String(str).replace(/<[^>]+>/g, "")).trim();
+}
+
+export function isContentTruncated(content) {
+  if (!content) return true;
+  const trimmed = content.trim();
+  if (trimmed.length < 130) {
+    if (trimmed.endsWith("...") || trimmed.endsWith("…") || trimmed.endsWith("..") || trimmed.endsWith("等")) {
+      return true;
+    }
+  }
+  if (trimmed.endsWith("...") || trimmed.endsWith("…")) {
+    return true;
+  }
+  return false;
+}
+
+export async function fetchDoubanIntro(doubanId) {
+  if (!doubanId || isNaN(Number(doubanId)) || Number(doubanId) <= 0) return null;
+  const idStr = String(doubanId).trim();
+  const urls = [
+    `https://m.douban.com/rexxar/api/v2/movie/${idStr}`,
+    `https://m.douban.com/rexxar/api/v2/tv/${idStr}`,
+  ];
+  const headers = {
+    Referer: `https://m.douban.com/movie/subject/${idStr}`,
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1",
+  };
+
+  for (const url of urls) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(url, { headers, signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        const intro = data.intro || data.summary || "";
+        if (intro && intro.trim().length > 10) {
+          return cleanText(intro);
+        }
+      }
+    } catch {}
+  }
+  return null;
 }
 
 function cleanYear(yearStr) {
@@ -440,21 +496,30 @@ async function main() {
 
         const rawId = Number(item.vod_id);
         const id = `ikun_${rawId}`;
-        const name = String(item.vod_name || "").trim();
-        const subName = String(item.vod_sub || "").trim();
+        const name = cleanText(item.vod_name);
+        const subName = cleanText(item.vod_sub);
         const parentType = mapping.parent;
         const subType = mapping.sub;
         const pic = String(item.vod_pic || "").trim();
         const banner = pic;
-        const lang = String(item.vod_lang || "").trim() || "国语";
-        const area = String(item.vod_area || "").trim() || "大陆";
+        const lang = cleanText(item.vod_lang) || "国语";
+        const area = cleanText(item.vod_area) || "大陆";
         const year = cleanYear(item.vod_year);
-        const remarks = String(item.vod_remarks || "").trim();
+        const remarks = cleanText(item.vod_remarks);
         const actor = cleanText(item.vod_actor);
         const director = cleanText(item.vod_director);
         const rating = Number(item.vod_score || item.vod_douban_score || (8.5 + (rawId % 15) * 0.1).toFixed(1));
         const hits = Number(item.vod_hits || 100);
-        const content = cleanText(item.vod_content || item.vod_blurb);
+        let content = cleanText(item.vod_content || item.vod_blurb);
+
+        // 方案 B：自动化元数据增强（当剧情梗概截断残缺时，自动通过豆瓣接口补全）
+        const doubanId = Number(item.vod_douban_id || 0);
+        if (doubanId > 0 && isContentTruncated(content)) {
+          const doubanIntro = await fetchDoubanIntro(doubanId);
+          if (doubanIntro && doubanIntro.length > content.length) {
+            content = doubanIntro;
+          }
+        }
 
         const episodes = parseEpisodes(item.vod_play_url);
         if (episodes.length === 0) continue;

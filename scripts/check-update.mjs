@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import fs from "node:fs";
-import { writeUpdateLog } from "./ingest-ikun-full.mjs";
+import { writeUpdateLog, cleanText, decodeHtmlEntities, fetchDoubanIntro, isContentTruncated } from "./ingest-ikun-full.mjs";
 
 // 自动加载 .env
 try {
@@ -36,19 +36,6 @@ function parseEpisodes(playUrlStr) {
     }
   }
   return episodes;
-}
-
-function cleanText(str) {
-  if (!str) return "";
-  return String(str)
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&#39;/g, "'")
-    .trim();
 }
 
 function cleanYear(yearStr) {
@@ -210,21 +197,32 @@ async function main() {
     console.log(`⚡ 正在执行单片同步入库...`);
     const id = `ikun_${upstreamItem.vod_id}`;
     const rawId = Number(upstreamItem.vod_id);
-    const name = String(upstreamItem.vod_name || "").trim();
-    const subName = String(upstreamItem.vod_sub || "").trim();
+    const name = cleanText(upstreamItem.vod_name);
+    const subName = cleanText(upstreamItem.vod_sub);
     const parentType = upstreamItem.type_id_1 === 1 ? "电影" : upstreamItem.type_id_1 === 4 ? "动漫" : upstreamItem.type_id_1 === 3 ? "综艺" : "电视剧";
     const subType = upstreamItem.type_name || "未知分类";
     const pic = String(upstreamItem.vod_pic || "").trim();
     const banner = pic;
-    const lang = String(upstreamItem.vod_lang || "").trim() || "国语";
-    const area = String(upstreamItem.vod_area || "").trim() || "大陆";
+    const lang = cleanText(upstreamItem.vod_lang) || "国语";
+    const area = cleanText(upstreamItem.vod_area) || "大陆";
     const year = cleanYear(upstreamItem.vod_year);
-    const remarks = upstreamRemarks;
+    const remarks = cleanText(upstreamRemarks);
     const actor = cleanText(upstreamItem.vod_actor);
     const director = cleanText(upstreamItem.vod_director);
     const rating = Number(upstreamItem.vod_score || upstreamItem.vod_douban_score || 8.8);
     const hits = Number(upstreamItem.vod_hits || 100);
-    const content = cleanText(upstreamItem.vod_content || upstreamItem.vod_blurb);
+    let content = cleanText(upstreamItem.vod_content || upstreamItem.vod_blurb);
+
+    // 方案 B：自动化元数据增强（当剧情梗概截断残缺时，自动通过豆瓣接口补全）
+    const doubanId = Number(upstreamItem.vod_douban_id || 0);
+    if (doubanId > 0 && isContentTruncated(content)) {
+      console.log(`🔍 检测到剧情简介简短或残缺，正在尝试通过豆瓣 (ID: ${doubanId}) 自动获取完整剧情...`);
+      const doubanIntro = await fetchDoubanIntro(doubanId);
+      if (doubanIntro && doubanIntro.length > content.length) {
+        console.log(`✅ 成功从豆瓣获取并补充完整剧情简介 (${doubanIntro.length} 字)！`);
+        content = doubanIntro;
+      }
+    }
     const now = Date.now();
 
     const sources = JSON.stringify([
