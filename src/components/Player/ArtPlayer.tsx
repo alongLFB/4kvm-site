@@ -408,11 +408,19 @@ export default function VideoPlayer({
   useEffect(() => {
     // 监听移动端屏幕旋转动态更新
     const handleResize = () => {
+      const isMobile = isMobileDevice();
+      const isPort = window.innerHeight > window.innerWidth;
+
+      // 移动端若用户未点击全屏但物理旋转设备至横向，自动适配全屏模式
+      if (isMobile && !isPort && !isLandscapeRef.current) {
+        enterLandscape();
+        return;
+      }
+
       if (!isLandscapeRef.current) return;
       const wrapper = wrapperRef.current;
       if (!wrapper) return;
 
-      const isPort = window.innerHeight > window.innerWidth;
       setIsRealLandscape(!isPort);
 
       if (isPort) {
@@ -590,13 +598,6 @@ export default function VideoPlayer({
         },
       },
       controls: [
-        {
-          name: "cleanModeBadge",
-          position: "left",
-          index: 35,
-          tooltip: "纯净去广告模式：已自动过滤切片插播广告，纯享高清正片",
-          html: `<span class="flex items-center gap-1.5 text-[11px] font-bold text-cyan-400 bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 rounded-full select-none cursor-default"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>纯净正片</span>`,
-        },
         {
           name: "resolution",
           position: "right",
@@ -804,11 +805,11 @@ export default function VideoPlayer({
           }`}
           style={{
             paddingLeft: isRealLandscape
-              ? "max(20px, env(safe-area-inset-left, 20px))"
-              : "max(28px, env(safe-area-inset-top, 28px))",
+              ? "max(24px, calc(env(safe-area-inset-left, 24px) + 8px))"
+              : "max(32px, calc(env(safe-area-inset-top, 32px) + 8px))",
             paddingRight: isRealLandscape
-              ? "max(20px, env(safe-area-inset-right, 20px))"
-              : "max(28px, env(safe-area-inset-bottom, 28px))",
+              ? "max(24px, calc(env(safe-area-inset-right, 24px) + 8px))"
+              : "max(32px, calc(env(safe-area-inset-bottom, 28px) + 8px))",
             paddingTop: isRealLandscape
               ? "max(12px, env(safe-area-inset-top, 12px))"
               : "max(14px, env(safe-area-inset-right, 14px))",
