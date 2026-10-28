@@ -805,14 +805,14 @@ export default function VideoPlayer({
           }`}
           style={{
             paddingLeft: isRealLandscape
-              ? "max(24px, calc(env(safe-area-inset-left, 24px) + 8px))"
-              : "max(32px, calc(env(safe-area-inset-top, 32px) + 8px))",
+              ? "max(32px, calc(env(safe-area-inset-left, 32px) + 14px))"
+              : "max(48px, calc(env(safe-area-inset-top, 48px) + 12px))",
             paddingRight: isRealLandscape
-              ? "max(24px, calc(env(safe-area-inset-right, 24px) + 8px))"
-              : "max(32px, calc(env(safe-area-inset-bottom, 28px) + 8px))",
+              ? "max(32px, calc(env(safe-area-inset-right, 32px) + 14px))"
+              : "max(36px, calc(env(safe-area-inset-bottom, 34px) + 10px))",
             paddingTop: isRealLandscape
-              ? "max(12px, env(safe-area-inset-top, 12px))"
-              : "max(14px, env(safe-area-inset-right, 14px))",
+              ? "max(14px, calc(env(safe-area-inset-top, 14px) + 4px))"
+              : "max(14px, calc(env(safe-area-inset-right, 14px) + 2px))",
           }}
         >
           <button

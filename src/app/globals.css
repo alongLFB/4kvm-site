@@ -229,9 +229,9 @@ body.landscape-locked .ambient-backlight {
    Physical right -> Video Top
 */
 .mobile-landscape-active:not(.in-real-landscape) .art-bottom {
-  padding-left: max(44px, calc(env(safe-area-inset-top, 44px) + 8px)) !important;
-  padding-right: max(40px, calc(env(safe-area-inset-bottom, 34px) + 8px)) !important;
-  padding-bottom: 6px !important;
+  padding-left: max(50px, calc(env(safe-area-inset-top, 50px) + 12px)) !important;
+  padding-right: max(44px, calc(env(safe-area-inset-bottom, 34px) + 10px)) !important;
+  padding-bottom: max(12px, calc(env(safe-area-inset-left, 0px) + 10px)) !important;
 }
 
 /* Real Landscape (iPhone physically turned horizontal by user):
@@ -241,15 +241,15 @@ body.landscape-locked .ambient-backlight {
    Physical top -> Top
 */
 .mobile-landscape-active.in-real-landscape .art-bottom {
-  padding-left: max(36px, calc(env(safe-area-inset-left, 36px) + 12px)) !important;
-  padding-right: max(36px, calc(env(safe-area-inset-right, 36px) + 12px)) !important;
-  padding-bottom: max(10px, env(safe-area-inset-bottom, 10px)) !important;
+  padding-left: max(36px, calc(env(safe-area-inset-left, 36px) + 14px)) !important;
+  padding-right: max(36px, calc(env(safe-area-inset-right, 36px) + 14px)) !important;
+  padding-bottom: max(18px, calc(env(safe-area-inset-bottom, 20px) + 6px)) !important;
 }
 
 /* Tighten Progress Bar spacing - perfectly flush with controls */
 .mobile-landscape-active .art-bottom .art-progress {
-  padding-top: 6px !important;
-  padding-bottom: 2px !important;
+  padding-top: 8px !important;
+  padding-bottom: 4px !important;
   margin: 0 !important;
   width: 100% !important;
 }
@@ -277,11 +277,11 @@ body.landscape-locked .ambient-backlight {
 }
 
 /* Lock button position & safe-area adaptation in landscape mode:
-   Positioned comfortably at 35% height to stay completely clear of Dynamic Island (centered at 50%)
+   Positioned comfortably at 32% height to stay completely clear of Dynamic Island (centered at 50%)
 */
 .mobile-landscape-active:not(.in-real-landscape) .art-layer-lock {
-  left: max(36px, calc(env(safe-area-inset-top, 36px) + 8px)) !important;
-  top: 35% !important;
+  left: max(48px, calc(env(safe-area-inset-top, 48px) + 12px)) !important;
+  top: 32% !important;
   transform: translateY(-50%) !important;
   z-index: 60 !important;
   width: 38px !important;
@@ -294,8 +294,8 @@ body.landscape-locked .ambient-backlight {
 }
 
 .mobile-landscape-active.in-real-landscape .art-layer-lock {
-  left: max(24px, calc(env(safe-area-inset-left, 24px) + 12px)) !important;
-  top: 35% !important;
+  left: max(32px, calc(env(safe-area-inset-left, 32px) + 14px)) !important;
+  top: 32% !important;
   transform: translateY(-50%) !important;
   z-index: 60 !important;
   width: 38px !important;
@@ -307,37 +307,34 @@ body.landscape-locked .ambient-backlight {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
 }
 
-/* Safe-area insets for Notice toast, Settings panel, and Auto-playback prompts */
-.mobile-landscape-active:not(.in-real-landscape) .art-notice {
-  padding-left: max(36px, calc(env(safe-area-inset-top, 36px) + 12px)) !important;
-  padding-top: max(16px, env(safe-area-inset-right, 16px)) !important;
-}
-
-.mobile-landscape-active.in-real-landscape .art-notice {
-  padding-left: max(24px, calc(env(safe-area-inset-left, 24px) + 12px)) !important;
-  padding-top: max(16px, env(safe-area-inset-top, 16px)) !important;
+/* Suppress redundant Artplayer default top-left notice toast ("播放" / "暂停" 等左上角文字) */
+.art-video-player .art-notice {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 .mobile-landscape-active:not(.in-real-landscape) .art-settings {
-  right: max(32px, calc(env(safe-area-inset-bottom, 32px) + 10px)) !important;
-  bottom: 48px !important;
+  right: max(40px, calc(env(safe-area-inset-bottom, 34px) + 12px)) !important;
+  bottom: 56px !important;
   max-height: 220px !important;
 }
 
 .mobile-landscape-active.in-real-landscape .art-settings {
-  right: max(24px, calc(env(safe-area-inset-right, 24px) + 10px)) !important;
-  bottom: 48px !important;
+  right: max(32px, calc(env(safe-area-inset-right, 32px) + 14px)) !important;
+  bottom: 56px !important;
   max-height: 220px !important;
 }
 
 .mobile-landscape-active:not(.in-real-landscape) .art-layer-auto-playback {
-  left: max(36px, calc(env(safe-area-inset-top, 36px) + 12px)) !important;
-  bottom: 50px !important;
+  left: max(48px, calc(env(safe-area-inset-top, 48px) + 12px)) !important;
+  bottom: 58px !important;
 }
 
 .mobile-landscape-active.in-real-landscape .art-layer-auto-playback {
-  left: max(24px, calc(env(safe-area-inset-left, 24px) + 12px)) !important;
-  bottom: 50px !important;
+  left: max(32px, calc(env(safe-area-inset-left, 32px) + 14px)) !important;
+  bottom: 58px !important;
 }
 
 /* Center Play Button and Loading Spinner Centering */
@@ -360,7 +357,12 @@ body.landscape-locked .ambient-backlight {
   pointer-events: auto !important;
 }
 
-.mobile-landscape-active .art-loading {
+/* Loading Spinner - display only when genuinely loading/buffering */
+.mobile-landscape-active .art-video-player:not(.art-loading-show) .art-loading {
+  display: none !important;
+}
+
+.mobile-landscape-active .art-video-player.art-loading-show .art-loading {
   position: absolute !important;
   inset: 0 !important;
   width: 100% !important;
