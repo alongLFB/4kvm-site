@@ -45,6 +45,25 @@ const formatTime = (sec: number) => {
   return `${m < 10 ? "0" : ""}${m}:${s < 10 ? "0" : ""}${s}`;
 };
 
+/**
+ * 伪横屏（竖握 + CSS 旋转）的长边长度同步：
+ * iOS PWA(standalone) 下 100vh/100dvh 可能比物理屏幕矮（少掉顶部安全区），
+ * 导致播放器底部比 Home 条安全距离多空出一截。standalone 时改用真实屏幕长边，
+ * 其余环境（普通浏览器）不设置变量，CSS 回退到 100dvh。
+ */
+const syncLandscapeLength = (wrapper: HTMLElement | null, isPortrait: boolean) => {
+  if (!wrapper || typeof window === "undefined") return;
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (window.navigator as any).standalone === true;
+  if (isStandalone && isPortrait) {
+    const longSide = Math.max(window.screen.width, window.screen.height);
+    wrapper.style.setProperty("--landscape-vh", `${longSide}px`);
+  } else {
+    wrapper.style.removeProperty("--landscape-vh");
+  }
+};
+
 export default function VideoPlayer({
   url,
   title,
@@ -134,6 +153,7 @@ export default function VideoPlayer({
     if (wrapper) {
       wrapper.classList.add("mobile-landscape-active");
       const isPort = window.innerHeight > window.innerWidth;
+      syncLandscapeLength(wrapper, isPort);
       setIsRealLandscape(!isPort);
 
       if (isPort) {
@@ -178,6 +198,7 @@ export default function VideoPlayer({
     const wrapper = wrapperRef.current;
     if (wrapper) {
       wrapper.classList.remove("mobile-landscape-active", "in-real-landscape");
+      wrapper.style.removeProperty("--landscape-vh");
     }
 
     const triggerResize = () => {
@@ -422,6 +443,7 @@ export default function VideoPlayer({
       if (!wrapper) return;
 
       setIsRealLandscape(!isPort);
+      syncLandscapeLength(wrapper, isPort);
 
       if (isPort) {
         wrapper.classList.remove("in-real-landscape");
