@@ -162,6 +162,22 @@ body.landscape-locked [data-floating-actions] {
   pointer-events: none !important;
 }
 
+/* Pseudo-landscape: show ONLY the player. The strips reserved for the status bar /
+   Dynamic Island and Home indicator must be pure black, not the page content behind them.
+   `visibility` is used (not display) so layout is untouched; descendants of the player
+   explicitly opt back in. */
+html.landscape-locked body > *,
+body.landscape-locked > * {
+  visibility: hidden !important;
+}
+
+html.landscape-locked .mobile-landscape-active,
+html.landscape-locked .mobile-landscape-active *,
+body.landscape-locked .mobile-landscape-active,
+body.landscape-locked .mobile-landscape-active * {
+  visibility: visible !important;
+}
+
 /* Elevate and reset player container in landscape mode */
 html.landscape-locked .player-container-wrapper,
 body.landscape-locked .player-container-wrapper {
