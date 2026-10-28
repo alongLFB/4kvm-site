@@ -806,13 +806,13 @@ export default function VideoPlayer({
           style={{
             paddingLeft: isRealLandscape
               ? "max(32px, calc(env(safe-area-inset-left, 32px) + 14px))"
-              : "max(48px, calc(env(safe-area-inset-top, 48px) + 12px))",
+              : "20px",
             paddingRight: isRealLandscape
               ? "max(32px, calc(env(safe-area-inset-right, 32px) + 14px))"
-              : "max(36px, calc(env(safe-area-inset-bottom, 34px) + 10px))",
+              : "20px",
             paddingTop: isRealLandscape
               ? "max(14px, calc(env(safe-area-inset-top, 14px) + 4px))"
-              : "max(14px, calc(env(safe-area-inset-right, 14px) + 2px))",
+              : "14px",
           }}
         >
           <button

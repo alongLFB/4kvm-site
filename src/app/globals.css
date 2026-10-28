@@ -182,10 +182,10 @@ body.landscape-locked .ambient-backlight {
 /* Mobile Fullscreen Landscape CSS Mode */
 .mobile-landscape-active {
   position: fixed !important;
-  top: 0 !important;
+  top: max(56px, env(safe-area-inset-top, 56px)) !important;
   left: 0 !important;
-  width: 100vh !important;
-  width: 100dvh !important;
+  width: calc(100vh - max(56px, env(safe-area-inset-top, 56px)) - max(34px, env(safe-area-inset-bottom, 34px))) !important;
+  width: calc(100dvh - max(56px, env(safe-area-inset-top, 56px)) - max(34px, env(safe-area-inset-bottom, 34px))) !important;
   height: 100vw !important;
   height: 100dvw !important;
   max-width: none !important;
@@ -223,15 +223,15 @@ body.landscape-locked .ambient-backlight {
 
 /* Safe Area Insets for iOS Notch / Dynamic Island & Home Indicator (Controls & Overlays only) */
 /* Rotated Landscape (iPhone in portrait, rotated 90deg clockwise):
-   Physical top (Notch/Island) -> Video Left
-   Physical bottom (Home indicator) -> Video Right
+   Physical top (Notch/Dynamic Island) -> Video Left (cleanly cleared by container top offset)
+   Physical bottom (Home indicator) -> Video Right (cleanly cleared by container bottom offset)
    Physical left -> Video Bottom
    Physical right -> Video Top
 */
 .mobile-landscape-active:not(.in-real-landscape) .art-bottom {
-  padding-left: max(50px, calc(env(safe-area-inset-top, 50px) + 12px)) !important;
-  padding-right: max(44px, calc(env(safe-area-inset-bottom, 34px) + 10px)) !important;
-  padding-bottom: max(12px, calc(env(safe-area-inset-left, 0px) + 10px)) !important;
+  padding-left: 20px !important;
+  padding-right: 20px !important;
+  padding-bottom: 12px !important;
 }
 
 /* Real Landscape (iPhone physically turned horizontal by user):
@@ -276,12 +276,10 @@ body.landscape-locked .ambient-backlight {
   height: 38px !important;
 }
 
-/* Lock button position & safe-area adaptation in landscape mode:
-   Positioned comfortably at 32% height to stay completely clear of Dynamic Island (centered at 50%)
-*/
+/* Lock button position & safe-area adaptation in landscape mode */
 .mobile-landscape-active:not(.in-real-landscape) .art-layer-lock {
-  left: max(48px, calc(env(safe-area-inset-top, 48px) + 12px)) !important;
-  top: 32% !important;
+  left: 20px !important;
+  top: 50% !important;
   transform: translateY(-50%) !important;
   z-index: 60 !important;
   width: 38px !important;
@@ -316,7 +314,7 @@ body.landscape-locked .ambient-backlight {
 }
 
 .mobile-landscape-active:not(.in-real-landscape) .art-settings {
-  right: max(40px, calc(env(safe-area-inset-bottom, 34px) + 12px)) !important;
+  right: 20px !important;
   bottom: 56px !important;
   max-height: 220px !important;
 }
@@ -328,7 +326,7 @@ body.landscape-locked .ambient-backlight {
 }
 
 .mobile-landscape-active:not(.in-real-landscape) .art-layer-auto-playback {
-  left: max(48px, calc(env(safe-area-inset-top, 48px) + 12px)) !important;
+  left: 20px !important;
   bottom: 58px !important;
 }
 
