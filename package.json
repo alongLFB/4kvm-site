@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "artplayer": "^5.4.0",
+    "better-auth": "^1.7.20",
     "clsx": "^2.1.1",
     "hls.js": "^1.5.20",
     "lucide-react": "^1.38.0",

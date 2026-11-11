@@ -19,6 +19,7 @@ export function getDatabase(): DatabaseSync {
   // WAL Mode for high performance concurrent reads
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA synchronous = NORMAL;");
+  db.exec("PRAGMA foreign_keys = ON;");
 
   dbInstance = db;
   return db;

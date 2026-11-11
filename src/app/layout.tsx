@@ -31,6 +31,8 @@ export const metadata: Metadata = {
 
 import { DownloadProvider } from "@/contexts/DownloadContext";
 import { GlobalDownloadCenter } from "@/components/DownloadManagerDrawer";
+import { AuthSyncProvider } from "@/contexts/AuthSyncContext";
+import { AccountModal } from "@/components/AccountModal";
 
 export default function RootLayout({
   children,
@@ -57,16 +59,19 @@ export default function RootLayout({
         {/* Subtle Ambient Cosmic Glow at top of viewport */}
         <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[360px] bg-gradient-to-b from-cyan-500/10 via-indigo-500/5 to-transparent blur-[120px] pointer-events-none -z-10" />
 
-        <DownloadProvider>
-          <PwaRegister />
-          <Navbar />
-          <main className="flex-1 max-w-[1600px] w-full mx-auto px-3.5 sm:px-6 lg:px-10 py-4 sm:py-7 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-16 pl-[max(0.875rem,env(safe-area-inset-left,0.875rem))] pr-[max(0.875rem,env(safe-area-inset-right,0.875rem))]">
-            {children}
-          </main>
-          <FloatingActions />
-          <Footer />
-          <GlobalDownloadCenter />
-        </DownloadProvider>
+        <AuthSyncProvider>
+          <DownloadProvider>
+            <PwaRegister />
+            <Navbar />
+            <main className="flex-1 max-w-[1600px] w-full mx-auto px-3.5 sm:px-6 lg:px-10 py-4 sm:py-7 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-16 pl-[max(0.875rem,env(safe-area-inset-left,0.875rem))] pr-[max(0.875rem,env(safe-area-inset-right,0.875rem))]">
+              {children}
+            </main>
+            <FloatingActions />
+            <Footer />
+            <GlobalDownloadCenter />
+            <AccountModal />
+          </DownloadProvider>
+        </AuthSyncProvider>
       </body>
     </html>
   );

@@ -18,11 +18,14 @@ import {
   Trophy,
   Lock,
   Download,
+  UserCheck,
+  User,
 } from "lucide-react";
 import { GATED_CONFIG, isTypeGated } from "@/config/gated-sections";
 import { DesktopSearch, MobileSearchModal } from "@/components/Search/GlobalSearch";
 import { OnlineBadge } from "@/components/OnlineBadge";
 import { useDownloadManager } from "@/contexts/DownloadContext";
+import { useAuthSync } from "@/contexts/AuthSyncContext";
 
 function NavbarContent() {
   const router = useRouter();
@@ -31,6 +34,7 @@ function NavbarContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { openDrawer, activeCount, completedCount } = useDownloadManager();
+  const { user, openAccountModal } = useAuthSync();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const handleLogoClick = (e: React.MouseEvent) => {
@@ -197,10 +201,33 @@ function NavbarContent() {
                 className={`p-2 rounded-full transition shrink-0 ${
                   isHistory ? "text-cyan-400 bg-white/10" : "text-gray-300 hover:text-cyan-400 hover:bg-white/5"
                 }`}
-                title="观看历史"
+                title="观看历史与收藏"
               >
                 <History className="w-4 h-4 lg:w-5 lg:h-5" />
               </Link>
+
+              <button
+                type="button"
+                onClick={openAccountModal}
+                className={`px-2.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition shrink-0 cursor-pointer ${
+                  user
+                    ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25"
+                    : "bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10"
+                }`}
+                title={user ? `已登录：${user.name}` : "登录 / 多端云同步"}
+              >
+                {user ? (
+                  <>
+                    <UserCheck className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="max-w-20 truncate">{user.name}</span>
+                  </>
+                ) : (
+                  <>
+                    <User className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>云同步登录</span>
+                  </>
+                )}
+              </button>
 
               <OnlineBadge />
             </div>
@@ -239,6 +266,14 @@ function NavbarContent() {
               <Link href="/history" className="p-2 text-gray-300">
                 <History className="w-5 h-5" />
               </Link>
+              <button
+                type="button"
+                onClick={openAccountModal}
+                className="p-2 text-cyan-400 hover:text-white rounded-xl bg-white/5"
+                aria-label="个人中心与云同步"
+              >
+                {user ? <UserCheck className="w-4 h-4" /> : <User className="w-4 h-4" />}
+              </button>
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="p-2 text-gray-300 hover:text-white focus:outline-none"
