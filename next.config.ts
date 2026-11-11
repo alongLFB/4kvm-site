@@ -16,7 +16,20 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: '**' },
       { protocol: 'http', hostname: '**' }
     ]
-  }
+  },
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, DELETE, OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization, x-access-pin, x-requested-with' },
+          { key: 'Access-Control-Expose-Headers', value: 'set-auth-token' },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
