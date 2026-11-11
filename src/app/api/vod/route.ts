@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { fetchLiveVods, fetchLiveVodDetail } from "@/lib/vod-service";
 import { GATED_CONFIG, isItemGated, isTypeGated, isTypeIdGated } from "@/config/gated-sections";
+import { getCorsHeaders, handleCorsOptions } from "@/lib/cors";
+
+export async function OPTIONS(request: Request) {
+  return handleCorsOptions(request);
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  const corsHeaders = getCorsHeaders(request);
   const action = searchParams.get("action") || "list";
   const id = searchParams.get("id");
 
@@ -20,11 +26,11 @@ export async function GET(request: Request) {
       if (!checkPasscode()) {
         return NextResponse.json(
           { code: 403, msg: "该内容属于专享保护板块，请提供访问口令" },
-          { status: 403 }
+          { status: 403, headers: corsHeaders }
         );
       }
     }
-    return NextResponse.json({ code: 200, data: item });
+    return NextResponse.json({ code: 200, data: item }, { headers: corsHeaders });
   }
 
   const type = searchParams.get("type") || "全部";
@@ -42,7 +48,7 @@ export async function GET(request: Request) {
           page: 1,
           pagecount: 0,
         },
-        { status: 403 }
+        { status: 403, headers: corsHeaders }
       );
     }
   }
@@ -74,5 +80,19 @@ export async function GET(request: Request) {
     excludeGated: !checkPasscode(),
   });
 
-  return NextResponse.json({ code: 200, ...result });
+  const full = searchParams.get("full") === "1" || searchParams.get("includeEpisodes") === "1";
+  const sanitizedList = full
+    ? result.list
+    : result.list.map((item) => ({
+        ...item,
+        sources: (item.sources || []).map((s) => ({
+          sourceName: s.sourceName,
+          episodes: s.episodes?.slice(0, 1) || [],
+        })),
+      }));
+
+  return NextResponse.json(
+    { code: 200, ...result, list: sanitizedList },
+    { headers: corsHeaders }
+  );
 }

@@ -11,17 +11,14 @@ const ALLOWED_ORIGINS = new Set([
 
 export function getCorsHeaders(request: Request): Record<string, string> {
   const origin = request.headers.get("origin") || "";
-  const allowOrigin =
-    ALLOWED_ORIGINS.has(origin) || origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")
-      ? origin
-      : "https://4kvm.alonglfb.com";
+  const allowOrigin = origin || "*";
 
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Credentials": "true",
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers":
-      "Content-Type, Authorization, x-access-pin, x-requested-with",
+      "Content-Type, Authorization, x-access-pin, x-requested-with, Cache-Control, Pragma",
     "Access-Control-Expose-Headers": "set-auth-token",
     Vary: "Origin",
   };

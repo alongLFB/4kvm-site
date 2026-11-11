@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
 import { querySuggestions } from "@/lib/search-engine";
 import { GATED_CONFIG, isItemGated } from "@/config/gated-sections";
+import { getCorsHeaders, handleCorsOptions } from "@/lib/cors";
+
+export async function OPTIONS(request: Request) {
+  return handleCorsOptions(request);
+}
 
 export async function GET(request: Request) {
+  const corsHeaders = getCorsHeaders(request);
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q") || searchParams.get("keyword") || "";
   const limit = parseInt(searchParams.get("limit") || "6", 10);
 
   if (!q.trim()) {
-    return NextResponse.json({ code: 200, list: [] });
+    return NextResponse.json({ code: 200, list: [] }, { headers: corsHeaders });
   }
 
   // 提取口令判断是否解锁
@@ -24,8 +30,11 @@ export async function GET(request: Request) {
     list = list.filter((item) => !isItemGated(item));
   }
 
-  return NextResponse.json({
-    code: 200,
-    list: list.slice(0, limit),
-  });
+  return NextResponse.json(
+    {
+      code: 200,
+      list: list.slice(0, limit),
+    },
+    { headers: corsHeaders }
+  );
 }
