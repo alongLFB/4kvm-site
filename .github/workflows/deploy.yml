@@ -72,21 +72,38 @@ jobs:
             chmod -R 777 scripts 2>/dev/null || true
 
             # 4. 同步环境变量（若 GitHub Secrets 已配置 ENV_FILE）
+            ENV_UPDATED=false
+            NEXT_PUBLIC_ENV_CHANGED=false
             if [ -n "${ENV_FILE:-}" ]; then
+              OLD_ENV_MD5=$(md5sum .env 2>/dev/null | cut -d' ' -f1 || echo "")
+              OLD_NEXT_PUBLIC=$(grep -E '^NEXT_PUBLIC_' .env 2>/dev/null | sort || echo "")
+
               printf "%s\n" "$ENV_FILE" > .env
-            fi
-            # 自动修复 .env 中的格式问题与历史域名笔误
-            if [ -f .env ]; then
+              # 自动修复 .env 中的格式问题与历史域名笔误
               sed -i 's/^[[:space:]]*\.env\.example/# .env.example/g' .env 2>/dev/null || true
               sed -i 's/^[[:space:]]*cp \.env\.example/# cp .env.example/g' .env 2>/dev/null || true
               sed -i -E 's/^([[:space:]]*[^#[:space:]][^=]*)$/# [Fixed] \1/' .env 2>/dev/null || true
               sed -i 's/api\.ikunzyapi\.com/ikunzyapi.com/g' .env 2>/dev/null || true
+
+              NEW_ENV_MD5=$(md5sum .env 2>/dev/null | cut -d' ' -f1 || echo "")
+              NEW_NEXT_PUBLIC=$(grep -E '^NEXT_PUBLIC_' .env 2>/dev/null | sort || echo "")
+
+              if [ "$OLD_ENV_MD5" != "$NEW_ENV_MD5" ]; then
+                echo "==> [Config] 检测到环境变量 .env 内容发生更新！"
+                ENV_UPDATED=true
+                if [ "$OLD_NEXT_PUBLIC" != "$NEW_NEXT_PUBLIC" ]; then
+                  echo "==> [Config] 检测到 NEXT_PUBLIC_* 客户端构建变量改动，触发完整镜像重新构建！"
+                  NEXT_PUBLIC_ENV_CHANGED=true
+                fi
+              fi
             fi
 
             # 5. 智能判断是否需要重新构建 Docker 镜像 (按需构建)
             SHOULD_BUILD=false
             if [ "${FORCE_BUILD:-false}" = "true" ]; then
               echo "==> [Trigger] 手动触发部署且指定了强制构建 (force_build=true)"
+              SHOULD_BUILD=true
+            elif [ "$NEXT_PUBLIC_ENV_CHANGED" = "true" ]; then
               SHOULD_BUILD=true
             elif [ -z "$OLD_HEAD" ]; then
               echo "==> [Trigger] 首次部署，触发完整构建"
@@ -148,8 +165,39 @@ jobs:
 
               echo "==> 4kvm-site deployment completed successfully!"
             else
-              echo "==> ⚡ 本次仅改动了 scripts 脚本、文档或辅助配置，无需重建镜像！"
-              echo "==> 远端代码已秒级同步至最新版本 ($NEW_HEAD)，旧容器保持零中断运行！"
+              if [ "$ENV_UPDATED" = "true" ]; then
+                echo "==> [Config] 检测到服务端运行环境变量更新，立即原子化重启容器以加载最新配置..."
+                UP_SUCCESS=false
+                for i in {1..3}; do
+                  if docker compose up -d --no-deps --force-recreate 4kvm-app; then
+                    UP_SUCCESS=true
+                    break
+                  fi
+                  echo "Docker compose up retry ($i/3)..."
+                  sleep 2
+                done
+
+                if [ "$UP_SUCCESS" != "true" ]; then
+                  echo "❌ Failed to restart container after 3 attempts."
+                  exit 1
+                fi
+
+                # 自动化健康检查轮询
+                echo "==> Verifying Deployment Health after env update..."
+                for i in {1..15}; do
+                  if curl -s http://127.0.0.1:3028/api/health | grep -q "ok" 2>/dev/null; then
+                    echo "✅ Health check passed! 4kvm-site is fully healthy and serving traffic."
+                    break
+                  fi
+                  echo "Waiting for app to become healthy ($i/15)..."
+                  sleep 2
+                done
+                echo "==> 环境变量已成功秒级重载至容器！"
+              else
+                echo "==> ⚡ 本次仅改动了 scripts 脚本、文档或辅助配置，且环境变量无变化，无需重建镜像！"
+                echo "==> 远端代码已秒级同步至最新版本 ($NEW_HEAD)，旧容器保持零中断运行！"
+              fi
+
               # 同样执行一次实体修复以保证数据纯净
               docker compose exec -T 4kvm-app node scripts/repair-entities-and-metadata.mjs 2>/dev/null || true
             fi
