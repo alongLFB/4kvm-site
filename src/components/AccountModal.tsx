@@ -7,6 +7,7 @@ import {
   User,
   Mail,
   Lock,
+  KeyRound,
   Cloud,
   RefreshCw,
   LogOut,
@@ -27,6 +28,7 @@ export function AccountModal() {
     isAccountModalOpen,
     closeAccountModal,
     loginWithEmail,
+    sendRegisterCode,
     registerWithEmail,
     requestPasswordReset,
     loginWithGoogle,
@@ -39,13 +41,44 @@ export function AccountModal() {
   const [tab, setTab] = useState<AuthTab>("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [sendCooldown, setSendCooldown] = useState(0);
+  const [sendingCode, setSendingCode] = useState(false);
   const [password, setPassword] = useState("");
   const [editName, setEditName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
+  React.useEffect(() => {
+    if (sendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setSendCooldown((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [sendCooldown]);
+
   if (!isAccountModalOpen) return null;
+
+  const handleSendCode = async () => {
+    const trimmed = email.trim();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setErrorMsg("请先输入有效的电子邮箱地址");
+      return;
+    }
+    setErrorMsg("");
+    setSuccessMsg("");
+    setSendingCode(true);
+    try {
+      await sendRegisterCode(trimmed);
+      setSuccessMsg("验证码已发送至您的邮箱，10 分钟内有效");
+      setSendCooldown(60);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "发送验证码失败");
+    } finally {
+      setSendingCode(false);
+    }
+  };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,8 +91,14 @@ export function AccountModal() {
         await loginWithEmail(email, password);
         setSuccessMsg("登录成功，已自动合并并同步您的云端观看记录与收藏！");
       } else if (tab === "register") {
-        await registerWithEmail(name, email, password);
+        if (!code.trim() || code.trim().length !== 6) {
+          setErrorMsg("请输入 6 位邮箱验证码");
+          setSubmitting(false);
+          return;
+        }
+        await registerWithEmail(name, email, password, code.trim());
         setSuccessMsg("账号创建成功，本地游客历史与收藏已自动同步至云端！");
+        setCode("");
       } else {
         await requestPasswordReset(email);
         setSuccessMsg("密码重置说明已发送至您的邮箱，请查收。");
@@ -235,6 +274,8 @@ export function AccountModal() {
                   onClick={() => {
                     setTab("login");
                     setErrorMsg("");
+                    setSuccessMsg("");
+                    setCode("");
                   }}
                   className={`py-1.5 rounded-lg text-xs font-semibold transition ${
                     tab === "login"
@@ -249,6 +290,8 @@ export function AccountModal() {
                   onClick={() => {
                     setTab("register");
                     setErrorMsg("");
+                    setSuccessMsg("");
+                    setCode("");
                   }}
                   className={`py-1.5 rounded-lg text-xs font-semibold transition ${
                     tab === "register"
@@ -263,6 +306,8 @@ export function AccountModal() {
                   onClick={() => {
                     setTab("reset");
                     setErrorMsg("");
+                    setSuccessMsg("");
+                    setCode("");
                   }}
                   className={`py-1.5 rounded-lg text-xs font-semibold transition ${
                     tab === "reset"
@@ -300,6 +345,37 @@ export function AccountModal() {
                     className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
                   />
                 </div>
+
+                {tab === "register" && (
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <KeyRound className="w-4 h-4 text-gray-500 absolute left-3 top-3" />
+                      <input
+                        type="text"
+                        required
+                        maxLength={6}
+                        value={code}
+                        onChange={(e) =>
+                          setCode(e.target.value.replace(/\D/g, ""))
+                        }
+                        placeholder="6 位邮箱验证码"
+                        className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 tracking-wider"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      disabled={sendCooldown > 0 || sendingCode}
+                      onClick={handleSendCode}
+                      className="px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap transition"
+                    >
+                      {sendingCode
+                        ? "发送中..."
+                        : sendCooldown > 0
+                          ? `${sendCooldown}s 后重试`
+                          : "获取验证码"}
+                    </button>
+                  </div>
+                )}
 
                 {tab !== "reset" && (
                   <div className="relative">

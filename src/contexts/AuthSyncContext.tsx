@@ -42,10 +42,12 @@ interface AuthSyncContextValue {
   openAccountModal: () => void;
   closeAccountModal: () => void;
   loginWithEmail: (email: string, password: string) => Promise<void>;
+  sendRegisterCode: (email: string) => Promise<void>;
   registerWithEmail: (
     name: string,
     email: string,
     password: string,
+    code: string,
   ) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
@@ -358,10 +360,23 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
     await performSync(true);
   };
 
+  const sendRegisterCode = async (email: string) => {
+    const res = await fetch("/api/v1/auth/send-register-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.message || "发送验证码失败，请稍后重试");
+    }
+  };
+
   const registerWithEmail = async (
     name: string,
     email: string,
     password: string,
+    code: string,
   ) => {
     const res = await fetch("/api/v1/auth/sign-up/email", {
       method: "POST",
@@ -371,6 +386,7 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
         name: name.trim() || email.split("@")[0],
         email: email.trim(),
         password,
+        code: code.trim(),
       }),
     });
     const token = res.headers.get("set-auth-token");
@@ -537,6 +553,7 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
         openAccountModal: () => setIsAccountModalOpen(true),
         closeAccountModal: () => setIsAccountModalOpen(false),
         loginWithEmail,
+        sendRegisterCode,
         registerWithEmail,
         requestPasswordReset,
         loginWithGoogle,
