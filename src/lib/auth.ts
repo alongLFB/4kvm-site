@@ -128,9 +128,17 @@ ensureAuthAndSyncSchema();
 const googleClientId = process.env.GOOGLE_CLIENT_ID || "";
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
 
+const defaultBaseUrl =
+  process.env.BETTER_AUTH_URL ||
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  (process.env.NODE_ENV === "production"
+    ? "https://4kvm.alonglfb.com"
+    : "http://localhost:3000");
+
 export const auth = betterAuth({
   database: getDatabase(),
   basePath: "/api/v1/auth",
+  baseURL: defaultBaseUrl,
   secret:
     process.env.BETTER_AUTH_SECRET ||
     "4kvm-alonglfbtv-shared-auth-secret-key-2026-v1",
@@ -142,6 +150,9 @@ export const auth = betterAuth({
     "http://127.0.0.1:3000",
     "alonglfbtv://",
   ],
+  advanced: {
+    trustedProxyHeaders: true,
+  },
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 6,

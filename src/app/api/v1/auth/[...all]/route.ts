@@ -26,7 +26,13 @@ async function handleAuthRequest(request: Request): Promise<Response> {
       );
     }
 
-    const callbackURL = `${url.origin}/api/v1/auth/google/native-callback`;
+    const siteBase =
+      process.env.BETTER_AUTH_URL ||
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      (process.env.NODE_ENV === "production"
+        ? "https://4kvm.alonglfb.com"
+        : url.origin);
+    const callbackURL = `${siteBase}/api/v1/auth/google/native-callback`;
     const signInRes = await auth.api.signInSocial({
       body: {
         provider: "google",
