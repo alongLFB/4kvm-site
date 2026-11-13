@@ -95,9 +95,11 @@ export function pushUserSyncData(
 
   let applied = 0;
   let seq = getCurrentUserSyncCursor(userId);
+  let inTx = false;
 
-  db.exec("BEGIN IMMEDIATE TRANSACTION;");
   try {
+    db.exec("BEGIN IMMEDIATE TRANSACTION;");
+    inTx = true;
     seq = nextUserSyncSeq(userId);
 
     const selectHistStmt = db.prepare(
@@ -260,8 +262,13 @@ export function pushUserSyncData(
     }
 
     db.exec("COMMIT;");
+    inTx = false;
   } catch (err) {
-    db.exec("ROLLBACK;");
+    if (inTx) {
+      try {
+        db.exec("ROLLBACK;");
+      } catch {}
+    }
     throw err;
   }
 

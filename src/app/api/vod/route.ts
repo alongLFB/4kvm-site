@@ -60,8 +60,10 @@ export async function GET(request: Request) {
   const quality = searchParams.get("quality") || "全部";
   const status = searchParams.get("status") || "全部";
   const sort = searchParams.get("sort") || "hot";
-  const page = parseInt(searchParams.get("pg") || searchParams.get("page") || "1", 10);
-  const limit = parseInt(searchParams.get("limit") || "20", 10);
+  const rawPage = parseInt(searchParams.get("pg") || searchParams.get("page") || "1", 10);
+  const rawLimit = parseInt(searchParams.get("limit") || "20", 10);
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 20;
   const query = searchParams.get("keyword") || searchParams.get("wd") || searchParams.get("q") || "";
 
   const result = await fetchLiveVods({

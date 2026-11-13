@@ -190,12 +190,22 @@ async function handleAuthRequest(request: Request): Promise<Response> {
         </div>
       `;
 
-      await sendEmail({
+      const emailResult = await sendEmail({
         to: email,
         subject: "【4KVM / alonglfb-tv】您的账号注册验证码",
         html,
         text: `【4KVM 在线影视】您的账号注册验证码为：${code}，10分钟内有效。若非本人操作请忽略。`,
       });
+
+      if (!emailResult.success && emailResult.provider === "none" && process.env.NODE_ENV === "production") {
+        return NextResponse.json(
+          {
+            code: 503,
+            message: "服务端尚未配置邮件发送服务 (SMTP)，请联系管理员配置发信账号",
+          },
+          { status: 503, headers: getCorsHeaders(request) },
+        );
+      }
 
       console.info(
         `[Auth Register Code] Sent registration OTP to ${email}: ${code}`,
@@ -210,6 +220,53 @@ async function handleAuthRequest(request: Request): Promise<Response> {
       console.error("[Auth] Failed to send register code:", err);
       return NextResponse.json(
         { code: 500, message: `发送验证码失败: ${msg}` },
+        { status: 500, headers: getCorsHeaders(request) },
+      );
+    }
+  }
+
+  // 永久注销账号: /api/v1/auth/delete-user
+  if (
+    request.method === "POST" &&
+    url.pathname.endsWith("/api/v1/auth/delete-user")
+  ) {
+    try {
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user?.id) {
+        return NextResponse.json(
+          { code: 401, message: "未登录或登录凭证已失效" },
+          { status: 401, headers: getCorsHeaders(request) },
+        );
+      }
+
+      const userId = session.user.id;
+      const db = getDatabase();
+
+      db.exec("BEGIN IMMEDIATE;");
+      try {
+        db.prepare('DELETE FROM "user_history" WHERE user_id = ?').run(userId);
+        db.prepare('DELETE FROM "user_favorites" WHERE user_id = ?').run(userId);
+        db.prepare('DELETE FROM "sync_cursor" WHERE user_id = ?').run(userId);
+        db.prepare('DELETE FROM "session" WHERE "userId" = ?').run(userId);
+        db.prepare('DELETE FROM "account" WHERE "userId" = ?').run(userId);
+        db.prepare('DELETE FROM "user" WHERE "id" = ?').run(userId);
+        db.exec("COMMIT;");
+      } catch (dbErr) {
+        db.exec("ROLLBACK;");
+        throw dbErr;
+      }
+
+      const res = NextResponse.json(
+        { code: 200, success: true, message: "账号及云端数据已成功永久注销" },
+        { status: 200, headers: getCorsHeaders(request) },
+      );
+      res.cookies.set("better-auth.session_token", "", { maxAge: 0, path: "/" });
+      res.cookies.set("__Secure-better-auth.session_token", "", { maxAge: 0, path: "/" });
+      return res;
+    } catch (err: unknown) {
+      console.error("[Auth] Failed to delete user account:", err);
+      return NextResponse.json(
+        { code: 500, message: "注销失败，请稍后重试" },
         { status: 500, headers: getCorsHeaders(request) },
       );
     }
@@ -283,9 +340,11 @@ async function handleAuthRequest(request: Request): Promise<Response> {
 
       // 剔除自定义的 code 字段，转发标准注册请求给 Better Auth
       const { code: _, ...cleanBody } = body;
+      const forwardHeaders = new Headers(request.headers);
+      forwardHeaders.delete("content-length");
       const forwardReq = new Request(request.url, {
         method: "POST",
-        headers: request.headers,
+        headers: forwardHeaders,
         body: JSON.stringify(cleanBody),
       });
 

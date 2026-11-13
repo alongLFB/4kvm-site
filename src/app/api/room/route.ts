@@ -16,6 +16,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ code: 400, message: "缺少影片信息" }, { status: 400 });
     }
 
+    if (!host || !host.id || !host.name) {
+      return NextResponse.json({ code: 400, message: "缺少房主信息" }, { status: 400 });
+    }
+
     const rawIp = getClientIp(request);
     const location = await resolveIpLocation(rawIp, request.headers);
     const maskedIp = maskIp(rawIp);

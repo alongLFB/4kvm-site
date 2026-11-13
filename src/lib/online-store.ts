@@ -44,6 +44,7 @@ if (!global.__4kvm_clean_timer__) {
   global.__4kvm_clean_timer__ = setInterval(() => {
     OnlineWatcherStore.pruneExpired();
   }, 30 * 1000);
+  global.__4kvm_clean_timer__.unref?.();
 }
 
 export const OnlineWatcherStore = {

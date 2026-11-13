@@ -165,6 +165,7 @@ if (!global.__4kvm_cleaner_interval__) {
       }
     });
   }, 15000);
+  global.__4kvm_cleaner_interval__.unref?.();
 }
 
 export const RoomStore = {
@@ -627,19 +628,22 @@ export const RoomStore = {
       isWebFullscreen?: boolean;
   isMutedAll?: boolean;
   voiceStates?: Record<string, { isMuted: boolean }>;
-      sender: { id: string; name: string };
+      sender?: { id: string; name: string };
     }
   ): boolean {
     const room = rooms.get(roomId);
     if (!room) return false;
 
+    const senderId = action?.sender?.id || "";
+    const senderName = action?.sender?.name || "观众";
+
     // Progress permission check
-    if (room.controlMode === "host" && room.hostId !== action.sender.id && (action.type === "play" || action.type === "pause" || action.type === "seek")) {
+    if (room.controlMode === "host" && room.hostId !== senderId && (action.type === "play" || action.type === "pause" || action.type === "seek")) {
       return false;
     }
 
     // Switch permission check
-    if (room.switchMode === "host" && room.hostId !== action.sender.id && (action.type === "source" || action.type === "episode")) {
+    if (room.switchMode === "host" && room.hostId !== senderId && (action.type === "source" || action.type === "episode")) {
       return false;
     }
 
@@ -658,7 +662,7 @@ export const RoomStore = {
         senderId: "system",
         senderName: "系统",
         senderAvatar: "▶️",
-        text: `【${action.sender.name}】恢复了播放 (${timeStr})`,
+        text: `【${senderName}】恢复了播放 (${timeStr})`,
         time: "刚刚",
         isSystem: true,
       };
@@ -672,7 +676,7 @@ export const RoomStore = {
         senderId: "system",
         senderName: "系统",
         senderAvatar: "⏸️",
-        text: `【${action.sender.name}】暂停了播放 (${timeStr})`,
+        text: `【${senderName}】暂停了播放 (${timeStr})`,
         time: "刚刚",
         isSystem: true,
       };
@@ -685,7 +689,7 @@ export const RoomStore = {
         senderId: "system",
         senderName: "系统",
         senderAvatar: "⏩",
-        text: `【${action.sender.name}】将播放进度跳转至 ${timeStr}`,
+        text: `【${senderName}】将播放进度跳转至 ${timeStr}`,
         time: "刚刚",
         isSystem: true,
       };
@@ -699,7 +703,7 @@ export const RoomStore = {
         senderId: "system",
         senderName: "系统",
         senderAvatar: "📺",
-        text: `【${action.sender.name}】${action.isWebFullscreen ? "开启了网页全屏剧场模式" : "退出了全屏剧场模式"}`,
+        text: `【${senderName}】${action.isWebFullscreen ? "开启了网页全屏剧场模式" : "退出了全屏剧场模式"}`,
         time: "刚刚",
         isSystem: true,
       };
@@ -718,7 +722,7 @@ export const RoomStore = {
         senderId: "system",
         senderName: "系统",
         senderAvatar: "📡",
-        text: `【${action.sender.name}】切换播放线路至「${action.sourceName || "新线路"}」`,
+        text: `【${senderName}】切换播放线路至「${action.sourceName || "新线路"}」`,
         time: "刚刚",
         isSystem: true,
       };
@@ -747,7 +751,7 @@ export const RoomStore = {
         senderId: "system",
         senderName: "系统",
         senderAvatar: "🎬",
-        text: `【${action.sender.name}】切换到了 ${room.episodeName}`,
+        text: `【${senderName}】切换到了 ${room.episodeName}`,
         time: "刚刚",
         isSystem: true,
       };
@@ -770,7 +774,7 @@ export const RoomStore = {
 
   addChat(roomId: string, sender: { id: string; name: string; avatar: string; device?: string }, text: string): ChatMessage | null {
     const room = rooms.get(roomId);
-    if (!room || !text.trim()) return null;
+    if (!room || typeof text !== "string" || !text.trim() || !sender?.id) return null;
 
     const msg: ChatMessage = {
       id: `msg_${Date.now()}_${Math.random()}`,

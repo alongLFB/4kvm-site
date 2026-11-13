@@ -204,14 +204,12 @@ export async function fetchLiveVods(params: FilterParams): Promise<{
 }
 
 export async function fetchLiveVodDetail(id: string): Promise<VodItem | null> {
+  if (!id) return null;
   const db = getDatabase();
   const stmt = db.prepare("SELECT * FROM vods WHERE id = ? LIMIT 1");
   const row = stmt.get(id);
   if (row) {
     return rowToVodItem(row);
   }
-  // Fallback to first item if not found
-  const fallbackStmt = db.prepare("SELECT * FROM vods ORDER BY hits DESC LIMIT 1");
-  const fallbackRow = fallbackStmt.get();
-  return fallbackRow ? rowToVodItem(fallbackRow) : null;
+  return null;
 }

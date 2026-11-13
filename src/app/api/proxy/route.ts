@@ -19,12 +19,18 @@ export async function GET(request: Request) {
   }
 
   try {
+    const forwardHeaders: Record<string, string> = {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Referer: targetUrl,
+    };
+    const clientRange = request.headers.get("range");
+    if (clientRange) {
+      forwardHeaders["Range"] = clientRange;
+    }
+
     const upstream = await fetch(targetUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Referer: targetUrl,
-      },
+      headers: forwardHeaders,
     });
 
     const headers = new Headers();
@@ -39,6 +45,14 @@ export async function GET(request: Request) {
     const contentLength = upstream.headers.get("content-length");
     if (contentLength) {
       headers.set("Content-Length", contentLength);
+    }
+    const contentRange = upstream.headers.get("content-range");
+    if (contentRange) {
+      headers.set("Content-Range", contentRange);
+    }
+    const acceptRanges = upstream.headers.get("accept-ranges");
+    if (acceptRanges) {
+      headers.set("Accept-Ranges", acceptRanges);
     }
 
     return new Response(upstream.body, {
