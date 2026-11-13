@@ -66,6 +66,15 @@ interface AuthSyncContextValue {
     type_name?: string;
     year?: string;
   }) => void;
+  deleteHistoryItem: (vodId: string) => void;
+  clearAllHistory: () => void;
+  clearAllFavorites: () => void;
+  syncSearchHistory: boolean;
+  setSyncSearchHistory: (enabled: boolean) => void;
+  autoPlayNext: boolean;
+  setAutoPlayNext: (enabled: boolean) => void;
+  autoResume: boolean;
+  setAutoResume: (enabled: boolean) => void;
 }
 
 const FAVORITES_STORAGE_KEY = "4kvm_favorites";
@@ -74,13 +83,14 @@ const AUTH_TOKEN_STORAGE_KEY = "4kvm_auth_bearer_token";
 
 const AuthSyncContext = createContext<AuthSyncContextValue | null>(null);
 
-function readLocalHistory(): WatchHistoryItem[] {
+function readLocalHistory(includeDeleted = false): WatchHistoryItem[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem("watch_history");
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return includeDeleted ? parsed : parsed.filter((h: WatchHistoryItem) => !h.deleted);
   } catch {
     return [];
   }
@@ -128,6 +138,21 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [syncSearchHistory, setSyncSearchHistoryState] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("4kvm_sync_search_history") === "1";
+  });
+
+  const [autoPlayNext, setAutoPlayNextState] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("4kvm_auto_next_ep") !== "0";
+  });
+
+  const [autoResume, setAutoResumeState] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("4kvm_auto_resume") !== "0";
+  });
+
   const getAuthHeaders = useCallback((): Record<string, string> => {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -146,9 +171,13 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
       if (typeof window === "undefined") return;
       setSyncing(true);
       try {
-        const localHist = readLocalHistory();
+        const localHist = readLocalHistory(true);
         const localFavs = readLocalFavorites();
         const savedPin = localStorage.getItem(GATED_CONFIG.storageKey) || "";
+        const syncSearch = localStorage.getItem("4kvm_sync_search_history") || "0";
+        const autoNext = localStorage.getItem("4kvm_auto_next_ep") || "1";
+        const autoResumeVal = localStorage.getItem("4kvm_auto_resume") || "1";
+        const searchHistoryRaw = localStorage.getItem("4kvm_search_history") || "[]";
 
         const pushPayload = {
           history: localHist.map((h) => ({
@@ -162,7 +191,7 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
             current_time: Number(h.currentTime || 0),
             duration: Number(h.duration || 0),
             updated_at: Number(h.timestamp || Date.now()),
-            deleted: false,
+            deleted: Boolean(h.deleted),
           })),
           favorites: localFavs.map((f) => ({
             vod_id: f.vodId,
@@ -175,15 +204,13 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
             updated_at: f.updatedAt,
             deleted: Boolean(f.deleted),
           })),
-          settings: savedPin
-            ? [
-                {
-                  key: "unlocked_pin",
-                  value: savedPin,
-                  updated_at: Date.now(),
-                },
-              ]
-            : [],
+          settings: [
+            savedPin ? { key: "unlocked_pin", value: savedPin, updated_at: Date.now() } : null,
+            { key: "sync_search_history", value: syncSearch, updated_at: Date.now() },
+            syncSearch === "1" ? { key: "cloud_search_history", value: searchHistoryRaw, updated_at: Date.now() } : null,
+            { key: "auto_next_ep", value: autoNext, updated_at: Date.now() },
+            { key: "auto_resume", value: autoResumeVal, updated_at: Date.now() },
+          ].filter(Boolean),
         };
 
         await fetch("/api/v1/sync/push", {
@@ -213,17 +240,13 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
 
           if (Array.isArray(pullData.history) && pullData.history.length > 0) {
             const histMap = new Map<string, WatchHistoryItem>();
-            for (const h of readLocalHistory()) {
+            for (const h of readLocalHistory(true)) {
               histMap.set(String(h.vodId), h);
             }
             for (const remote of pullData.history) {
               const id = String(remote.vod_id);
-              if (remote.deleted) {
-                histMap.delete(id);
-                continue;
-              }
-              const existing = histMap.get(id);
               const remoteUpdated = Number(remote.updated_at || 0);
+              const existing = histMap.get(id);
               if (!existing || remoteUpdated >= (existing.timestamp || 0)) {
                 histMap.set(id, {
                   vodId: id,
@@ -235,14 +258,17 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
                   currentTime: Number(remote.current_time || 0),
                   duration: Number(remote.duration || 0),
                   timestamp: remoteUpdated,
+                  deleted: Boolean(remote.deleted),
                 });
               }
             }
-            const mergedHist = Array.from(histMap.values()).sort(
-              (a, b) => (b.timestamp || 0) - (a.timestamp || 0),
+            const allHist = Array.from(histMap.values());
+            writeLocalHistory(allHist);
+            setHistory(
+              allHist
+                .filter((h) => !h.deleted)
+                .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)),
             );
-            writeLocalHistory(mergedHist);
-            setHistory(mergedHist);
           }
 
           if (
@@ -282,6 +308,28 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
             for (const s of pullData.settings) {
               if (s.key === "unlocked_pin" && s.value) {
                 localStorage.setItem(GATED_CONFIG.storageKey, String(s.value));
+              } else if (s.key === "sync_search_history") {
+                const val = String(s.value) === "1" ? "1" : "0";
+                localStorage.setItem("4kvm_sync_search_history", val);
+                setSyncSearchHistoryState(val === "1");
+              } else if (s.key === "cloud_search_history") {
+                if (localStorage.getItem("4kvm_sync_search_history") === "1" && s.value) {
+                  try {
+                    const cloudTerms: string[] = JSON.parse(String(s.value));
+                    const localTerms: string[] = JSON.parse(localStorage.getItem("4kvm_search_history") || "[]");
+                    const merged = Array.from(new Set([...cloudTerms, ...localTerms])).slice(0, 10);
+                    localStorage.setItem("4kvm_search_history", JSON.stringify(merged));
+                    window.dispatchEvent(new Event("4kvm-search-history-updated"));
+                  } catch {}
+                }
+              } else if (s.key === "auto_next_ep") {
+                const val = String(s.value) !== "0";
+                localStorage.setItem("4kvm_auto_next_ep", val ? "1" : "0");
+                setAutoPlayNextState(val);
+              } else if (s.key === "auto_resume") {
+                const val = String(s.value) !== "0";
+                localStorage.setItem("4kvm_auto_resume", val ? "1" : "0");
+                setAutoResumeState(val);
               }
             }
           }
@@ -558,6 +606,128 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
     [user, performSync],
   );
 
+  const deleteHistoryItem = useCallback(
+    (vodId: string) => {
+      const all = readLocalHistory(true);
+      const targetId = String(vodId);
+      const now = Date.now();
+      const idx = all.findIndex((h) => String(h.vodId) === targetId);
+      if (idx >= 0) {
+        all[idx] = { ...all[idx], deleted: true, timestamp: now };
+      } else {
+        all.push({
+          vodId: targetId,
+          vodName: "",
+          vodPic: "",
+          episodeName: "",
+          episodeIndex: 0,
+          sourceIndex: 0,
+          currentTime: 0,
+          duration: 0,
+          timestamp: now,
+          deleted: true,
+        });
+      }
+      writeLocalHistory(all);
+      setHistory(
+        all
+          .filter((h) => !h.deleted)
+          .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)),
+      );
+      if (user) {
+        if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = setTimeout(() => {
+          void performSync(false);
+        }, 800);
+      }
+    },
+    [user, performSync],
+  );
+
+  const clearAllHistory = useCallback(() => {
+    const all = readLocalHistory(true);
+    const now = Date.now();
+    const updated = all.map((h) => ({
+      ...h,
+      deleted: true,
+      timestamp: now,
+    }));
+    writeLocalHistory(updated);
+    setHistory([]);
+    if (user) {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = setTimeout(() => {
+        void performSync(false);
+      }, 800);
+    }
+  }, [user, performSync]);
+
+  const clearAllFavorites = useCallback(() => {
+    const all = readLocalFavorites();
+    const now = Date.now();
+    const updated = all.map((f) => ({
+      ...f,
+      deleted: true,
+      updatedAt: now,
+    }));
+    writeLocalFavorites(updated);
+    setFavorites([]);
+    if (user) {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = setTimeout(() => {
+        void performSync(false);
+      }, 800);
+    }
+  }, [user, performSync]);
+
+  const setSyncSearchHistory = useCallback(
+    (enabled: boolean) => {
+      setSyncSearchHistoryState(enabled);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("4kvm_sync_search_history", enabled ? "1" : "0");
+      }
+      if (user) {
+        if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = setTimeout(() => {
+          void performSync(false);
+        }, 500);
+      }
+    },
+    [user, performSync],
+  );
+
+  const setAutoPlayNext = useCallback(
+    (enabled: boolean) => {
+      setAutoPlayNextState(enabled);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("4kvm_auto_next_ep", enabled ? "1" : "0");
+      }
+      if (user) {
+        if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = setTimeout(() => {
+          void performSync(false);
+        }, 500);
+      }
+    },
+    [user, performSync],
+  );
+
+  const setAutoResume = useCallback(
+    (enabled: boolean) => {
+      setAutoResumeState(enabled);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("4kvm_auto_resume", enabled ? "1" : "0");
+      }
+      if (user) {
+        if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = setTimeout(() => {
+          void performSync(false);
+        }, 500);
+      }
+    },
+    [user, performSync],
+  );
+
   return (
     <AuthSyncContext.Provider
       value={{
@@ -581,6 +751,15 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
         syncNow: () => performSync(true),
         isFavorite,
         toggleFavorite,
+        deleteHistoryItem,
+        clearAllHistory,
+        clearAllFavorites,
+        syncSearchHistory,
+        setSyncSearchHistory,
+        autoPlayNext,
+        setAutoPlayNext,
+        autoResume,
+        setAutoResume,
       }}
     >
       {children}

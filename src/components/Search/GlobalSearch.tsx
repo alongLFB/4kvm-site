@@ -36,13 +36,22 @@ const MAX_HISTORY = 10;
 export function useSearchHistory() {
   const [history, setHistory] = useState<string[]>([]);
 
-  useEffect(() => {
+  const loadHistory = () => {
     try {
       const stored = localStorage.getItem(HISTORY_KEY);
       if (stored) {
         setHistory(JSON.parse(stored));
+      } else {
+        setHistory([]);
       }
     } catch (e) {}
+  };
+
+  useEffect(() => {
+    loadHistory();
+    const onSearchUpdated = () => loadHistory();
+    window.addEventListener("4kvm-search-history-updated", onSearchUpdated);
+    return () => window.removeEventListener("4kvm-search-history-updated", onSearchUpdated);
   }, []);
 
   const addHistory = (term: string) => {
@@ -52,6 +61,10 @@ export function useSearchHistory() {
       const updated = [clean, ...history.filter((h) => h !== clean)].slice(0, MAX_HISTORY);
       setHistory(updated);
       localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new Event("4kvm-search-history-updated"));
+      if (typeof window !== "undefined" && localStorage.getItem("4kvm_sync_search_history") === "1") {
+        window.dispatchEvent(new CustomEvent("4kvm-sync-updated", { detail: { syncRemote: true } }));
+      }
     } catch (e) {}
   };
 
@@ -61,6 +74,10 @@ export function useSearchHistory() {
       const updated = history.filter((h) => h !== term);
       setHistory(updated);
       localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new Event("4kvm-search-history-updated"));
+      if (typeof window !== "undefined" && localStorage.getItem("4kvm_sync_search_history") === "1") {
+        window.dispatchEvent(new CustomEvent("4kvm-sync-updated", { detail: { syncRemote: true } }));
+      }
     } catch (e) {}
   };
 
@@ -69,6 +86,10 @@ export function useSearchHistory() {
     try {
       setHistory([]);
       localStorage.removeItem(HISTORY_KEY);
+      window.dispatchEvent(new Event("4kvm-search-history-updated"));
+      if (typeof window !== "undefined" && localStorage.getItem("4kvm_sync_search_history") === "1") {
+        window.dispatchEvent(new CustomEvent("4kvm-sync-updated", { detail: { syncRemote: true } }));
+      }
     } catch (e) {}
   };
 

@@ -16,13 +16,16 @@ export default function HistoryPage() {
     openAccountModal,
     syncNow,
     toggleFavorite,
+    deleteHistoryItem,
+    clearAllHistory,
   } = useAuthSync();
 
   const loadLocalHistory = () => {
     try {
       const data = localStorage.getItem("watch_history");
       if (data) {
-        setHistory(JSON.parse(data));
+        const parsed = JSON.parse(data);
+        setHistory(Array.isArray(parsed) ? parsed.filter((x: WatchHistoryItem) => !x.deleted) : []);
       } else {
         setHistory([]);
       }
@@ -39,10 +42,8 @@ export default function HistoryPage() {
   }, []);
 
   const handleClear = () => {
-    if (confirm("确定要清空全部本地播放历史吗？")) {
-      localStorage.removeItem("watch_history");
-      window.dispatchEvent(new Event("4kvm-sync-updated"));
-      setHistory([]);
+    if (confirm("确定要清空全部播放历史并在多端同步清除吗？")) {
+      clearAllHistory();
     }
   };
 
@@ -159,12 +160,26 @@ export default function HistoryPage() {
                       {h.episodeName}
                     </p>
                   </div>
-                  <div className="flex items-center justify-between text-[11px] text-gray-500">
+                  <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1">
                     <span>播放至: {formatSeconds(h.currentTime)}</span>
-                    <span className="text-cyan-400 opacity-0 group-hover:opacity-100 transition flex items-center gap-1 font-medium">
-                      <Play className="w-3 h-3 fill-cyan-400" />
-                      继续观看
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-cyan-400 opacity-0 group-hover:opacity-100 transition flex items-center gap-1 font-medium">
+                        <Play className="w-3 h-3 fill-cyan-400" />
+                        继续观看
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          deleteHistoryItem(h.vodId);
+                        }}
+                        className="p-1 rounded-md text-gray-500 hover:text-red-400 hover:bg-white/10 transition cursor-pointer"
+                        title="从云端与本地删除此记录"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </Link>

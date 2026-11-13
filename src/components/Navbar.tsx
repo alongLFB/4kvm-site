@@ -34,7 +34,7 @@ function NavbarContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { openDrawer, activeCount, completedCount } = useDownloadManager();
-  const { user, openAccountModal } = useAuthSync();
+  const { user, openAccountModal, isAccountModalOpen } = useAuthSync();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const handleLogoClick = (e: React.MouseEvent) => {
@@ -232,11 +232,11 @@ function NavbarContent() {
               <OnlineBadge />
             </div>
 
-            {/* Mobile Header Actions */}
+            {/* Mobile Header Actions (Streamlined: Search, Download, Category Menu) */}
             <div className="flex md:hidden items-center gap-1.5">
               <button
                 onClick={() => setMobileSearchOpen(true)}
-                className="p-2 text-gray-300 hover:text-white rounded-xl bg-white/5 active:bg-white/10 transition flex items-center justify-center"
+                className="p-2 text-gray-300 hover:text-white rounded-xl bg-white/5 active:bg-white/10 transition flex items-center justify-center cursor-pointer"
                 aria-label="搜索影视"
                 title="搜索影视"
               >
@@ -256,30 +256,13 @@ function NavbarContent() {
                   <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 ) : null}
               </button>
-              <Link
-                href="/hall"
-                className="px-2.5 py-1 text-xs font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 rounded-lg flex items-center gap-1"
-              >
-                <Users className="w-3.5 h-3.5" />
-                一起看
-              </Link>
-              <Link href="/history" className="p-2 text-gray-300">
-                <History className="w-5 h-5" />
-              </Link>
-              <button
-                type="button"
-                onClick={openAccountModal}
-                className="p-2 text-cyan-400 hover:text-white rounded-xl bg-white/5"
-                aria-label="个人中心与云同步"
-              >
-                {user ? <UserCheck className="w-4 h-4" /> : <User className="w-4 h-4" />}
-              </button>
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="p-2 text-gray-300 hover:text-white focus:outline-none"
-                aria-label="切换菜单"
+                className="p-2 text-gray-300 hover:text-white rounded-xl bg-white/5 active:bg-white/10 transition flex items-center justify-center cursor-pointer"
+                aria-label="影视分类导航"
+                title="影视分类导航"
               >
-                {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                {mobileMenuOpen ? <X className="w-5 h-5 text-cyan-400" /> : <Menu className="w-5 h-5" />}
               </button>
             </div>
           </div>
@@ -294,48 +277,14 @@ function NavbarContent() {
             />
             <div className="relative z-50 md:hidden border-t border-white/10 bg-dark-900/98 backdrop-blur-xl px-4 pt-3 pb-6 space-y-3 animate-in fade-in slide-in-from-top-2 shadow-2xl">
               <div className="flex items-center justify-between px-1 pb-1">
-                <span className="text-xs font-semibold text-gray-400">实时观影概况</span>
+                <span className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
+                  影视分类快速直达
+                </span>
                 <OnlineBadge />
               </div>
 
-              <div
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setMobileSearchOpen(true);
-                }}
-                className="relative flex items-center cursor-pointer"
-              >
-                <div className="w-full bg-dark-800 text-sm text-gray-400 px-4 py-2.5 pl-9 rounded-xl border border-white/10 flex items-center">
-                  搜索片名、拼音、演员...
-                </div>
-                <Search className="w-4 h-4 text-cyan-400 absolute left-3" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <Link
-                  href="/"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`p-3 rounded-xl text-sm font-medium flex items-center gap-2 transition ${
-                    isHome
-                      ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 font-bold"
-                      : "bg-dark-800 active:bg-dark-700 text-white"
-                  }`}
-                >
-                  <Home className="w-4 h-4 text-cyan-400" />
-                  首页
-                </Link>
-                <Link
-                  href="/hall"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`p-3 rounded-xl text-sm font-bold flex items-center gap-2 transition ${
-                    isHall
-                      ? "bg-cyan-500/20 border border-cyan-500/40 text-cyan-400"
-                      : "bg-dark-800 active:bg-dark-700 text-white"
-                  }`}
-                >
-                  <Users className="w-4 h-4 text-cyan-400" />
-                  🎪 放映广场
-                </Link>
+              <div className="grid grid-cols-2 gap-2 pt-1">
                 <Link
                   href="/category"
                   onClick={() => setMobileMenuOpen(false)}
@@ -427,14 +376,14 @@ function NavbarContent() {
         onClose={() => setMobileSearchOpen(false)}
       />
 
-      {/* Mobile Sticky Bottom Tab Bar (Streamlined to 4 core tabs) */}
+      {/* Mobile Sticky Bottom Tab Bar (Streamlined to 5 core tabs including User Center) */}
       <div
         data-mobile-bottom-bar="true"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-dark-950/95 backdrop-blur-xl border-t border-white/10 px-3 py-1.5 pl-[max(0.75rem,env(safe-area-inset-left,0.75rem))] pr-[max(0.75rem,env(safe-area-inset-right,0.75rem))] pb-[max(0.75rem,env(safe-area-inset-bottom,0.75rem))] flex items-center justify-around shadow-2xl"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-dark-950/95 backdrop-blur-xl border-t border-white/10 px-2 py-1.5 pl-[max(0.5rem,env(safe-area-inset-left,0.5rem))] pr-[max(0.5rem,env(safe-area-inset-right,0.5rem))] pb-[max(0.75rem,env(safe-area-inset-bottom,0.75rem))] flex items-center justify-around shadow-2xl"
       >
         <Link
           href="/"
-          className={`flex flex-col items-center gap-0.5 py-1 px-4 rounded-xl transition active:scale-95 ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition active:scale-95 ${
             isHome ? "text-cyan-400 font-bold bg-cyan-500/10" : "text-gray-400 hover:text-white"
           }`}
         >
@@ -443,7 +392,7 @@ function NavbarContent() {
         </Link>
         <Link
           href="/category"
-          className={`flex flex-col items-center gap-0.5 py-1 px-4 rounded-xl transition active:scale-95 ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition active:scale-95 ${
             isCategory ? "text-cyan-400 font-bold bg-cyan-500/10" : "text-gray-400 hover:text-white"
           }`}
         >
@@ -452,7 +401,7 @@ function NavbarContent() {
         </Link>
         <Link
           href="/hall"
-          className={`flex flex-col items-center gap-0.5 py-1 px-4 rounded-xl transition active:scale-95 ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition active:scale-95 ${
             isHall ? "text-cyan-400 font-bold bg-cyan-500/10" : "text-gray-400 hover:text-white"
           }`}
         >
@@ -461,13 +410,30 @@ function NavbarContent() {
         </Link>
         <Link
           href="/history"
-          className={`flex flex-col items-center gap-0.5 py-1 px-4 rounded-xl transition active:scale-95 ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition active:scale-95 ${
             isHistory ? "text-cyan-400 font-bold bg-cyan-500/10" : "text-gray-400 hover:text-white"
           }`}
         >
           <History className="w-5 h-5" />
-          <span className="text-[10px]">历史</span>
+          <span className="text-[10px]">历史/收藏</span>
         </Link>
+        <button
+          type="button"
+          onClick={openAccountModal}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition active:scale-95 cursor-pointer ${
+            isAccountModalOpen ? "text-cyan-400 font-bold bg-cyan-500/10" : "text-gray-400 hover:text-white"
+          }`}
+        >
+          {user ? (
+            <div className="relative">
+              <UserCheck className="w-5 h-5 text-cyan-400" />
+              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-cyan-400 ring-1 ring-dark-950" />
+            </div>
+          ) : (
+            <User className="w-5 h-5" />
+          )}
+          <span className="text-[10px]">{user ? "我的" : "登录"}</span>
+        </button>
       </div>
     </>
   );

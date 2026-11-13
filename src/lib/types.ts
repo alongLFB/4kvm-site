@@ -39,4 +39,5 @@ export interface WatchHistoryItem {
   currentTime: number;
   duration: number;
   timestamp: number;
+  deleted?: boolean;
 }

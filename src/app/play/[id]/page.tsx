@@ -72,7 +72,7 @@ export default function PlayPage() {
   const [passcodeModalOpen, setPasscodeModalOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const { isFavorite, toggleFavorite } = useAuthSync();
+  const { isFavorite, toggleFavorite, autoPlayNext, autoResume } = useAuthSync();
   const favorited = item ? isFavorite(String(item.id)) : false;
 
   // 新增：自动续播初始进度与提示、选集正反序、剧情简介折叠状态
@@ -146,13 +146,15 @@ export default function PlayPage() {
                 targetTime = spT !== null ? parseInt(spT, 10) : 0;
               } else {
                 try {
-                  const histStr = localStorage.getItem("watch_history") || "[]";
-                  const histList: WatchHistoryItem[] = JSON.parse(histStr);
-                  const found = histList.find((h) => h.vodId === vod.id);
-                  if (found) {
-                    targetSrc = found.sourceIndex ?? 0;
-                    targetEp = found.episodeIndex ?? 0;
-                    targetTime = found.currentTime ?? 0;
+                  if (autoResume) {
+                    const histStr = localStorage.getItem("watch_history") || "[]";
+                    const histList: WatchHistoryItem[] = JSON.parse(histStr);
+                    const found = histList.find((h) => h.vodId === vod.id && !h.deleted);
+                    if (found) {
+                      targetSrc = found.sourceIndex ?? 0;
+                      targetEp = found.episodeIndex ?? 0;
+                      targetTime = found.currentTime ?? 0;
+                    }
                   }
                 } catch (e) {}
               }
@@ -487,7 +489,7 @@ export default function PlayPage() {
                   playerRef.current = art;
                 }}
                 onEnded={() => {
-                  if (currentEpIndex < currentSource.episodes.length - 1) {
+                  if (autoPlayNext && currentEpIndex < currentSource.episodes.length - 1) {
                     handleEpisodeChange(currentEpIndex + 1);
                   }
                 }}
