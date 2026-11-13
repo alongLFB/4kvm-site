@@ -348,22 +348,45 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
   const refreshSession = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/v1/auth/get-session", {
+      // 1. Initial attempt with current auth headers (Bearer token if present + cookie credentials)
+      let res = await fetch("/api/v1/auth/get-session", {
         method: "GET",
         credentials: "include",
         headers: getAuthHeaders(),
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.user) {
-          setUser(data.user);
-          updateGuestUser({
-            name: data.user.name || data.user.email.split("@")[0],
-          });
-          await performSync(false);
-        } else {
-          setUser(null);
+
+      let data = res.ok ? await res.json().catch(() => null) : null;
+
+      // 2. Stale token recovery: If get-session returned null user or HTTP failure while a Bearer
+      // token was stored in localStorage, the stored token is stale/expired.
+      // Better Auth's bearer middleware will overwrite the valid session cookie with this stale token and fail!
+      // In that case: remove the stale Bearer token and retry immediately with pure cookie credentials.
+      if (
+        !data?.user &&
+        typeof window !== "undefined" &&
+        localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)
+      ) {
+        localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+        res = await fetch("/api/v1/auth/get-session", {
+          method: "GET",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (res.ok) {
+          data = await res.json().catch(() => null);
         }
+      }
+
+      if (data?.user) {
+        setUser(data.user);
+        // Persist session token to localStorage for subsequent cross-origin / TV sync calls
+        if (data?.session?.token && typeof window !== "undefined") {
+          localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, data.session.token);
+        }
+        updateGuestUser({
+          name: data.user.name || data.user.email.split("@")[0],
+        });
+        await performSync(false);
       } else {
         setUser(null);
       }
@@ -484,6 +507,11 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loginWithGoogle = async () => {
+    // Clear any stale local bearer token before initiating OAuth to prevent conflict upon return
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    }
+
     const callbackURL =
       typeof window !== "undefined"
         ? `${window.location.pathname}${window.location.search}` || "/"

@@ -50,11 +50,18 @@ async function handleAuthRequest(request: Request): Promise<Response> {
         const data = (await signInRes.clone().json()) as { url?: string };
         if (data?.url) {
           const redirectRes = NextResponse.redirect(data.url, 302);
-          const setCookie = signInRes.headers.get("set-cookie");
-          if (setCookie) {
-            redirectRes.headers.set("set-cookie", setCookie);
+          const cookies = signInRes.headers.getSetCookie?.() || [];
+          if (cookies.length > 0) {
+            for (const c of cookies) {
+              redirectRes.headers.append("set-cookie", c);
+            }
+          } else {
+            const setCookie = signInRes.headers.get("set-cookie");
+            if (setCookie) {
+              redirectRes.headers.set("set-cookie", setCookie);
+            }
           }
-          return withCors(request, redirectRes);
+          return redirectRes;
         }
       } catch {
         // Fallback to raw response
@@ -303,6 +310,9 @@ async function handleAuthRequest(request: Request): Promise<Response> {
   }
 
   const response = await auth.handler(request);
+  if (response.status >= 300 && response.status < 400) {
+    return response;
+  }
   return withCors(request, response);
 }
 
