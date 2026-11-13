@@ -96,11 +96,13 @@ function readLocalHistory(includeDeleted = false): WatchHistoryItem[] {
   }
 }
 
-function writeLocalHistory(list: WatchHistoryItem[]) {
+function writeLocalHistory(list: WatchHistoryItem[], notify = true) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem("watch_history", JSON.stringify(list.slice(0, 100)));
-    window.dispatchEvent(new Event("4kvm-sync-updated"));
+    if (notify) {
+      window.dispatchEvent(new Event("4kvm-sync-updated"));
+    }
   } catch {
     // Ignore storage quota errors
   }
@@ -118,11 +120,13 @@ function readLocalFavorites(): WebFavoriteItem[] {
   }
 }
 
-function writeLocalFavorites(list: WebFavoriteItem[]) {
+function writeLocalFavorites(list: WebFavoriteItem[], notify = true) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(list));
-    window.dispatchEvent(new Event("4kvm-sync-updated"));
+    if (notify) {
+      window.dispatchEvent(new Event("4kvm-sync-updated"));
+    }
   } catch {
     // Ignore
   }
@@ -130,13 +134,20 @@ function writeLocalFavorites(list: WebFavoriteItem[]) {
 
 export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUserInfo | null>(null);
+  const userRef = useRef<AuthUserInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const syncingRef = useRef(false);
+  const isRefreshingRef = useRef(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [favorites, setFavorites] = useState<WebFavoriteItem[]>([]);
   const [history, setHistory] = useState<WatchHistoryItem[]>([]);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   const [syncSearchHistory, setSyncSearchHistoryState] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -169,6 +180,9 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
   const performSync = useCallback(
     async (fullPush = false) => {
       if (typeof window === "undefined") return;
+      if (!userRef.current) return;
+      if (syncingRef.current) return;
+      syncingRef.current = true;
       setSyncing(true);
       try {
         const localHist = readLocalHistory(true);
@@ -263,7 +277,7 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
               }
             }
             const allHist = Array.from(histMap.values());
-            writeLocalHistory(allHist);
+            writeLocalHistory(allHist, false);
             setHistory(
               allHist
                 .filter((h) => !h.deleted)
@@ -300,7 +314,7 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
             const mergedFavs = Array.from(favMap.values()).sort(
               (a, b) => b.updatedAt - a.updatedAt,
             );
-            writeLocalFavorites(mergedFavs);
+            writeLocalFavorites(mergedFavs, false);
             setFavorites(mergedFavs.filter((f) => !f.deleted));
           }
 
@@ -339,6 +353,7 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
       } catch (err) {
         console.error("[Web AuthSync] Sync error:", err);
       } finally {
+        syncingRef.current = false;
         setSyncing(false);
       }
     },
@@ -346,6 +361,8 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
   );
 
   const refreshSession = useCallback(async () => {
+    if (isRefreshingRef.current) return;
+    isRefreshingRef.current = true;
     setLoading(true);
     try {
       // 1. Initial attempt with current auth headers (Bearer token if present + cookie credentials)
@@ -362,7 +379,7 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
       // Better Auth's bearer middleware will overwrite the valid session cookie with this stale token and fail!
       // In that case: remove the stale Bearer token and retry immediately with pure cookie credentials.
       if (
-        !data?.user &&
+        (!res.ok || !data?.user) &&
         typeof window !== "undefined" &&
         localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)
       ) {
@@ -379,6 +396,7 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
 
       if (data?.user) {
         setUser(data.user);
+        userRef.current = data.user;
         // Persist session token to localStorage for subsequent cross-origin / TV sync calls
         if (data?.session?.token && typeof window !== "undefined") {
           localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, data.session.token);
@@ -387,12 +405,20 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
           name: data.user.name || data.user.email.split("@")[0],
         });
         await performSync(false);
-      } else {
+      } else if (res.status === 401 || (res.ok && data === null)) {
+        // Genuinely not logged in or session expired on server
         setUser(null);
+        userRef.current = null;
+        if (typeof window !== "undefined") {
+          localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+        }
+      } else {
+        console.warn("[Auth] get-session returned non-auth status:", res.status);
       }
-    } catch {
-      setUser(null);
+    } catch (err) {
+      console.warn("[Auth] get-session network exception:", err);
     } finally {
+      isRefreshingRef.current = false;
       setLoading(false);
     }
   }, [getAuthHeaders, performSync]);
@@ -406,7 +432,7 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
       setFavorites(readLocalFavorites().filter((f) => !f.deleted));
       setHistory(readLocalHistory());
       const custom = e as CustomEvent<{ syncRemote?: boolean }>;
-      if (custom?.detail?.syncRemote && user) {
+      if (custom?.detail?.syncRemote && userRef.current) {
         if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
         syncTimerRef.current = setTimeout(() => {
           void performSync(false);
@@ -414,8 +440,11 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
       }
     };
     window.addEventListener("4kvm-sync-updated", onSyncUpdated);
-    return () => window.removeEventListener("4kvm-sync-updated", onSyncUpdated);
-  }, [refreshSession, user, performSync]);
+    return () => {
+      window.removeEventListener("4kvm-sync-updated", onSyncUpdated);
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, []); // Run exactly once on mount, breaking the re-render cascade loop!
 
   const loginWithEmail = async (email: string, password: string) => {
     const res = await fetch("/api/v1/auth/sign-in/email", {
@@ -624,14 +653,14 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
       writeLocalFavorites(all);
       setFavorites(all.filter((f) => !f.deleted));
 
-      if (user) {
+      if (userRef.current) {
         if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
         syncTimerRef.current = setTimeout(() => {
           void performSync(false);
         }, 1500);
       }
     },
-    [user, performSync],
+    [performSync],
   );
 
   const deleteHistoryItem = useCallback(
@@ -662,14 +691,14 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
           .filter((h) => !h.deleted)
           .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)),
       );
-      if (user) {
+      if (userRef.current) {
         if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
         syncTimerRef.current = setTimeout(() => {
           void performSync(false);
         }, 800);
       }
     },
-    [user, performSync],
+    [performSync],
   );
 
   const clearAllHistory = useCallback(() => {
@@ -682,13 +711,13 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
     }));
     writeLocalHistory(updated);
     setHistory([]);
-    if (user) {
+    if (userRef.current) {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
       syncTimerRef.current = setTimeout(() => {
         void performSync(false);
       }, 800);
     }
-  }, [user, performSync]);
+  }, [performSync]);
 
   const clearAllFavorites = useCallback(() => {
     const all = readLocalFavorites();
@@ -700,13 +729,13 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
     }));
     writeLocalFavorites(updated);
     setFavorites([]);
-    if (user) {
+    if (userRef.current) {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
       syncTimerRef.current = setTimeout(() => {
         void performSync(false);
       }, 800);
     }
-  }, [user, performSync]);
+  }, [performSync]);
 
   const setSyncSearchHistory = useCallback(
     (enabled: boolean) => {
@@ -714,14 +743,14 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== "undefined") {
         localStorage.setItem("4kvm_sync_search_history", enabled ? "1" : "0");
       }
-      if (user) {
+      if (userRef.current) {
         if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
         syncTimerRef.current = setTimeout(() => {
           void performSync(false);
         }, 500);
       }
     },
-    [user, performSync],
+    [performSync],
   );
 
   const setAutoPlayNext = useCallback(
@@ -730,14 +759,14 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== "undefined") {
         localStorage.setItem("4kvm_auto_next_ep", enabled ? "1" : "0");
       }
-      if (user) {
+      if (userRef.current) {
         if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
         syncTimerRef.current = setTimeout(() => {
           void performSync(false);
         }, 500);
       }
     },
-    [user, performSync],
+    [performSync],
   );
 
   const setAutoResume = useCallback(
@@ -746,14 +775,14 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== "undefined") {
         localStorage.setItem("4kvm_auto_resume", enabled ? "1" : "0");
       }
-      if (user) {
+      if (userRef.current) {
         if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
         syncTimerRef.current = setTimeout(() => {
           void performSync(false);
         }, 500);
       }
     },
-    [user, performSync],
+    [performSync],
   );
 
   return (
