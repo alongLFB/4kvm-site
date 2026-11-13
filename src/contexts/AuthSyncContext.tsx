@@ -424,13 +424,18 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loginWithGoogle = async () => {
+    const callbackURL =
+      typeof window !== "undefined"
+        ? `${window.location.pathname}${window.location.search}` || "/"
+        : "/";
+
     const res = await fetch("/api/v1/auth/sign-in/social", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         provider: "google",
-        callbackURL: window.location.href,
+        callbackURL,
       }),
     });
     const data = await res.json().catch(() => ({}));

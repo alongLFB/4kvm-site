@@ -143,14 +143,38 @@ export const auth = betterAuth({
   secret:
     process.env.BETTER_AUTH_SECRET ||
     "4kvm-alonglfbtv-shared-auth-secret-key-2026-v1",
-  trustedOrigins: [
-    "https://4kvm.alonglfb.com",
-    "https://tv.alonglfb.com",
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:3000",
-    "alonglfbtv://",
-  ],
+  trustedOrigins: (request) => {
+    const list = [
+      "https://4kvm.alonglfb.com",
+      "http://4kvm.alonglfb.com",
+      "https://*.alonglfb.com",
+      "http://*.alonglfb.com",
+      "https://alonglfb.com",
+      "http://alonglfb.com",
+      "https://tv.alonglfb.com",
+      "http://tv.alonglfb.com",
+      "http://localhost:3000",
+      "http://localhost:5173",
+      "http://127.0.0.1:3000",
+      "alonglfbtv://",
+    ];
+    if (request) {
+      const origin = request.headers.get("origin");
+      if (origin && !list.includes(origin)) {
+        list.push(origin);
+      }
+      const host =
+        request.headers.get("x-forwarded-host") ||
+        request.headers.get("host");
+      const proto = request.headers.get("x-forwarded-proto") || "https";
+      if (host) {
+        list.push(`${proto}://${host}`);
+        list.push(`http://${host}`);
+        list.push(`https://${host}`);
+      }
+    }
+    return list;
+  },
   advanced: {
     trustedProxyHeaders: true,
   },
