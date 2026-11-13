@@ -8,10 +8,11 @@ import { MovieCard } from "@/components/MovieCard";
 import { CreateRoomModal } from "@/components/CreateRoomModal";
 import { PasscodeModal } from "@/components/PasscodeModal";
 import { GATED_CONFIG } from "@/config/gated-sections";
-import { Film, Share2, Radio, Users, Loader2, Lock, ChevronDown, ArrowUpDown, Download } from "lucide-react";
+import { Film, Share2, Radio, Users, Loader2, Lock, ChevronDown, ArrowUpDown, Download, Star } from "lucide-react";
 import { VodItem, WatchHistoryItem } from "@/lib/types";
 import { useOnlineWatcher } from "@/hooks/useOnlineWatcher";
 import { DownloadModal } from "@/components/DownloadModal";
+import { useAuthSync } from "@/contexts/AuthSyncContext";
 
 const VideoPlayer = dynamic(() => import("@/components/Player/ArtPlayer"), {
   ssr: false,
@@ -70,6 +71,9 @@ export default function PlayPage() {
   const [isGatedLocked, setIsGatedLocked] = useState(false);
   const [passcodeModalOpen, setPasscodeModalOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  const { isFavorite, toggleFavorite } = useAuthSync();
+  const favorited = item ? isFavorite(String(item.id)) : false;
 
   // 新增：自动续播初始进度与提示、选集正反序、剧情简介折叠状态
   const [initialTime, setInitialTime] = useState<number>(0);
@@ -310,6 +314,9 @@ export default function PlayPage() {
         timestamp: Date.now(),
       });
       localStorage.setItem("watch_history", JSON.stringify(list.slice(0, 30)));
+      window.dispatchEvent(
+        new CustomEvent("4kvm-sync-updated", { detail: { syncRemote: true } }),
+      );
     } catch (e) {
       console.error(e);
     }
@@ -519,6 +526,36 @@ export default function PlayPage() {
 
               {/* Action Buttons with Tactile Elevation */}
               <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                {/* Favorite Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!item) return;
+                    toggleFavorite({
+                      id: String(item.id),
+                      name: item.name,
+                      pic: item.pic,
+                      remarks: item.remarks,
+                      rating: item.rating,
+                      type_name: item.type_name,
+                      year: item.year,
+                    });
+                  }}
+                  className={`px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border active:scale-95 cursor-pointer ${
+                    favorited
+                      ? "bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                      : "bg-white/[0.06] hover:bg-white/[0.12] text-gray-200 border-white/10"
+                  }`}
+                  title={favorited ? "点击取消收藏" : "收藏该影片并多端同步"}
+                >
+                  <Star
+                    className={`w-4 h-4 ${
+                      favorited ? "fill-amber-400 text-amber-400" : "text-amber-400"
+                    }`}
+                  />
+                  <span>{favorited ? "已收藏" : "收藏"}</span>
+                </button>
+
                 {/* Download Button */}
                 <button
                   type="button"

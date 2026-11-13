@@ -18,6 +18,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { VodItem } from "@/lib/types";
+import { useAuthSync } from "@/contexts/AuthSyncContext";
 
 interface VodDetailModalProps {
   item: VodItem | null;
@@ -34,6 +35,9 @@ export function VodDetailModal({
 }: VodDetailModalProps) {
   const [copied, setCopied] = useState(false);
   const [activeSourceIndex, setActiveSourceIndex] = useState(0);
+
+  const { isFavorite, toggleFavorite } = useAuthSync();
+  const favorited = item ? isFavorite(String(item.id)) : false;
 
   // Close on Escape & lock body scroll
   useEffect(() => {
@@ -156,6 +160,35 @@ export function VodDetailModal({
                     <span>一起看</span>
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!item) return;
+                    toggleFavorite({
+                      id: String(item.id),
+                      name: item.name,
+                      pic: item.pic,
+                      remarks: item.remarks,
+                      rating: item.rating,
+                      type_name: item.type_name,
+                      year: item.year,
+                    });
+                  }}
+                  className={`px-4 py-2.5 sm:px-5 sm:py-3.5 rounded-2xl active:scale-95 font-semibold text-xs sm:text-sm flex items-center gap-2 border backdrop-blur-xl transition cursor-pointer ${
+                    favorited
+                      ? "bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40 shadow-[0_0_20px_rgba(245,158,11,0.2)]"
+                      : "bg-white/5 hover:bg-white/10 text-gray-200 border-white/10"
+                  }`}
+                  title={favorited ? "点击取消收藏" : "收藏该影视并多端同步"}
+                >
+                  <Star
+                    className={`w-4 h-4 ${
+                      favorited ? "fill-amber-400 text-amber-400" : "text-amber-400"
+                    }`}
+                  />
+                  <span>{favorited ? "已收藏" : "收藏"}</span>
+                </button>
 
                 <button
                   type="button"

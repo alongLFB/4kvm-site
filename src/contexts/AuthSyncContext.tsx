@@ -38,6 +38,7 @@ interface AuthSyncContextValue {
   syncing: boolean;
   lastSyncedAt: number | null;
   favorites: WebFavoriteItem[];
+  history: WatchHistoryItem[];
   isAccountModalOpen: boolean;
   openAccountModal: () => void;
   closeAccountModal: () => void;
@@ -123,6 +124,7 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
   const [syncing, setSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [favorites, setFavorites] = useState<WebFavoriteItem[]>([]);
+  const [history, setHistory] = useState<WatchHistoryItem[]>([]);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -240,6 +242,7 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
               (a, b) => (b.timestamp || 0) - (a.timestamp || 0),
             );
             writeLocalHistory(mergedHist);
+            setHistory(mergedHist);
           }
 
           if (
@@ -325,14 +328,23 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setFavorites(readLocalFavorites().filter((f) => !f.deleted));
+    setHistory(readLocalHistory());
     void refreshSession();
 
-    const onSyncUpdated = () => {
+    const onSyncUpdated = (e: Event) => {
       setFavorites(readLocalFavorites().filter((f) => !f.deleted));
+      setHistory(readLocalHistory());
+      const custom = e as CustomEvent<{ syncRemote?: boolean }>;
+      if (custom?.detail?.syncRemote && user) {
+        if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = setTimeout(() => {
+          void performSync(false);
+        }, 1500);
+      }
     };
     window.addEventListener("4kvm-sync-updated", onSyncUpdated);
     return () => window.removeEventListener("4kvm-sync-updated", onSyncUpdated);
-  }, [refreshSession]);
+  }, [refreshSession, user, performSync]);
 
   const loginWithEmail = async (email: string, password: string) => {
     const res = await fetch("/api/v1/auth/sign-in/email", {
@@ -554,6 +566,7 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
         syncing,
         lastSyncedAt,
         favorites,
+        history,
         isAccountModalOpen,
         openAccountModal: () => setIsAccountModalOpen(true),
         closeAccountModal: () => setIsAccountModalOpen(false),

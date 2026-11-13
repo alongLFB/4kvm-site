@@ -41,6 +41,7 @@ export default function HistoryPage() {
   const handleClear = () => {
     if (confirm("确定要清空全部本地播放历史吗？")) {
       localStorage.removeItem("watch_history");
+      window.dispatchEvent(new Event("4kvm-sync-updated"));
       setHistory([]);
     }
   };

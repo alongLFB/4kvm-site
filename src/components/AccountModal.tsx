@@ -14,10 +14,21 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
+  History,
+  Play,
+  ChevronRight,
+  Star,
 } from "lucide-react";
 import { useAuthSync } from "@/contexts/AuthSyncContext";
 
 type AuthTab = "login" | "register" | "reset";
+
+function formatSeconds(s: number) {
+  const total = Math.max(0, Math.floor(s || 0));
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+}
 
 export function AccountModal() {
   const {
@@ -25,6 +36,7 @@ export function AccountModal() {
     syncing,
     lastSyncedAt,
     favorites,
+    history,
     isAccountModalOpen,
     closeAccountModal,
     loginWithEmail,
@@ -216,7 +228,7 @@ export function AccountModal() {
                     type="button"
                     disabled={syncing}
                     onClick={() => void syncNow()}
-                    className="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-xs font-semibold flex items-center gap-1 transition disabled:opacity-50"
+                    className="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-xs font-semibold flex items-center gap-1 transition disabled:opacity-50 cursor-pointer"
                   >
                     <RefreshCw
                       className={`w-3 h-3 ${syncing ? "animate-spin" : ""}`}
@@ -225,11 +237,78 @@ export function AccountModal() {
                   </button>
                 </div>
                 <p className="text-[11px] text-gray-400">
-                  云端已同步收藏 {favorites.length} 部影片 ·{" "}
+                  云端已同步：观看历史 <strong className="text-cyan-300 font-semibold">{history.length}</strong> 条 · 收藏 <strong className="text-amber-300 font-semibold">{favorites.length}</strong> 部影片 ·{" "}
                   {lastSyncedAt
                     ? `上次同步 ${new Date(lastSyncedAt).toLocaleTimeString()}`
                     : "实时就绪"}
                 </p>
+              </div>
+
+              {/* Quick History & Favorites Preview */}
+              <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <History className="w-3.5 h-3.5 text-cyan-400" />
+                    最近观看历史
+                  </span>
+                  <Link
+                    href="/history"
+                    onClick={closeAccountModal}
+                    className="text-xs text-cyan-400 hover:text-cyan-300 font-medium flex items-center gap-0.5 hover:underline"
+                  >
+                    全部历史与收藏 ({history.length})
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+
+                {history.length > 0 ? (
+                  <div className="space-y-2">
+                    {history.slice(0, 3).map((h, i) => (
+                      <Link
+                        key={i}
+                        href={`/play/${h.vodId}?src=${h.sourceIndex || 0}&ep=${h.episodeIndex || 0}&t=${h.currentTime || 0}`}
+                        onClick={closeAccountModal}
+                        className="flex items-center gap-2.5 p-2 rounded-lg bg-black/40 hover:bg-white/[0.06] border border-white/5 hover:border-cyan-500/30 transition group"
+                      >
+                        <img
+                          src={h.vodPic}
+                          alt={h.vodName}
+                          className="w-9 h-12 object-cover rounded bg-dark-800 shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-bold text-gray-200 group-hover:text-cyan-300 truncate">
+                            {h.vodName}
+                          </div>
+                          <div className="text-[11px] text-gray-400 truncate mt-0.5 flex items-center gap-1.5">
+                            <span className="text-cyan-400/90 font-medium">{h.episodeName}</span>
+                            <span>·</span>
+                            <span>播至 {formatSeconds(h.currentTime)}</span>
+                          </div>
+                        </div>
+                        <Play className="w-3.5 h-3.5 text-gray-500 group-hover:text-cyan-400 shrink-0" />
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-500 text-center py-3 bg-black/20 rounded-lg border border-white/5">
+                    暂无播放记录，播放影片后将自动同步记录
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5 text-gray-300">
+                    <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                    <span>我的收藏 ({favorites.length})</span>
+                  </span>
+                  <Link
+                    href="/history"
+                    onClick={closeAccountModal}
+                    className="text-cyan-400 hover:text-cyan-300 font-medium flex items-center gap-0.5 hover:underline"
+                  >
+                    查看收藏列表
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
               </div>
 
               {/* Actions */}
