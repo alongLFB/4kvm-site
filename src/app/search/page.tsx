@@ -19,9 +19,19 @@ import {
   Star,
   Calendar,
   Sparkles,
+  Filter,
 } from "lucide-react";
 import { GATED_CONFIG } from "@/config/gated-sections";
 import { VodItem } from "@/lib/types";
+
+const BASE_CATEGORIES = [
+  { label: "全部", value: "全部" },
+  { label: "🎬 电影", value: "电影" },
+  { label: "📺 电视剧", value: "电视剧" },
+  { label: "✨ 动漫", value: "动漫" },
+  { label: "🎤 综艺", value: "综艺" },
+  { label: "⚽ 体育", value: "体育" },
+];
 
 // 高亮关键词
 function HighlightMatchedText({ text, query }: { text: string; query: string }) {
@@ -47,13 +57,16 @@ function SearchContent() {
   const searchParams = useSearchParams();
   const q = searchParams?.get("q") || "";
   const initialPage = parseInt(searchParams?.get("page") || searchParams?.get("pg") || "1", 10);
+  const initialType = searchParams?.get("type") || "全部";
 
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<VodItem[]>([]);
   const [currentPage, setCurrentPage] = useState(initialPage > 0 ? initialPage : 1);
+  const [selectedType, setSelectedType] = useState<string>(initialType);
   const [total, setTotal] = useState(0);
   const [pageCount, setPageCount] = useState(1);
   const [jumpInput, setJumpInput] = useState("");
+  const [hasGatedAccess, setHasGatedAccess] = useState(false);
 
   // 视图模式：默认详细档案列表 (list)，也可切换海报网格 (grid)
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
@@ -62,10 +75,43 @@ function SearchContent() {
   const [selectedDetailItem, setSelectedDetailItem] = useState<VodItem | null>(null);
   const [roomVod, setRoomVod] = useState<VodItem | null>(null);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setHasGatedAccess(!!localStorage.getItem(GATED_CONFIG.storageKey));
+    }
+  }, []);
+
   // 当搜索关键词变化时，重置回到第 1 页
   useEffect(() => {
     setCurrentPage(1);
   }, [q]);
+
+  // 同步 URL 上的 type 参数
+  useEffect(() => {
+    const t = searchParams?.get("type") || "全部";
+    setSelectedType(t);
+  }, [searchParams]);
+
+  const categories = [
+    ...BASE_CATEGORIES,
+    ...(hasGatedAccess ? [{ label: "🎬 伦理片", value: "伦理片" }] : []),
+  ];
+
+  const handleTypeSelect = (newType: string) => {
+    if (newType === selectedType) return;
+    setSelectedType(newType);
+    setCurrentPage(1);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (newType && newType !== "全部") {
+        url.searchParams.set("type", newType);
+      } else {
+        url.searchParams.delete("type");
+      }
+      url.searchParams.set("pg", "1");
+      window.history.replaceState({}, "", url.toString());
+    }
+  };
 
   useEffect(() => {
     if (!q.trim()) {
@@ -85,8 +131,10 @@ function SearchContent() {
     const headers: Record<string, string> = {};
     if (pin) headers[GATED_CONFIG.headerKey] = pin;
 
+    const typeParam = selectedType && selectedType !== "全部" ? `&type=${encodeURIComponent(selectedType)}` : "";
+
     fetch(
-      `/api/vod?wd=${encodeURIComponent(q.trim())}&pg=${currentPage}&limit=20`,
+      `/api/vod?wd=${encodeURIComponent(q.trim())}${typeParam}&pg=${currentPage}&limit=20`,
       { headers }
     )
       .then((res) => res.json())
@@ -105,7 +153,7 @@ function SearchContent() {
     return () => {
       isMounted = false;
     };
-  }, [q, currentPage]);
+  }, [q, currentPage, selectedType]);
 
   const changePage = (p: number) => {
     if (p < 1 || p > pageCount || p === currentPage) return;
@@ -168,6 +216,38 @@ function SearchContent() {
           </div>
         )}
       </div>
+
+      {/* 搜索分类过滤栏 */}
+      {q.trim() && (
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+          <span className="text-xs font-bold text-gray-400 flex items-center gap-1.5 shrink-0 mr-1 select-none">
+            <Filter className="w-3.5 h-3.5 text-cyan-400" />
+            <span>分类筛选：</span>
+          </span>
+          {categories.map((cat) => {
+            const isActive = selectedType === cat.value;
+            return (
+              <button
+                key={cat.value}
+                type="button"
+                onClick={() => handleTypeSelect(cat.value)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 select-none active:scale-95 ${
+                  isActive
+                    ? "bg-cyan-500 text-dark-950 shadow-md shadow-cyan-500/20 scale-[1.02]"
+                    : "bg-white/[0.04] text-gray-300 hover:text-white hover:bg-white/[0.08] border border-white/[0.06]"
+                }`}
+              >
+                <span>{cat.label}</span>
+                {isActive && total > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-dark-950/20 font-black">
+                    {total}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {loading ? (
         <div className="py-32 flex flex-col items-center justify-center gap-3 text-gray-400">
@@ -382,7 +462,24 @@ function SearchContent() {
         </>
       ) : (
         <div className="py-24 text-center space-y-4">
-          <p className="text-gray-400 text-base">未找到与 “{q}” 相关的影视</p>
+          <p className="text-gray-400 text-base">
+            {selectedType !== "全部" ? (
+              <>在【<span className="text-cyan-400 font-bold">{selectedType}</span>】分类中未找到与 “{q}” 相关的影视</>
+            ) : (
+              <>未找到与 “{q}” 相关的影视</>
+            )}
+          </p>
+          {selectedType !== "全部" && (
+            <div>
+              <button
+                type="button"
+                onClick={() => handleTypeSelect("全部")}
+                className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-dark-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition cursor-pointer"
+              >
+                清除分类筛选，查看全部结果
+              </button>
+            </div>
+          )}
           <p className="text-xs text-gray-500">
             支持全拼输入（如 <span className="text-cyan-400 font-mono">chun</span>）或首字母（如{" "}
             <span className="text-cyan-400 font-mono">zcql</span>）快捷找片

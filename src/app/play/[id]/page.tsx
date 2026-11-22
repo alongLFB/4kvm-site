@@ -8,7 +8,7 @@ import { MovieCard } from "@/components/MovieCard";
 import { CreateRoomModal } from "@/components/CreateRoomModal";
 import { PasscodeModal } from "@/components/PasscodeModal";
 import { GATED_CONFIG } from "@/config/gated-sections";
-import { Film, Share2, Radio, Users, Loader2, Lock, ChevronDown, ArrowUpDown, Download, Star } from "lucide-react";
+import { Film, Share2, Radio, Users, Loader2, Lock, ChevronDown, ArrowUpDown, Download, Star, Layers, Flame } from "lucide-react";
 import { VodItem, WatchHistoryItem } from "@/lib/types";
 import { useOnlineWatcher } from "@/hooks/useOnlineWatcher";
 import { DownloadModal } from "@/components/DownloadModal";
@@ -56,13 +56,33 @@ function renderPersonLinks(rawText?: string) {
   );
 }
 
+// 智能提取剧集/系列IP根名称（去除第X季、第X部、年番、特别篇、罗马数字或后缀）
+function extractSeriesBaseName(name: string): string {
+  if (!name) return "";
+  let clean = name.trim();
+  // 过滤常见的方括号前缀如 [国语]、(超清)、【HD】
+  clean = clean.replace(/^[\[【(（][^\]】)）]+[\]】)）]\s*/, "");
+  // 过滤常见的季数、部数、年番、衍生篇等
+  clean = clean
+    .replace(/第[0-9一二三四五六七八九十百]+[季部卷篇章期]/g, "")
+    .replace(/\b(season|s)\s*[0-9]+/gi, "")
+    .replace(/(年番|特别篇|剧场版|电影版|重制版|真人版|动态漫画|动画版|网络版|电视版|番外篇|总集篇|精简版)/g, "")
+    .replace(/[:：·\-_—].*$/, "")
+    .replace(/\s*([0-9]+|[IVXLCDM]+)$/i, "")
+    .trim();
+  if (clean.length < 2) return name.slice(0, 4);
+  return clean;
+}
+
 export default function PlayPage() {
   const params = useParams();
   const id = params?.id as string;
 
   const [loading, setLoading] = useState(true);
   const [item, setItem] = useState<VodItem | null>(null);
-  const [recommendations, setRecommendations] = useState<VodItem[]>([]);
+  const [seriesList, setSeriesList] = useState<VodItem[]>([]);
+  const [genreList, setGenreList] = useState<VodItem[]>([]);
+  const [seriesBaseName, setSeriesBaseName] = useState<string>("");
   const [currentSourceIndex, setCurrentSourceIndex] = useState(0);
   const [currentEpIndex, setCurrentEpIndex] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -197,16 +217,74 @@ export default function PlayPage() {
 
   useEffect(() => {
     loadVodDetail();
-
-    fetch(`/api/vod?type=电影&pg=1`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.list) {
-          setRecommendations(data.list.filter((x: VodItem) => x.id !== id).slice(0, 5));
-        }
-      })
-      .catch(console.error);
   }, [id]);
+
+  // 根据当前影视动态拉取：1. IP系列/续作精选；2. 同类别热门推荐
+  useEffect(() => {
+    if (!item?.id || !item?.name) return;
+
+    const baseName = extractSeriesBaseName(item.name);
+    setSeriesBaseName(baseName);
+
+    let isMounted = true;
+
+    // 1. 获取系列续作作品
+    const fetchSeries = async () => {
+      try {
+        if (baseName && baseName.length >= 2) {
+          const res = await fetch(`/api/vod?wd=${encodeURIComponent(baseName)}&limit=24`);
+          const data = await res.json();
+          if (isMounted && data?.list) {
+            // 过滤当前作品，且名称中包含基准IP名
+            const filtered = data.list.filter(
+              (x: VodItem) =>
+                String(x.id) !== String(item.id) &&
+                x.name.toLowerCase().includes(baseName.toLowerCase())
+            );
+            // 优先同类型排序（例如同样是动漫、同样是电视剧）
+            filtered.sort((a: VodItem, b: VodItem) => {
+              const aSame = a.type_name === item.type_name ? 1 : 0;
+              const bSame = b.type_name === item.type_name ? 1 : 0;
+              return bSame - aSame;
+            });
+            setSeriesList(filtered.slice(0, 10));
+          }
+        } else {
+          setSeriesList([]);
+        }
+      } catch (err) {
+        console.error("加载系列作品失败:", err);
+      }
+    };
+
+    // 2. 获取同类热门推荐
+    const fetchGenre = async () => {
+      try {
+        const typeParam = item.type_name ? `type=${encodeURIComponent(item.type_name)}` : `type=电影`;
+        const subTypeParam = item.sub_type ? `&sub_type=${encodeURIComponent(item.sub_type)}` : "";
+        const res = await fetch(`/api/vod?${typeParam}${subTypeParam}&sort=hot&limit=20`);
+        const data = await res.json();
+        if (isMounted && data?.list) {
+          // 过滤掉当前作品以及系列作品中已有的作品
+          const filtered = data.list.filter(
+            (x: VodItem) =>
+              String(x.id) !== String(item.id) &&
+              !(baseName && baseName.length >= 2 && x.name.toLowerCase().includes(baseName.toLowerCase()))
+          );
+          setGenreList(filtered.slice(0, 10));
+        }
+      } catch (err) {
+        console.error("加载同类推荐失败:", err);
+      }
+    };
+
+    fetchSeries();
+    fetchGenre();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [item?.id, item?.name, item?.type_name, item?.sub_type]);
 
   // 离开页面或路由切换时，确保停止视频播放并释放媒体资源
   useEffect(() => {
@@ -723,11 +801,49 @@ export default function PlayPage() {
         </div>
       </div>
 
-      {recommendations.length > 0 && (
+      {/* 系列续作 / 联动作品推荐 */}
+      {seriesList.length > 0 && (
         <section className="space-y-4 pt-8 border-t border-white/10">
-          <h2 className="text-lg font-bold text-white">为您推荐</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-5 bg-gradient-to-b from-cyan-400 to-blue-500 rounded-full" />
+              <Layers className="w-5 h-5 text-cyan-400" />
+              <h2 className="text-lg font-bold text-white">
+                《{seriesBaseName}》系列作品 & 续作精选
+              </h2>
+            </div>
+            <span className="text-xs text-cyan-400/80 bg-cyan-950/40 border border-cyan-500/20 px-2.5 py-0.5 rounded-full font-mono">
+              共 {seriesList.length} 部相关作品
+            </span>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {recommendations.map((rec) => (
+            {seriesList.map((rec) => (
+              <MovieCard key={rec.id} item={rec} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 同类热门推荐 */}
+      {genreList.length > 0 && (
+        <section className={`space-y-4 ${seriesList.length > 0 ? "pt-6" : "pt-8 border-t border-white/10"}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-5 bg-gradient-to-b from-amber-400 to-orange-500 rounded-full" />
+              <Flame className="w-5 h-5 text-amber-400" />
+              <h2 className="text-lg font-bold text-white">
+                同类热门{item?.sub_type ? ` · ${item.sub_type}` : item?.type_name ? ` · ${item.type_name}` : ""}推荐
+              </h2>
+            </div>
+            <Link
+              href={`/search?type=${encodeURIComponent(item?.type_name || "全部")}`}
+              className="text-xs text-gray-400 hover:text-cyan-400 transition"
+            >
+              查看更多 &gt;
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {genreList.map((rec) => (
               <MovieCard key={rec.id} item={rec} />
             ))}
           </div>
