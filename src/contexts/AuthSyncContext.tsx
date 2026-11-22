@@ -541,9 +541,9 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
     }
 
-    const callbackURL =
+    const currentUrl =
       typeof window !== "undefined"
-        ? `${window.location.pathname}${window.location.search}` || "/"
+        ? window.location.href
         : "/";
 
     const res = await fetch("/api/v1/auth/sign-in/social", {
@@ -552,7 +552,8 @@ export function AuthSyncProvider({ children }: { children: React.ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         provider: "google",
-        callbackURL,
+        callbackURL: currentUrl,
+        errorCallbackURL: currentUrl,
       }),
     });
     const data = await res.json().catch(() => ({}));

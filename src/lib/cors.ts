@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 const ALLOWED_ORIGIN_SET = new Set([
   "https://4kvm.alonglfb.com",
   "http://4kvm.alonglfb.com",
+  "https://movie.alonglfb.com",
+  "http://movie.alonglfb.com",
   "https://tv.alonglfb.com",
   "http://tv.alonglfb.com",
   "https://alonglfb.com",

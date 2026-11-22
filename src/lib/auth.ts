@@ -136,6 +136,11 @@ const defaultBaseUrl =
     ? "https://4kvm.alonglfb.com"
     : "http://localhost:3000");
 
+const isProd = process.env.NODE_ENV === "production";
+const cookieDomain =
+  process.env.AUTH_COOKIE_DOMAIN ||
+  (isProd ? ".alonglfb.com" : undefined);
+
 export const auth = betterAuth({
   database: getDatabase(),
   basePath: "/api/v1/auth",
@@ -147,6 +152,8 @@ export const auth = betterAuth({
     const list = [
       "https://4kvm.alonglfb.com",
       "http://4kvm.alonglfb.com",
+      "https://movie.alonglfb.com",
+      "http://movie.alonglfb.com",
       "https://*.alonglfb.com",
       "http://*.alonglfb.com",
       "https://alonglfb.com",
@@ -177,6 +184,10 @@ export const auth = betterAuth({
   },
   advanced: {
     trustedProxyHeaders: true,
+    crossSubDomainCookies: {
+      enabled: !!cookieDomain,
+      domain: cookieDomain,
+    },
   },
   emailAndPassword: {
     enabled: true,

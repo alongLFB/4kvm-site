@@ -260,6 +260,11 @@ async function handleAuthRequest(request: Request): Promise<Response> {
         { code: 200, success: true, message: "账号及云端数据已成功永久注销" },
         { status: 200, headers: getCorsHeaders(request) },
       );
+      const cookieDomain = process.env.NODE_ENV === "production" ? ".alonglfb.com" : undefined;
+      if (cookieDomain) {
+        res.cookies.set("better-auth.session_token", "", { maxAge: 0, path: "/", domain: cookieDomain });
+        res.cookies.set("__Secure-better-auth.session_token", "", { maxAge: 0, path: "/", domain: cookieDomain });
+      }
       res.cookies.set("better-auth.session_token", "", { maxAge: 0, path: "/" });
       res.cookies.set("__Secure-better-auth.session_token", "", { maxAge: 0, path: "/" });
       return res;
